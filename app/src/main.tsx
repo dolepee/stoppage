@@ -259,14 +259,26 @@ function App() {
           <section className="systems-strip" aria-label="System health">
             <SystemStatus
               icon={<Waves size={18} />}
-              label="Scores stream"
-              value={snapshot.streamHealth.scores ? "Healthy" : "Degraded"}
+              label="Scores input"
+              value={
+                snapshot.dataMode === "SYNTHETIC"
+                  ? "Synthetic replay"
+                  : snapshot.streamHealth.scores
+                    ? "TxLINE healthy"
+                    : "TxLINE degraded"
+              }
               healthy={snapshot.streamHealth.scores}
             />
             <SystemStatus
               icon={<Radio size={18} />}
-              label="Odds stream"
-              value={snapshot.streamHealth.odds ? "Healthy" : "Degraded"}
+              label="Odds input"
+              value={
+                snapshot.dataMode === "SYNTHETIC"
+                  ? "Synthetic replay"
+                  : snapshot.streamHealth.odds
+                    ? "TxLINE healthy"
+                    : "TxLINE degraded"
+              }
               healthy={snapshot.streamHealth.odds}
             />
             <SystemStatus
