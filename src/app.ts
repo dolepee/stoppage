@@ -21,6 +21,18 @@ export async function createApplication(options: ApplicationOptions = {}) {
   const app = Fastify({ logger: options.logger ?? true });
   const runtime = new StoppageRuntime(publicJudgeScenario);
 
+  app.addHook("onRequest", async (_request, reply) => {
+    reply
+      .header("X-Content-Type-Options", "nosniff")
+      .header("X-Frame-Options", "DENY")
+      .header("Referrer-Policy", "strict-origin-when-cross-origin")
+      .header("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+      .header(
+        "Content-Security-Policy",
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; font-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'",
+      );
+  });
+
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof z.ZodError) {
       return reply.code(400).send({

@@ -21,6 +21,7 @@ describe("operator API", () => {
       url: "/api/health",
     });
     expect(response.statusCode).toBe(200);
+    expect(response.headers["x-content-type-options"]).toBe("nosniff");
     expect(response.json()).toMatchObject({
       ok: true,
       network: "solana-mainnet",
