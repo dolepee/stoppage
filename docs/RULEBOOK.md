@@ -21,6 +21,15 @@ They are not calibrated claims.
 5. Publish every holdout lifecycle, including unconfirmed suspensions and
    fail-safe activations.
 
+The holdout command is deliberately approval-gated. It requires the exact
+human-approved configuration hash and writes its report only under the ignored
+private data directory:
+
+```bash
+pnpm policy:holdout -- --approved-config-hash <HASH> \
+  --fixture <HOLDOUT_FIXTURE_1> --fixture <HOLDOUT_FIXTURE_2>
+```
+
 The fixture used in the video cannot be used to tune the thresholds.
 
 ## Trigger semantics

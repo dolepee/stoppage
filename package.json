@@ -32,6 +32,7 @@
     "g2:capture": "tsx scripts/capture-history.ts",
     "g2:replay": "tsx scripts/replay-capture.ts",
     "policy:calibrate": "tsx scripts/calibrate-policy.ts",
+    "policy:holdout": "tsx scripts/evaluate-holdout.ts",
     "evidence:prepare": "tsx scripts/prepare-public-evidence.ts"
   },
   "dependencies": {
