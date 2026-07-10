@@ -18,6 +18,30 @@ const config: GovernorConfig = {
 };
 
 describe("QuoteGovernor", () => {
+  it("rejects policy values that could disable safety rules", () => {
+    expect(
+      () =>
+        new QuoteGovernor({
+          ...config,
+          sharpMoveThreshold: 0,
+        }),
+    ).toThrow("sharpMoveThreshold");
+    expect(
+      () =>
+        new QuoteGovernor({
+          ...config,
+          stabilityEpsilon: config.sharpMoveThreshold,
+        }),
+    ).toThrow("stabilityEpsilon");
+    expect(
+      () =>
+        new QuoteGovernor({
+          ...config,
+          recoveryStableMs: -1,
+        }),
+    ).toThrow("recoveryStableMs");
+  });
+
   it("suspends, reprices, and reopens after an event-first move", () => {
     const governor = new QuoteGovernor(config);
     governor.process(quote("q0", 1_000, probabilities(0.4, 0.3, 0.3)));

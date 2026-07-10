@@ -32,9 +32,7 @@ export class QuoteGovernor {
   readonly #streamHealth = { odds: true, scores: true };
 
   constructor(config: GovernorConfig = DEFAULT_GOVERNOR_CONFIG) {
-    if (config.stableUpdatesRequired < 2) {
-      throw new Error("stableUpdatesRequired must be at least 2");
-    }
+    validateConfig(config);
     this.#config = structuredClone(config);
     this.#configHash = sha256(this.#config);
   }
@@ -417,4 +415,38 @@ export class QuoteGovernor {
 
 function unique(values: string[]) {
   return [...new Set(values)];
+}
+
+function validateConfig(config: GovernorConfig) {
+  if (
+    !Number.isFinite(config.sharpMoveThreshold) ||
+    config.sharpMoveThreshold <= 0 ||
+    config.sharpMoveThreshold > 1
+  ) {
+    throw new Error("sharpMoveThreshold must be greater than 0 and at most 1");
+  }
+  if (
+    !Number.isFinite(config.stabilityEpsilon) ||
+    config.stabilityEpsilon < 0 ||
+    config.stabilityEpsilon >= config.sharpMoveThreshold
+  ) {
+    throw new Error(
+      "stabilityEpsilon must be non-negative and below sharpMoveThreshold",
+    );
+  }
+  if (
+    !Number.isInteger(config.stableUpdatesRequired) ||
+    config.stableUpdatesRequired < 2
+  ) {
+    throw new Error("stableUpdatesRequired must be an integer of at least 2");
+  }
+  for (const [name, value] of [
+    ["reopenDelayMs", config.reopenDelayMs],
+    ["eventConfirmationWindowMs", config.eventConfirmationWindowMs],
+    ["recoveryStableMs", config.recoveryStableMs],
+  ] as const) {
+    if (!Number.isInteger(value) || value < 0) {
+      throw new Error(`${name} must be a non-negative integer`);
+    }
+  }
 }

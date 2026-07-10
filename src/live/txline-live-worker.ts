@@ -136,10 +136,16 @@ export class TxLineLiveWorker {
           await this.#client.streamOdds(
             {
               onOpen: () => this.#touch(name),
-              onHeartbeat: () => this.#touch(name),
+              onHeartbeat: () => {
+                attempt = 0;
+                return this.#touch(name);
+              },
               onRaw: (payload, eventId) =>
                 this.#captureRaw(name, payload, eventId),
-              onData: (payload) => this.#handleOdds(payload),
+              onData: (payload) => {
+                attempt = 0;
+                return this.#handleOdds(payload);
+              },
             },
             controller.signal,
           );
@@ -147,10 +153,16 @@ export class TxLineLiveWorker {
           await this.#client.streamScores(
             {
               onOpen: () => this.#touch(name),
-              onHeartbeat: () => this.#touch(name),
+              onHeartbeat: () => {
+                attempt = 0;
+                return this.#touch(name);
+              },
               onRaw: (payload, eventId) =>
                 this.#captureRaw(name, payload, eventId),
-              onData: (payload) => this.#handleScore(payload),
+              onData: (payload) => {
+                attempt = 0;
+                return this.#handleScore(payload);
+              },
             },
             controller.signal,
           );
@@ -174,7 +186,10 @@ export class TxLineLiveWorker {
       }
 
       if (!signal.aborted) {
-        const backoff = Math.min(this.#reconnectBaseMs * 2 ** attempt, 30_000);
+        const backoff = Math.min(
+          this.#reconnectBaseMs * 2 ** Math.max(0, attempt - 1),
+          30_000,
+        );
         await abortableDelay(backoff, signal);
       }
     }

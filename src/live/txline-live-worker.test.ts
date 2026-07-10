@@ -228,6 +228,59 @@ describe("TxLineLiveWorker", () => {
     expect(worker.status().running).toBe(false);
     expect(statuses.at(-1)).toBe(false);
   });
+
+  it("resets reconnect backoff after a healthy heartbeat", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    let oddsConnections = 0;
+    const client = {
+      fetchFixtures: async () => [],
+      streamOdds: async (
+        callbacks: FakeCallbacks<OddsPayload>,
+        signal: AbortSignal,
+      ) => {
+        oddsConnections += 1;
+        await callbacks.onOpen();
+        if (oddsConnections === 1) throw new Error("connect-reset");
+        if (oddsConnections === 2) {
+          await callbacks.onHeartbeat(1_000);
+          return;
+        }
+        controller.abort();
+        await untilAborted(signal);
+      },
+      streamScores: async (
+        callbacks: FakeCallbacks<ScorePayload>,
+        signal: AbortSignal,
+      ) => {
+        await callbacks.onOpen();
+        await untilAborted(signal);
+      },
+    };
+    const worker = new TxLineLiveWorker({
+      client,
+      reconnectBaseMs: 100,
+      callbacks: { onInput: () => undefined },
+      capture: async () => undefined,
+    });
+
+    try {
+      const run = worker.run(controller.signal);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(oddsConnections).toBe(1);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(oddsConnections).toBe(2);
+      await vi.advanceTimersByTimeAsync(99);
+      expect(oddsConnections).toBe(2);
+      await vi.advanceTimersByTimeAsync(1);
+      await run;
+
+      expect(oddsConnections).toBe(3);
+      expect(worker.status().reconnects.odds).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
 });
 
 interface FakeCallbacks<T> {
