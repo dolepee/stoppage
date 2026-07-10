@@ -1,5 +1,7 @@
 # Stoppage
 
+![Stoppage operator console social card](app/public/og-stoppage.png)
+
 **An autonomous in-play quote governor driven by TxLINE on Solana.**
 
 Stoppage freezes, reprices, and reopens a simulated operator book when the

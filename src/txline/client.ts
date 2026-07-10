@@ -7,6 +7,10 @@ import {
   type OddsPayload,
   type ScorePayload,
 } from "./types.js";
+import {
+  scoreStatValidationSchema,
+  type ScoreStatValidation,
+} from "./validation-types.js";
 import { parseSseData, readSseMessages } from "./sse.js";
 
 interface TxLineClientOptions {
@@ -16,6 +20,7 @@ interface TxLineClientOptions {
 }
 
 interface StreamCallbacks<T> {
+  onOpen?: () => void | Promise<void>;
   onData: (payload: T, eventId?: string) => void | Promise<void>;
   onHeartbeat?: (timestamp: number | null) => void | Promise<void>;
 }
@@ -78,6 +83,22 @@ export class TxLineClient {
     return oddsPayloadSchema.array().parse(await response.json());
   }
 
+  async fetchScoreStatValidation(input: {
+    fixtureId: number;
+    seq: number;
+    statKey: number;
+  }): Promise<ScoreStatValidation> {
+    const query = new URLSearchParams({
+      fixtureId: String(input.fixtureId),
+      seq: String(input.seq),
+      statKey: String(input.statKey),
+    });
+    const response = await this.#authorizedFetch(
+      `/api/scores/stat-validation?${query.toString()}`,
+    );
+    return scoreStatValidationSchema.parse(await response.json());
+  }
+
   async streamOdds(
     callbacks: StreamCallbacks<OddsPayload>,
     signal: AbortSignal,
@@ -123,6 +144,7 @@ export class TxLineClient {
         "Cache-Control": "no-cache",
       },
     });
+    await callbacks.onOpen?.();
 
     for await (const message of readSseMessages(response)) {
       if (signal.aborted) return;

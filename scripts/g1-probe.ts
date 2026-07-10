@@ -21,7 +21,10 @@ async function main() {
   ]);
 
   const result: Record<string, unknown> = {
-    ok: true,
+    ok: false,
+    infrastructureOk:
+      Boolean(programAccount?.executable) && guestToken.length > 0,
+    g1Complete: false,
     network: "solana-mainnet",
     txlineOrigin: config.txlineOrigin,
     programId: TXLINE_MAINNET.programId,
@@ -42,9 +45,78 @@ async function main() {
       participant1: fixture.Participant1 ?? null,
       participant2: fixture.Participant2 ?? null,
     }));
+
+    const [oddsStream, scoresStream] = await Promise.all([
+      probeStream("odds", (callbacks, signal) =>
+        client.streamOdds(callbacks, signal),
+      ),
+      probeStream("scores", (callbacks, signal) =>
+        client.streamScores(callbacks, signal),
+      ),
+    ]);
+    result.streams = { odds: oddsStream, scores: scoresStream };
+    result.g1Complete =
+      fixtures.length > 0 && oddsStream.connected && scoresStream.connected;
+    result.ok = result.g1Complete;
+  } else {
+    result.blockedReason = "TXLINE_API_TOKEN is not configured";
   }
 
   console.log(JSON.stringify(result, null, 2));
 }
 
 await main();
+
+async function probeStream<T>(
+  name: "odds" | "scores",
+  start: (
+    callbacks: {
+      onOpen: () => void;
+      onData: (payload: T) => void;
+      onHeartbeat: (timestamp: number | null) => void;
+    },
+    signal: AbortSignal,
+  ) => Promise<void>,
+) {
+  const controller = new AbortController();
+  const startedAt = Date.now();
+  let connected = false;
+  let heartbeatCount = 0;
+  let dataCount = 0;
+  let lastHeartbeatTs: number | null = null;
+  let error: string | null = null;
+
+  const stream = start(
+    {
+      onOpen: () => {
+        connected = true;
+      },
+      onData: () => {
+        dataCount += 1;
+      },
+      onHeartbeat: (timestamp) => {
+        heartbeatCount += 1;
+        lastHeartbeatTs = timestamp;
+      },
+    },
+    controller.signal,
+  ).catch((caught: unknown) => {
+    if ((caught as Error).name !== "AbortError")
+      error = (caught as Error).message;
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 12_000));
+  controller.abort();
+  await stream;
+
+  return {
+    name,
+    connected,
+    heartbeatCount,
+    dataCount,
+    lastHeartbeatTs,
+    actualDataObserved: dataCount > 0,
+    durationMs: Date.now() - startedAt,
+    error,
+  };
+}

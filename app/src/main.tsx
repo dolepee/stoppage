@@ -251,6 +251,13 @@ function Header({
         >
           TxLINE <ExternalLink size={13} />
         </a>
+        <a
+          href="https://github.com/dolepee/stoppage"
+          target="_blank"
+          rel="noreferrer"
+        >
+          Source <ExternalLink size={13} />
+        </a>
       </nav>
       <div className={`connection-pill ${connection}`}>
         <span />

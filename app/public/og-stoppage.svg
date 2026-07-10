@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="675" viewBox="0 0 1200 675">
+  <rect width="1200" height="675" fill="#090b0c"/>
+  <rect x="50" y="42" width="1100" height="591" rx="8" fill="#0d1112" stroke="#273034"/>
+  <rect x="82" y="76" width="42" height="42" rx="7" fill="#42ddb7"/>
+  <rect x="90" y="84" width="26" height="27" rx="4" fill="none" stroke="#07100e" stroke-width="4"/>
+  <rect x="96" y="90" width="5" height="15" rx="1" fill="#07100e"/>
+  <rect x="105" y="90" width="5" height="15" rx="1" fill="#6d4e1d"/>
+  <text x="140" y="104" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="24" font-weight="700">Stoppage</text>
+  <text x="1018" y="102" fill="#74df8f" font-family="Arial, sans-serif" font-size="14" font-weight="700">TxLINE × SOLANA</text>
+
+  <text x="82" y="222" fill="#42ddb7" font-family="Arial, sans-serif" font-size="16" font-weight="700">AUTONOMOUS QUOTE CONTROL</text>
+  <text x="82" y="292" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="50" font-weight="700">Stop stale quotes</text>
+  <text x="82" y="350" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="50" font-weight="700">before they compound.</text>
+  <text x="82" y="414" fill="#929da0" font-family="Arial, sans-serif" font-size="21">Freeze. Reprice. Reopen. Deterministically.</text>
+
+  <rect x="682" y="164" width="418" height="346" rx="7" fill="#111617" stroke="#39454a"/>
+  <text x="714" y="202" fill="#929da0" font-family="Arial, sans-serif" font-size="13">SYNTHETIC JUDGE REPLAY · 1X2</text>
+  <text x="714" y="250" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="20" font-weight="700">68:14 · GOAL CONFIRMED</text>
+  <line x1="714" y1="274" x2="1068" y2="274" stroke="#273034"/>
+  <text x="714" y="314" fill="#929da0" font-family="Arial, sans-serif" font-size="14">POLICY ACTION</text>
+  <text x="714" y="361" fill="#f1b94d" font-family="Arial, sans-serif" font-size="38" font-weight="700">SUSPENDED</text>
+  <rect x="714" y="390" width="354" height="54" rx="5" fill="#171d1f" stroke="#273034"/>
+  <text x="734" y="422" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="15">Reaction receipt</text>
+  <text x="1012" y="422" text-anchor="end" fill="#42ddb7" font-family="monospace" font-size="17">240 ms</text>
+  <text x="714" y="478" fill="#929da0" font-family="Arial, sans-serif" font-size="13">UNPROTECTED BASELINE: STILL OPEN</text>
+
+  <line x1="82" y1="548" x2="1100" y2="548" stroke="#273034"/>
+  <text x="82" y="587" fill="#929da0" font-family="Arial, sans-serif" font-size="16">Driven by TxLINE scores + StablePrice odds</text>
+  <text x="1100" y="587" text-anchor="end" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="16" font-weight="700">TxODDS World Cup · Trading Tools &amp; Agents</text>
+</svg>
