@@ -18,8 +18,8 @@ They are not calibrated claims.
 2. Freeze the metric definitions, thresholds, and rule rationales.
 3. Record the configuration hash.
 4. Evaluate only on later fixtures and live captures.
-5. Publish every holdout lifecycle, including unconfirmed suspensions and
-   fail-safe activations.
+5. Publish every holdout lifecycle, including odds-led suspensions that never
+   received supporting events and fail-safe activations.
 
 The holdout command is deliberately approval-gated. It requires the exact
 human-approved configuration hash and writes its report only under the ignored
@@ -46,6 +46,11 @@ incident is confirmed or explicitly discarded.
 A probability component moves by at least the sharp-move threshold without a
 recent high-impact event. Stoppage suspends conservatively. A later event may
 confirm the move; otherwise the lifecycle remains labeled unconfirmed.
+
+The reported unconfirmed odds-led suspension rate uses only these windows as its
+denominator. It is `null` when a holdout contains no odds-led suspension. An
+event-led window may begin from a provisional event and still complete normally
+after that incident is confirmed or explicitly discarded.
 
 ### Fail-safe
 

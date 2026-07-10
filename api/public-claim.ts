@@ -1,7 +1,4 @@
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-
-const fallbackPath = resolve(process.cwd(), "data/public/public-claim.json");
+import { loadLatestPublicClaim } from "../src/evidence/public-claim.js";
 
 const normalizeHash = (value?: string) =>
   value?.toLowerCase().replace(/^0x/, "") || undefined;
@@ -24,16 +21,16 @@ export default async function handler(request, response) {
       requestUrl.searchParams.get("approvedConfigHash") ?? undefined,
     );
 
-    const file = await readFile(fallbackPath, "utf8");
-    const claim = JSON.parse(file);
-    const claimHash = normalizeHash(claim.approvedConfigHash);
-
-    if (queryHash && claimHash !== queryHash) {
+    const claim = await loadLatestPublicClaim(
+      "data/public",
+      queryHash ? `0x${queryHash}` : undefined,
+    );
+    if (!claim) {
       response.statusCode = 404;
       response.setHeader("Content-Type", "application/json");
       response.end(
         JSON.stringify({
-          error: "Public claim not found",
+          error: "Public claim not available",
         }),
       );
       return;

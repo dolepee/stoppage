@@ -1,6 +1,8 @@
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
+export const PUBLIC_CLAIM_APPROVAL_PREFIX = "APPROVE STOPPAGE PUBLIC CLAIM";
+
 export interface PublicLifecycleEvidence {
   action:
     | "SUSPEND"
@@ -22,9 +24,9 @@ export interface PublicLifecycleEvidence {
 }
 
 export interface PublicLifecycleCandidate {
-  status: "AWAITING_HUMAN_APPROVAL" | string;
+  status: "AWAITING_HUMAN_APPROVAL";
   evidenceType: "DERIVED_LIFECYCLE_EVIDENCE";
-  network: "solana-mainnet" | string;
+  network: "solana-mainnet";
   dataBoundary: string;
   lifecycleDurationMs: number;
   maximumProbabilityMove: number;
@@ -41,16 +43,19 @@ export interface PrivateHoldoutAggregate {
   completeProtectedWindows: number;
   staleQuoteSeconds: number;
   mispricingIntegral: number;
-  eventSuspensions: number;
-  unconfirmedEventSuspensions: number;
-  unconfirmedSuspensionRate?: number | null;
+  eventLedProtectedWindows: number;
+  oddsLedProtectedWindows: number;
+  confirmedOddsLedProtectedWindows: number;
+  unconfirmedOddsLedProtectedWindows: number;
+  unconfirmedOddsLedSuspensionRate: number | null;
+  failsafeProtectedWindows: number;
+  provisionalEventProtectedWindows: number;
 }
 
 export interface PrivateHoldoutReport {
   version: number;
-  status:
-    "AWAITING_PUBLIC_CLAIM_APPROVAL" | "PRIVATE_HOLDOUT_AVAILABLE" | string;
-  network: "solana-mainnet" | string;
+  status: "AWAITING_PUBLIC_CLAIM_APPROVAL";
+  network: "solana-mainnet";
   approvedConfigHash: string;
   evaluatedAt: string;
   fixtures: Array<Record<string, unknown>>;
@@ -58,21 +63,21 @@ export interface PrivateHoldoutReport {
 }
 
 export interface PublicClaimResponse {
-  version: 1;
+  version: 2;
   status: "AVAILABLE";
-  network: "solana-mainnet" | string;
+  network: "solana-mainnet";
   approvedConfigHash: string;
   evaluatedAt: string;
   approvedAt: string;
+  approval: {
+    statement: string;
+  };
   dataBoundary: string;
-  holdout: {
-    fixtures: number;
-    completeProtectedWindows: number;
-    staleQuoteSeconds: number;
-    mispricingIntegral: number;
-    eventSuspensions: number;
-    unconfirmedEventSuspensions: number;
-    unconfirmedSuspensionRate: number | null;
+  holdout: PrivateHoldoutAggregate & {
+    definitions: {
+      unconfirmedOddsLedSuspensionRate: string;
+      provisionalEventProtectedWindows: string;
+    };
   };
   lifecycleEvidence: {
     evidenceType: "DERIVED_LIFECYCLE_EVIDENCE";
@@ -94,43 +99,82 @@ export interface PublicClaimResponse {
 }
 
 export async function loadLatestPublicClaim(
-  dataRoot = "data/private",
+  dataRoot = "data/public",
   approvedConfigHash?: string,
 ): Promise<PublicClaimResponse | null> {
+  const claim = (await safeParseJson(
+    resolve(dataRoot, "public-claim.json"),
+  )) as PublicClaimResponse | null;
+  if (!claim || !isApprovedPublicClaim(claim)) return null;
+  if (
+    approvedConfigHash &&
+    claim.approvedConfigHash.toLowerCase() !== approvedConfigHash.toLowerCase()
+  ) {
+    return null;
+  }
+  return claim;
+}
+
+export async function loadLatestPrivateEvidence(
+  dataRoot: string,
+  approvedConfigHash: string,
+) {
   const root = resolve(dataRoot);
-  const [latestHoldout, latestCandidate] = await Promise.all([
+  const [holdout, lifecycle] = await Promise.all([
     findLatestHoldout(root, approvedConfigHash),
     findLatestLifecycleEvidence(root, approvedConfigHash),
   ]);
+  if (!holdout || !lifecycle) return null;
+  return { holdout, lifecycle };
+}
 
-  if (!latestHoldout || !latestCandidate) return null;
+export function buildApprovedPublicClaim({
+  holdout,
+  lifecycle,
+  approvalStatement,
+  approvedAt,
+}: {
+  holdout: PrivateHoldoutReport;
+  lifecycle: PublicLifecycleCandidate;
+  approvalStatement: string;
+  approvedAt: string;
+}): PublicClaimResponse {
+  if (holdout.approvedConfigHash !== lifecycle.configHash) {
+    throw new Error("Holdout and lifecycle config hashes do not match");
+  }
+  const expectedApproval = `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${holdout.approvedConfigHash}`;
+  if (approvalStatement !== expectedApproval) {
+    throw new Error(`Human approval must exactly equal: ${expectedApproval}`);
+  }
+  if (!Number.isFinite(Date.parse(approvedAt))) {
+    throw new Error("approvedAt must be a valid timestamp");
+  }
+  assertAggregate(holdout.aggregate);
 
   return {
-    version: 1,
+    version: 2,
     status: "AVAILABLE",
-    network: latestHoldout.network,
-    approvedConfigHash: latestHoldout.approvedConfigHash,
-    evaluatedAt: latestHoldout.evaluatedAt,
-    approvedAt: new Date().toISOString(),
-    dataBoundary: latestCandidate.dataBoundary,
+    network: holdout.network,
+    approvedConfigHash: holdout.approvedConfigHash,
+    evaluatedAt: holdout.evaluatedAt,
+    approvedAt,
+    approval: { statement: approvalStatement },
+    dataBoundary: lifecycle.dataBoundary,
     holdout: {
-      fixtures: latestHoldout.aggregate.fixtures,
-      completeProtectedWindows:
-        latestHoldout.aggregate.completeProtectedWindows,
-      staleQuoteSeconds: latestHoldout.aggregate.staleQuoteSeconds,
-      mispricingIntegral: latestHoldout.aggregate.mispricingIntegral,
-      eventSuspensions: latestHoldout.aggregate.eventSuspensions,
-      unconfirmedEventSuspensions:
-        latestHoldout.aggregate.unconfirmedEventSuspensions,
-      unconfirmedSuspensionRate:
-        latestHoldout.aggregate.unconfirmedSuspensionRate ?? null,
+      ...holdout.aggregate,
+      definitions: {
+        unconfirmedOddsLedSuspensionRate:
+          "Odds-led protected windows that remained UNBACKED_MOVE through repricing divided by all odds-led protected windows; null when no odds-led window was observed.",
+        provisionalEventProtectedWindows:
+          "Event-led windows entered from a provisional TxLINE event. Reopening still required later confirmation or explicit discard.",
+      },
     },
     lifecycleEvidence: {
-      evidenceType: latestCandidate.evidenceType,
-      lifecycleDurationMs: latestCandidate.lifecycleDurationMs,
-      maximumProbabilityMove: latestCandidate.maximumProbabilityMove,
-      txlineValidation: latestCandidate.txlineValidation,
-      decisions: latestCandidate.decisions.map((decision) => ({
+      evidenceType: lifecycle.evidenceType,
+      lifecycleDurationMs: lifecycle.lifecycleDurationMs,
+      maximumProbabilityMove: lifecycle.maximumProbabilityMove,
+      txlineValidation: lifecycle.txlineValidation,
+      decisions: lifecycle.decisions.map((decision) => ({
         action: decision.action,
         trigger: decision.trigger,
         fromMode: decision.fromMode,
@@ -142,98 +186,113 @@ export async function loadLatestPublicClaim(
   };
 }
 
+function isApprovedPublicClaim(value: PublicClaimResponse) {
+  if (
+    value.version !== 2 ||
+    value.status !== "AVAILABLE" ||
+    value.network !== "solana-mainnet" ||
+    !/^0x[0-9a-f]{64}$/.test(value.approvedConfigHash) ||
+    !Number.isFinite(Date.parse(value.evaluatedAt)) ||
+    !Number.isFinite(Date.parse(value.approvedAt))
+  ) {
+    return false;
+  }
+  const expectedApproval = `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${value.approvedConfigHash}`;
+  if (value.approval?.statement !== expectedApproval) return false;
+  try {
+    assertAggregate(value.holdout);
+  } catch {
+    return false;
+  }
+  return Boolean(
+    value.lifecycleEvidence?.decisions?.length &&
+    value.lifecycleEvidence.txlineValidation?.transactionSignature,
+  );
+}
+
 async function findLatestHoldout(
   dataRoot: string,
-  approvedConfigHash?: string,
+  approvedConfigHash: string,
 ): Promise<PrivateHoldoutReport | null> {
-  const files = await readdir(dataRoot).catch((error) => {
-    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
-      return [];
-    }
-    throw error;
-  });
-  const candidates = files.filter(
-    (name) => name.startsWith("holdout-") && name.endsWith(".json"),
-  );
-
-  for (const file of candidates.sort().reverse()) {
+  const files = await listJsonFiles(dataRoot, "holdout-");
+  for (const file of files) {
     const report = (await safeParseJson(
       resolve(dataRoot, file),
-      file,
     )) as PrivateHoldoutReport | null;
-    if (!report) continue;
-
     if (
-      report.status !== "AWAITING_PUBLIC_CLAIM_APPROVAL" ||
-      !report.approvedConfigHash
-    )
-      continue;
-    if (
-      approvedConfigHash &&
+      report?.status !== "AWAITING_PUBLIC_CLAIM_APPROVAL" ||
       report.approvedConfigHash !== approvedConfigHash
     ) {
       continue;
     }
-    if (
-      typeof report.aggregate?.fixtures !== "number" ||
-      !Number.isFinite(report.aggregate.fixtures)
-    ) {
+    try {
+      assertAggregate(report.aggregate);
+      return report;
+    } catch {
       continue;
     }
-    return report;
   }
-
   return null;
 }
 
 async function findLatestLifecycleEvidence(
   dataRoot: string,
-  approvedConfigHash?: string,
+  approvedConfigHash: string,
 ): Promise<PublicLifecycleCandidate | null> {
-  const files = await readdir(dataRoot).catch((error) => {
-    if ((error as NodeJS.ErrnoException)?.code === "ENOENT") {
-      return [];
-    }
-    throw error;
-  });
-  const candidates = files
-    .filter(
-      (name) =>
-        name.startsWith("public-evidence-candidate-") && name.endsWith(".json"),
-    )
-    .sort()
-    .reverse();
-
-  for (const file of candidates) {
+  const files = await listJsonFiles(dataRoot, "public-evidence-candidate-");
+  for (const file of files) {
     const candidate = (await safeParseJson(
       resolve(dataRoot, file),
-      file,
     )) as PublicLifecycleCandidate | null;
-    if (!candidate) continue;
-
     if (
-      candidate.status !== "AWAITING_HUMAN_APPROVAL" &&
-      candidate.status !== "APPROVED" &&
-      candidate.status !== "AVAILABLE"
+      candidate?.status === "AWAITING_HUMAN_APPROVAL" &&
+      candidate.configHash === approvedConfigHash &&
+      candidate.decisions?.length
     ) {
-      continue;
-    }
-    if (approvedConfigHash && candidate.configHash !== approvedConfigHash) {
-      continue;
-    }
-    if (candidate.decisions?.length) {
       return candidate;
     }
   }
-
   return null;
 }
 
-async function safeParseJson(path: string, label: string) {
+async function listJsonFiles(dataRoot: string, prefix: string) {
+  const files = await readdir(dataRoot).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  });
+  return files
+    .filter((name) => name.startsWith(prefix) && name.endsWith(".json"))
+    .sort()
+    .reverse();
+}
+
+function assertAggregate(value: PrivateHoldoutAggregate) {
+  for (const field of [
+    "fixtures",
+    "completeProtectedWindows",
+    "staleQuoteSeconds",
+    "mispricingIntegral",
+    "eventLedProtectedWindows",
+    "oddsLedProtectedWindows",
+    "confirmedOddsLedProtectedWindows",
+    "unconfirmedOddsLedProtectedWindows",
+    "failsafeProtectedWindows",
+    "provisionalEventProtectedWindows",
+  ] as const) {
+    if (!Number.isFinite(value?.[field]) || value[field] < 0) {
+      throw new Error(`Invalid holdout aggregate field: ${field}`);
+    }
+  }
+  const rate = value.unconfirmedOddsLedSuspensionRate;
+  if (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 1)) {
+    throw new Error("Invalid unconfirmed odds-led suspension rate");
+  }
+}
+
+async function safeParseJson(path: string) {
   try {
     return JSON.parse(await readFile(path, "utf8"));
   } catch {
-    console.warn(`Skipping unreadable public claim file: ${label}`);
     return null;
   }
 }

@@ -20,19 +20,20 @@ interface ActiveWindow {
     endTs: number;
     baselineProbability: ProbabilityVector;
   }>;
-  trigger: TriggerCode;
-  unconfirmedAtSuspend: boolean;
+  initialTrigger: TriggerCode;
+  provisionalEventAtSuspend: boolean;
   suspendHash: string;
   repriceReceipt: DecisionReceipt | null;
 }
 
 export interface HoldoutWindow {
-  trigger: TriggerCode;
+  initialTrigger: TriggerCode;
+  finalTrigger: TriggerCode;
   staleQuoteSeconds: number;
   mispricingIntegral: number;
   maximumProbabilityDivergence: number;
   reopenLatencyMs: number;
-  unconfirmedAtSuspend: boolean;
+  provisionalEventAtSuspend: boolean;
   repricingError: Record<string, number | null>;
   suspendHash: string;
   repriceHash: string;
@@ -52,8 +53,6 @@ export function evaluateHoldout(
   const receipts: DecisionReceipt[] = [];
   let baselineQuote: ConsensusQuote | null = null;
   let activeWindow: ActiveWindow | null = null;
-  let eventSuspensions = 0;
-  let unconfirmedEventSuspensions = 0;
 
   const processInput = (input: GovernorInput) => {
     const timestamp = inputTimestamp(input);
@@ -84,15 +83,11 @@ export function evaluateHoldout(
             startedAt: receipt.body.observedTs,
             segmentStartedAt: receipt.body.observedTs,
             segments: [],
-            trigger: receipt.body.trigger,
-            unconfirmedAtSuspend: eventTriggered && !input.confirmed,
+            initialTrigger: receipt.body.trigger,
+            provisionalEventAtSuspend: eventTriggered && !input.confirmed,
             suspendHash: receipt.hash,
             repriceReceipt: null,
           };
-        }
-        if (receipt.body.action === "SUSPEND" && input.kind === "match-event") {
-          eventSuspensions += 1;
-          if (!input.confirmed) unconfirmedEventSuspensions += 1;
         }
         continue;
       }
@@ -126,10 +121,11 @@ export function evaluateHoldout(
         stableReference,
       );
       windows.push({
-        trigger: activeWindow.trigger,
+        initialTrigger: activeWindow.initialTrigger,
+        finalTrigger: repriceReceipt.body.trigger,
         ...evaluated,
         reopenLatencyMs: receipt.body.observedTs - activeWindow.startedAt,
-        unconfirmedAtSuspend: activeWindow.unconfirmedAtSuspend,
+        provisionalEventAtSuspend: activeWindow.provisionalEventAtSuspend,
         repricingError: Object.fromEntries(
           horizonsMs.map((horizon) => [
             String(horizon),
@@ -173,6 +169,25 @@ export function evaluateHoldout(
     }),
   );
 
+  const eventLedProtectedWindows = windows.filter(
+    (window) => window.initialTrigger === "EVENT_BEFORE_REPRICE",
+  ).length;
+  const oddsLedProtectedWindows = windows.filter(
+    (window) => window.initialTrigger === "UNBACKED_MOVE",
+  );
+  const unconfirmedOddsLedProtectedWindows = oddsLedProtectedWindows.filter(
+    (window) => window.finalTrigger === "UNBACKED_MOVE",
+  ).length;
+  const confirmedOddsLedProtectedWindows = oddsLedProtectedWindows.filter(
+    (window) => window.finalTrigger === "EVENT_CONFIRMED_MOVE",
+  ).length;
+  const failsafeProtectedWindows = windows.filter(
+    (window) => window.initialTrigger === "STREAM_UNHEALTHY",
+  ).length;
+  const provisionalEventProtectedWindows = windows.filter(
+    (window) => window.provisionalEventAtSuspend,
+  ).length;
+
   return {
     status: "PRIVATE_HOLDOUT_EVALUATION" as const,
     configHash: governor.configHash,
@@ -196,12 +211,16 @@ export function evaluateHoldout(
       reopenLatencyMs: distribution(
         windows.map((window) => window.reopenLatencyMs),
       ),
-      eventSuspensions,
-      unconfirmedEventSuspensions,
-      unconfirmedSuspensionRate:
-        eventSuspensions === 0
+      eventLedProtectedWindows,
+      oddsLedProtectedWindows: oddsLedProtectedWindows.length,
+      confirmedOddsLedProtectedWindows,
+      unconfirmedOddsLedProtectedWindows,
+      unconfirmedOddsLedSuspensionRate:
+        oddsLedProtectedWindows.length === 0
           ? null
-          : unconfirmedEventSuspensions / eventSuspensions,
+          : unconfirmedOddsLedProtectedWindows / oddsLedProtectedWindows.length,
+      failsafeProtectedWindows,
+      provisionalEventProtectedWindows,
       repricingError: horizonMetrics,
     },
     windows,

@@ -40,9 +40,10 @@ through TxODDS's official Solana mainnet `validateStat` instruction.
   real-match vectors remain private under the event data licence.
 - TxLINE on-chain score validation: confirmed on Solana mainnet with a true
   predicate result.
-- Public real-match metrics: available after approval through `/api/public-claim`
-  for approved config and lifecycle evidence, including holdout aggregates and
-  public Solana receipt hashes. Raw fixture IDs and source vectors remain private.
+- Public real-match metrics: prepared privately and withheld pending the second
+  human publication approval. Once approved, `/api/public-claim` exposes only
+  derived holdout aggregates, lifecycle decisions, and public Solana evidence;
+  raw fixture IDs and source vectors remain private.
 
 ## Mainnet evidence
 
@@ -137,10 +138,10 @@ decisions.
 - `REOPEN`: all pending incidents are confirmed or discarded and the
   post-reprice delay passes without renewed instability.
 
-Thresholds shown in the repository are provisional engineering defaults. They
-will be frozen after chronological calibration and approved before holdout
-evaluation. Public aggregates are exposed only via `/api/public-claim` after
-`APPROVED` holdout and lifecycle gates align on the same config hash.
+The thresholds shown in the repository were frozen after chronological
+calibration and approved before holdout evaluation. Public aggregates are
+exposed only via `/api/public-claim` after a separate human publication approval
+and only when the holdout and lifecycle evidence share the approved config hash.
 
 ## Metrics
 
@@ -151,7 +152,9 @@ Stoppage does not report hypothetical betting profit or in-play CLV.
 - `mispricing_integral`: probability divergence multiplied by time, evaluated
   against the first post-trigger quote satisfying the frozen stability rule.
 - suspension and reopen latency.
-- unconfirmed-suspension rate.
+- unconfirmed odds-led suspension rate: odds-led windows that remained
+  `UNBACKED_MOVE` through repricing divided by all odds-led windows; `null` means
+  no odds-led case was observed, not that event-led windows failed to complete.
 - fixed-horizon repricing error.
 - stream uptime and failover count.
 

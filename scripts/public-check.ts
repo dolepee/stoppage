@@ -48,10 +48,6 @@ if (listed.includes("Dockerfile")) {
 }
 
 for (const path of listed) {
-  // Public claim payload intentionally carries on-chain hashes and is reviewed separately.
-  if (path === "data/public/public-claim.json") {
-    continue;
-  }
   if (
     (path === ".env" || path.startsWith(".env.")) &&
     path !== ".env.example"
@@ -65,11 +61,20 @@ for (const path of listed) {
   }
 
   const url = new URL(path, repositoryRoot);
-  const metadata = await stat(url);
+  const metadata = await stat(url).catch((error) => {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
+  });
+  if (!metadata) continue;
   if (!metadata.isFile() || metadata.size > 2_000_000) continue;
   const content = await readFile(url, "utf8");
+  const contentForSecretScan =
+    path === "data/public/public-claim.json"
+      ? scrubApprovedPublicHashes(content)
+      : content;
   for (const [label, pattern] of secretPatterns) {
-    if (pattern.test(content)) failures.push(`${label} pattern in ${path}`);
+    if (pattern.test(contentForSecretScan))
+      failures.push(`${label} pattern in ${path}`);
   }
 }
 
@@ -78,4 +83,21 @@ if (failures.length) {
   process.exitCode = 1;
 } else {
   console.log(`Public gate passed for ${listed.length} repository files.`);
+}
+
+function scrubApprovedPublicHashes(content: string) {
+  const claim = JSON.parse(content) as {
+    approvedConfigHash?: string;
+    lifecycleEvidence?: { decisions?: Array<{ receiptHash?: string }> };
+  };
+  const approvedHashes = [
+    claim.approvedConfigHash,
+    ...(claim.lifecycleEvidence?.decisions ?? []).map(
+      (decision) => decision.receiptHash,
+    ),
+  ].filter((value): value is string => Boolean(value));
+  return approvedHashes.reduce(
+    (scrubbed, hash) => scrubbed.replaceAll(hash, "<approved-public-hash>"),
+    content,
+  );
 }

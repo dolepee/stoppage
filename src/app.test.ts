@@ -60,63 +60,62 @@ describe("operator API", () => {
     );
     try {
       await writeFile(
-        join(dataRoot, "holdout-2026-07-10T12-00-00-000Z.json"),
+        join(dataRoot, "public-claim.json"),
         JSON.stringify({
-          version: 1,
-          status: "AWAITING_PUBLIC_CLAIM_APPROVAL",
+          version: 2,
+          status: "AVAILABLE",
           network: "solana-mainnet",
           approvedConfigHash: CONFIG_HASH,
           evaluatedAt: "2026-07-10T12:00:00.000Z",
-          fixtures: [],
-          aggregate: {
+          approvedAt: "2026-07-10T12:30:00.000Z",
+          approval: {
+            statement: `APPROVE STOPPAGE PUBLIC CLAIM ${CONFIG_HASH}`,
+          },
+          dataBoundary:
+            "No TxLINE records, vectors, identifiers, or absolute source timestamps.",
+          holdout: {
             fixtures: 2,
             completeProtectedWindows: 11,
             staleQuoteSeconds: 1230.071,
             mispricingIntegral: 180.9,
-            eventSuspensions: 11,
-            unconfirmedEventSuspensions: 11,
-            unconfirmedSuspensionRate: 1,
+            eventLedProtectedWindows: 11,
+            oddsLedProtectedWindows: 0,
+            confirmedOddsLedProtectedWindows: 0,
+            unconfirmedOddsLedProtectedWindows: 0,
+            unconfirmedOddsLedSuspensionRate: null,
+            failsafeProtectedWindows: 0,
+            provisionalEventProtectedWindows: 11,
+            definitions: {
+              unconfirmedOddsLedSuspensionRate: "test definition",
+              provisionalEventProtectedWindows: "test definition",
+            },
           },
-        }),
-      );
-      await writeFile(
-        join(
-          dataRoot,
-          "public-evidence-candidate-2026-07-10T12-00-00-000Z.json",
-        ),
-        JSON.stringify({
-          version: 1,
-          status: "APPROVED",
-          evidenceType: "DERIVED_LIFECYCLE_EVIDENCE",
-          network: "solana-mainnet",
-          dataBoundary:
-            "No TxLINE records, vectors, identifiers, or absolute source timestamps.",
-          lifecycleDurationMs: 169636,
-          maximumProbabilityMove: 0.7620899775,
-          configHash: CONFIG_HASH,
-          decisions: [
-            {
-              action: "SUSPEND",
-              trigger: "EVENT_BEFORE_REPRICE",
-              fromMode: "OPEN",
-              toMode: "SUSPENDED",
-              elapsedMs: 0,
-              receiptHash: SUSPEND_RECEIPT,
-              configHash: CONFIG_HASH,
+          lifecycleEvidence: {
+            evidenceType: "DERIVED_LIFECYCLE_EVIDENCE",
+            lifecycleDurationMs: 169636,
+            maximumProbabilityMove: 0.7620899775,
+            decisions: [
+              {
+                action: "SUSPEND",
+                trigger: "EVENT_BEFORE_REPRICE",
+                fromMode: "OPEN",
+                toMode: "SUSPENDED",
+                elapsedMs: 0,
+                receiptHash: SUSPEND_RECEIPT,
+              },
+              {
+                action: "REPRICE",
+                trigger: "EVENT_BEFORE_REPRICE",
+                fromMode: "SUSPENDED",
+                toMode: "REPRICED",
+                elapsedMs: 162640,
+                receiptHash: REPRICE_RECEIPT,
+              },
+            ],
+            txlineValidation: {
+              transactionSignature: TXLINE_SIGNATURE,
+              explorer: `https://solscan.io/tx/${TXLINE_SIGNATURE}`,
             },
-            {
-              action: "REPRICE",
-              trigger: "EVENT_BEFORE_REPRICE",
-              fromMode: "SUSPENDED",
-              toMode: "REPRICED",
-              elapsedMs: 162640,
-              receiptHash: REPRICE_RECEIPT,
-              configHash: CONFIG_HASH,
-            },
-          ],
-          txlineValidation: {
-            transactionSignature: TXLINE_SIGNATURE,
-            explorer: `https://solscan.io/tx/${TXLINE_SIGNATURE}`,
           },
         }),
       );
@@ -138,7 +137,9 @@ describe("operator API", () => {
         approvedConfigHash: CONFIG_HASH,
         holdout: {
           fixtures: 2,
-          eventSuspensions: 11,
+          eventLedProtectedWindows: 11,
+          oddsLedProtectedWindows: 0,
+          unconfirmedOddsLedSuspensionRate: null,
         },
         lifecycleEvidence: {
           evidenceType: "DERIVED_LIFECYCLE_EVIDENCE",
@@ -156,7 +157,42 @@ describe("operator API", () => {
           ],
         },
       });
+      expect(response.json().approvedAt).toBe("2026-07-10T12:30:00.000Z");
       expect(response.body).not.toContain("fixtureId");
+    } finally {
+      await rm(dataRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("does not publish a claim without the exact second approval", async () => {
+    const dataRoot = await mkdtemp(
+      join(tmpdir(), "txodds-public-claim-pending-" + "XXXXXX"),
+    );
+    try {
+      await writeFile(
+        join(dataRoot, "public-claim.json"),
+        JSON.stringify({
+          version: 2,
+          status: "AVAILABLE",
+          network: "solana-mainnet",
+          approvedConfigHash: CONFIG_HASH,
+          evaluatedAt: "2026-07-10T12:00:00.000Z",
+          approvedAt: "2026-07-10T12:30:00.000Z",
+          approval: { statement: "NOT APPROVED" },
+        }),
+      );
+      const application = await createApplication({
+        logger: false,
+        serveStatic: false,
+        publicClaimRoot: dataRoot,
+      });
+      applications.push(application);
+
+      const response = await application.app.inject({
+        method: "GET",
+        url: "/api/public-claim",
+      });
+      expect(response.statusCode).toBe(404);
     } finally {
       await rm(dataRoot, { recursive: true, force: true });
     }

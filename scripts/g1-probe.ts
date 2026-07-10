@@ -1,6 +1,7 @@
 import { Connection, PublicKey } from "@solana/web3.js";
 
 import { loadConfig } from "../src/config.js";
+import { writePrivateCapture } from "../src/private/capture-store.js";
 import { TXLINE_MAINNET } from "../src/txline/constants.js";
 import { TxLineClient } from "../src/txline/client.js";
 
@@ -77,7 +78,12 @@ async function main() {
     result.blockedReason = "TXLINE_API_TOKEN is not configured";
   }
 
-  console.log(JSON.stringify(result, null, 2));
+  const capturedAt = new Date().toISOString();
+  const privateEvidence = await writePrivateCapture(
+    `g1-probe-${capturedAt.replace(/[:.]/g, "-")}.json`,
+    { ...result, capturedAt },
+  );
+  console.log(JSON.stringify({ ...result, privateEvidence }, null, 2));
 }
 
 await main();

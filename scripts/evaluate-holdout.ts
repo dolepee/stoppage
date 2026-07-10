@@ -39,6 +39,13 @@ for (const fixtureId of fixtureIds) {
   });
 }
 
+const oddsLedProtectedWindows = sum(
+  fixtures.map((fixture) => fixture.metrics.oddsLedProtectedWindows),
+);
+const unconfirmedOddsLedProtectedWindows = sum(
+  fixtures.map((fixture) => fixture.metrics.unconfirmedOddsLedProtectedWindows),
+);
+
 const report = {
   version: 1,
   status: "AWAITING_PUBLIC_CLAIM_APPROVAL",
@@ -57,11 +64,27 @@ const report = {
     mispricingIntegral: sum(
       fixtures.map((fixture) => fixture.metrics.mispricingIntegral),
     ),
-    eventSuspensions: sum(
-      fixtures.map((fixture) => fixture.metrics.eventSuspensions),
+    eventLedProtectedWindows: sum(
+      fixtures.map((fixture) => fixture.metrics.eventLedProtectedWindows),
     ),
-    unconfirmedEventSuspensions: sum(
-      fixtures.map((fixture) => fixture.metrics.unconfirmedEventSuspensions),
+    oddsLedProtectedWindows,
+    confirmedOddsLedProtectedWindows: sum(
+      fixtures.map(
+        (fixture) => fixture.metrics.confirmedOddsLedProtectedWindows,
+      ),
+    ),
+    unconfirmedOddsLedProtectedWindows,
+    unconfirmedOddsLedSuspensionRate:
+      oddsLedProtectedWindows === 0
+        ? null
+        : unconfirmedOddsLedProtectedWindows / oddsLedProtectedWindows,
+    failsafeProtectedWindows: sum(
+      fixtures.map((fixture) => fixture.metrics.failsafeProtectedWindows),
+    ),
+    provisionalEventProtectedWindows: sum(
+      fixtures.map(
+        (fixture) => fixture.metrics.provisionalEventProtectedWindows,
+      ),
     ),
   },
 };

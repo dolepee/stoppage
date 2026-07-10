@@ -31,7 +31,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
   const readWorkerStatus =
     options.readWorkerStatus ??
     (() => readRuntimeState<PersistedWorkerStatus>("worker-status.json"));
-  const publicClaimRoot = options.publicClaimRoot ?? "data/private";
+  const publicClaimRoot = options.publicClaimRoot ?? "data/public";
 
   app.addHook("onRequest", async (_request, reply) => {
     reply

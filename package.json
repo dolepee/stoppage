@@ -34,7 +34,8 @@
     "g2:replay": "tsx scripts/replay-capture.ts",
     "policy:calibrate": "tsx scripts/calibrate-policy.ts",
     "policy:holdout": "tsx scripts/evaluate-holdout.ts",
-    "evidence:prepare": "tsx scripts/prepare-public-evidence.ts"
+    "evidence:prepare": "tsx scripts/prepare-public-evidence.ts",
+    "evidence:publish": "tsx scripts/publish-public-evidence.ts"
   },
   "dependencies": {
     "@fastify/static": "9.3.0",
