@@ -7,11 +7,9 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 
 const runtimeRoot = resolve(
-  process.env.STOPPAGE_RUNTIME_ROOT ??
-    resolve(dirname(fileURLToPath(import.meta.url)), "../..", "data/runtime"),
+  process.env.STOPPAGE_RUNTIME_ROOT ?? "data/runtime",
 );
 
 export async function writeRuntimeState(name: string, value: unknown) {

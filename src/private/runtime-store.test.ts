@@ -6,11 +6,13 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 describe("runtime state store", () => {
   let root: string | undefined;
+  const originalCwd = process.cwd();
 
   afterEach(async () => {
     vi.resetModules();
     vi.restoreAllMocks();
     delete process.env.STOPPAGE_RUNTIME_ROOT;
+    process.chdir(originalCwd);
     if (root) await rm(root, { recursive: true, force: true });
   });
 
@@ -26,5 +28,15 @@ describe("runtime state store", () => {
     await expect(readRuntimeState("worker.json")).resolves.toEqual({
       running: true,
     });
+  });
+
+  it("uses the working directory in compiled and source runtimes", async () => {
+    root = await mkdtemp(join(tmpdir(), "stoppage-runtime-cwd-"));
+    process.chdir(root);
+    const { writeRuntimeState } = await import("./runtime-store.js");
+
+    const path = await writeRuntimeState("worker.json", { running: true });
+
+    expect(path).toBe(join(process.cwd(), "data/runtime/worker.json"));
   });
 });
