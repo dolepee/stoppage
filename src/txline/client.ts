@@ -21,6 +21,7 @@ interface TxLineClientOptions {
 
 interface StreamCallbacks<T> {
   onOpen?: () => void | Promise<void>;
+  onRaw?: (payload: unknown, eventId?: string) => void | Promise<void>;
   onData: (payload: T, eventId?: string) => void | Promise<void>;
   onHeartbeat?: (timestamp: number | null) => void | Promise<void>;
 }
@@ -178,6 +179,7 @@ export class TxLineClient {
         continue;
       }
 
+      await callbacks.onRaw?.(parsed, message.id);
       const payload = schema.parse(parsed);
       await callbacks.onData(payload, message.id);
     }

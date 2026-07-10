@@ -10,6 +10,7 @@ import type { LiveWorkerCallbacks, LiveWorkerStatus } from "./types.js";
 interface StreamCallbacks<T> {
   onOpen: () => void | Promise<void>;
   onHeartbeat: (timestamp: number | null) => void | Promise<void>;
+  onRaw?: (payload: unknown, eventId?: string) => void | Promise<void>;
   onData: (payload: T, eventId?: string) => void | Promise<void>;
 }
 
@@ -48,7 +49,7 @@ export class TxLineLiveWorker {
   constructor(options: LiveWorkerOptions) {
     this.#client = options.client;
     this.#callbacks = options.callbacks;
-    this.#heartbeatTimeoutMs = options.heartbeatTimeoutMs ?? 20_000;
+    this.#heartbeatTimeoutMs = options.heartbeatTimeoutMs ?? 45_000;
     this.#reconnectBaseMs = options.reconnectBaseMs ?? 1_000;
     this.#now = options.now ?? Date.now;
     this.#capture = options.capture ?? appendPrivateCapture;
@@ -105,6 +106,8 @@ export class TxLineLiveWorker {
             {
               onOpen: () => this.#touch(name),
               onHeartbeat: () => this.#touch(name),
+              onRaw: (payload, eventId) =>
+                this.#captureRaw(name, payload, eventId),
               onData: (payload) => this.#handleOdds(payload),
             },
             controller.signal,
@@ -114,6 +117,8 @@ export class TxLineLiveWorker {
             {
               onOpen: () => this.#touch(name),
               onHeartbeat: () => this.#touch(name),
+              onRaw: (payload, eventId) =>
+                this.#captureRaw(name, payload, eventId),
               onData: (payload) => this.#handleScore(payload),
             },
             controller.signal,
@@ -147,11 +152,6 @@ export class TxLineLiveWorker {
   async #handleOdds(payload: OddsPayload) {
     const receivedAt = this.#now();
     this.#touch("odds", receivedAt);
-    await this.#capture(captureName(), {
-      stream: "odds",
-      receivedAt,
-      payload,
-    });
     const participants = this.#participants.get(payload.FixtureId);
     if (!participants) {
       this.#status.skippedOdds += 1;
@@ -169,11 +169,6 @@ export class TxLineLiveWorker {
   async #handleScore(payload: ScorePayload) {
     const receivedAt = this.#now();
     this.#touch("scores", receivedAt);
-    await this.#capture(captureName(), {
-      stream: "scores",
-      receivedAt,
-      payload,
-    });
     const inputs = [
       normalizeMatchEvent(payload, receivedAt),
       normalizeEventResolution(payload, receivedAt),
@@ -182,6 +177,19 @@ export class TxLineLiveWorker {
       this.#status.normalizedEvents += 1;
       await this.#callbacks.onInput(input);
     }
+  }
+
+  async #captureRaw(
+    stream: "odds" | "scores",
+    payload: unknown,
+    eventId?: string,
+  ) {
+    await this.#capture(captureName(), {
+      stream,
+      receivedAt: this.#now(),
+      ...(eventId ? { eventId } : {}),
+      payload,
+    });
   }
 
   #touch(name: "odds" | "scores", timestamp = this.#now()) {

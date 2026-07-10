@@ -30,7 +30,8 @@
     "g1:probe": "tsx scripts/g1-probe.ts",
     "g2:discover": "tsx scripts/discover-history.ts",
     "g2:capture": "tsx scripts/capture-history.ts",
-    "g2:replay": "tsx scripts/replay-capture.ts"
+    "g2:replay": "tsx scripts/replay-capture.ts",
+    "policy:calibrate": "tsx scripts/calibrate-policy.ts"
   },
   "dependencies": {
     "@fastify/static": "9.3.0",

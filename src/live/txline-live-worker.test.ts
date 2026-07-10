@@ -25,7 +25,7 @@ describe("TxLineLiveWorker", () => {
       ) => {
         await callbacks.onOpen();
         await callbacks.onHeartbeat(1_000);
-        await callbacks.onData({
+        const payload = {
           FixtureId: 77,
           MessageId: "m1",
           Ts: 1_000,
@@ -35,7 +35,9 @@ describe("TxLineLiveWorker", () => {
           InRunning: true,
           PriceNames: ["Northbridge", "Draw", "Eastport"],
           Pct: ["50.000", "25.000", "25.000"],
-        });
+        };
+        await callbacks.onRaw?.(payload, "odds:1");
+        await callbacks.onData(payload);
         await untilAborted(signal);
       },
       streamScores: async (
@@ -44,7 +46,7 @@ describe("TxLineLiveWorker", () => {
       ) => {
         await callbacks.onOpen();
         await callbacks.onHeartbeat(1_000);
-        await callbacks.onData({
+        const payload = {
           fixtureId: 77,
           gameState: "H2",
           action: "goal",
@@ -53,7 +55,9 @@ describe("TxLineLiveWorker", () => {
           seq: 8,
           confirmed: true,
           dataSoccer: { Goal: true },
-        });
+        };
+        await callbacks.onRaw?.(payload, "scores:1");
+        await callbacks.onData(payload);
         await untilAborted(signal);
       },
     };
@@ -86,6 +90,7 @@ describe("TxLineLiveWorker", () => {
 interface FakeCallbacks<T> {
   onOpen: () => void | Promise<void>;
   onHeartbeat: (timestamp: number | null) => void | Promise<void>;
+  onRaw?: (payload: unknown, eventId?: string) => void | Promise<void>;
   onData: (payload: T) => void | Promise<void>;
 }
 

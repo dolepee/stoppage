@@ -76,6 +76,12 @@ After the transport preflight passes, start the supervised worker:
 pnpm worker:live
 ```
 
+For a bounded observation run, pass `--duration-ms` (up to four hours):
+
+```bash
+pnpm worker:live -- --duration-ms 60000
+```
+
 Discover recent fixtures eligible for TxLINE's historical endpoint before
 capturing G2 evidence:
 
