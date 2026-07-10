@@ -7,6 +7,8 @@ services:
     env_file:
       - path: .env
         required: false
+    volumes:
+      - stoppage-runtime:/app/data/runtime:ro
     healthcheck:
       test:
         [
@@ -18,3 +20,31 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+  worker:
+    profiles: ["live"]
+    build: .
+    restart: unless-stopped
+    command: ["node", "dist/server/worker.js"]
+    env_file:
+      - path: .env
+        required: true
+    volumes:
+      - stoppage-private:/app/data/private
+      - stoppage-runtime:/app/data/runtime
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "const fs=require('node:fs');const s=JSON.parse(fs.readFileSync('/app/data/runtime/worker-status.json','utf8'));if(!s.running||Date.now()-Date.parse(s.updatedAt)>90000)process.exit(1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      start_period: 30s
+      retries: 3
+
+volumes:
+  stoppage-private:
+  stoppage-runtime:

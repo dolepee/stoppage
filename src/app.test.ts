@@ -71,4 +71,42 @@ describe("operator API", () => {
     });
     expect(response.statusCode).toBe(400);
   });
+
+  it("publishes sanitized worker health without feed identifiers", async () => {
+    const now = Date.now();
+    const application = await createApplication({
+      logger: false,
+      serveStatic: false,
+      readWorkerStatus: async () => ({
+        running: true,
+        fixturesLoaded: 6,
+        normalizedOdds: 4,
+        normalizedEvents: 2,
+        skippedOdds: 8,
+        reconnects: { odds: 0, scores: 1 },
+        fixtureRefreshes: 3,
+        fixtureRefreshFailures: 0,
+        lastFixtureRefreshAt: now - 10_000,
+        streamHealth: { odds: true, scores: true },
+        lastMessageAt: { odds: now - 2_000, scores: now - 3_000 },
+        startedAt: new Date(now - 60_000).toISOString(),
+        updatedAt: new Date(now - 500).toISOString(),
+      }),
+    });
+    applications.push(application);
+
+    const response = await application.app.inject({
+      method: "GET",
+      url: "/api/worker-health",
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      available: true,
+      running: true,
+      fixturesLoaded: 6,
+      streamHealth: { odds: true, scores: true },
+    });
+    expect(response.body).not.toContain("lastMessageAt");
+    expect(response.body).not.toContain("api-token");
+  });
 });

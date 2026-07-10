@@ -105,7 +105,19 @@ Secrets are written only to ignored files with restrictive permissions.
 `worker:live` supervises both SSE streams, records raw payloads only under the
 ignored private capture directory, reconnects with bounded backoff, emits
 stream-health inputs into the same governor, and persists only derived decision
-receipts separately.
+receipts separately. It also refreshes the fixture catalog every five minutes so
+new knockout fixtures become eligible without a restart.
+
+For a container host, the compiled worker runs without development dependencies:
+
+```bash
+docker compose --profile live up -d --build
+curl http://localhost:4173/api/worker-health
+```
+
+The live profile keeps raw captures and runtime state in separate persistent
+volumes. The health endpoint exposes only derived counters, stream state, and
+message age; it never returns credentials, source identifiers, or feed records.
 
 ## Policy
 

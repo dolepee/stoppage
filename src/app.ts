@@ -7,6 +7,8 @@ import { z } from "zod";
 
 import type { AppConfig } from "./config.js";
 import { loadConfig } from "./config.js";
+import type { LiveWorkerStatus } from "./live/types.js";
+import { readRuntimeState } from "./private/runtime-store.js";
 import { publicJudgeScenario } from "./replay/public-scenario.js";
 import { StoppageRuntime } from "./runtime/stoppage-runtime.js";
 
@@ -14,12 +16,19 @@ interface ApplicationOptions {
   config?: AppConfig;
   logger?: boolean;
   serveStatic?: boolean;
+  readWorkerStatus?: WorkerStatusReader;
 }
+
+type PersistedWorkerStatus = LiveWorkerStatus & { updatedAt: string };
+type WorkerStatusReader = () => Promise<PersistedWorkerStatus | null>;
 
 export async function createApplication(options: ApplicationOptions = {}) {
   const config = options.config ?? loadConfig();
   const app = Fastify({ logger: options.logger ?? true });
   const runtime = new StoppageRuntime(publicJudgeScenario);
+  const readWorkerStatus =
+    options.readWorkerStatus ??
+    (() => readRuntimeState<PersistedWorkerStatus>("worker-status.json"));
 
   app.addHook("onRequest", async (_request, reply) => {
     reply
@@ -58,6 +67,40 @@ export async function createApplication(options: ApplicationOptions = {}) {
   }));
 
   app.get("/api/status", async () => runtime.snapshot());
+
+  app.get("/api/worker-health", async () => {
+    const status = await readWorkerStatus();
+    if (!status) {
+      return {
+        available: false,
+        configured: Boolean(config.txlineApiToken),
+      };
+    }
+    const now = Date.now();
+    return {
+      available: true,
+      configured: Boolean(config.txlineApiToken),
+      running: status.running,
+      fixturesLoaded: status.fixturesLoaded,
+      normalizedOdds: status.normalizedOdds,
+      normalizedEvents: status.normalizedEvents,
+      reconnects: status.reconnects,
+      fixtureRefreshes: status.fixtureRefreshes,
+      fixtureRefreshFailures: status.fixtureRefreshFailures,
+      streamHealth: status.streamHealth,
+      lastMessageAgeMs: {
+        odds:
+          status.lastMessageAt.odds === null
+            ? null
+            : Math.max(0, now - status.lastMessageAt.odds),
+        scores:
+          status.lastMessageAt.scores === null
+            ? null
+            : Math.max(0, now - status.lastMessageAt.scores),
+      },
+      updatedAt: status.updatedAt,
+    };
+  });
 
   app.post("/api/replay/start", async (request, reply) => {
     const body = z
