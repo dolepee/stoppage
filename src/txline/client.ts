@@ -30,7 +30,8 @@ export class TxLineClient {
   readonly #origin: string;
   readonly #apiToken: string | undefined;
   readonly #fetch: typeof fetch;
-  #jwt?: string;
+  #jwt: string | undefined;
+  #guestSessionRequest: Promise<string> | undefined;
 
   constructor(options: TxLineClientOptions) {
     this.#origin = options.origin.replace(/\/$/, "");
@@ -42,19 +43,18 @@ export class TxLineClient {
     return Boolean(this.#apiToken);
   }
 
-  async startGuestSession(): Promise<string> {
-    const response = await this.#fetch(`${this.#origin}/auth/guest/start`, {
-      method: "POST",
-      headers: { Accept: "application/json" },
-    });
+  async startGuestSession(signal?: AbortSignal): Promise<string> {
+    if (this.#guestSessionRequest) return this.#guestSessionRequest;
 
-    if (!response.ok) {
-      throw new Error(`TxLINE guest auth failed with HTTP ${response.status}`);
+    const request = this.#requestGuestSession(signal);
+    this.#guestSessionRequest = request;
+    try {
+      return await request;
+    } finally {
+      if (this.#guestSessionRequest === request) {
+        this.#guestSessionRequest = undefined;
+      }
     }
-
-    const session = guestSessionSchema.parse(await response.json());
-    this.#jwt = session.token;
-    return session.token;
   }
 
   async fetchFixtures(
@@ -188,13 +188,14 @@ export class TxLineClient {
   async #authorizedFetch(
     path: string,
     init: RequestInit = {},
+    allowAuthRetry = true,
   ): Promise<Response> {
     if (!this.#apiToken) {
       throw new Error(
         "TXLINE_API_TOKEN is required for fixtures, history, and streams",
       );
     }
-    if (!this.#jwt) await this.startGuestSession();
+    if (!this.#jwt) await this.startGuestSession(init.signal ?? undefined);
 
     const response = await this.#fetch(`${this.#origin}${path}`, {
       ...init,
@@ -205,9 +206,10 @@ export class TxLineClient {
       },
     });
 
-    if (response.status === 401) {
-      await this.startGuestSession();
-      return this.#authorizedFetch(path, init);
+    if (response.status === 401 && allowAuthRetry) {
+      this.#jwt = undefined;
+      await this.startGuestSession(init.signal ?? undefined);
+      return this.#authorizedFetch(path, init, false);
     }
 
     if (!response.ok) {
@@ -218,6 +220,23 @@ export class TxLineClient {
     }
 
     return response;
+  }
+
+  async #requestGuestSession(signal?: AbortSignal): Promise<string> {
+    const timeout = AbortSignal.timeout(15_000);
+    const response = await this.#fetch(`${this.#origin}/auth/guest/start`, {
+      method: "POST",
+      headers: { Accept: "application/json" },
+      signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
+    });
+
+    if (!response.ok) {
+      throw new Error(`TxLINE guest auth failed with HTTP ${response.status}`);
+    }
+
+    const session = guestSessionSchema.parse(await response.json());
+    this.#jwt = session.token;
+    return session.token;
   }
 }
 

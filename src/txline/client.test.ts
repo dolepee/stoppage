@@ -54,4 +54,51 @@ describe("TxLineClient", () => {
     expect(scores[0]).toMatchObject({ FixtureId: 77, fixtureId: 77 });
     expect(scores[0]?.startTime).toBe(500);
   });
+
+  it("deduplicates concurrent guest authentication", async () => {
+    let guestRequests = 0;
+    const fetchImplementation: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/auth/guest/start")) {
+        guestRequests += 1;
+        await Promise.resolve();
+        return Response.json({ token: "guest" });
+      }
+      return Response.json([]);
+    };
+    const client = new TxLineClient({
+      origin: "https://txline.example",
+      apiToken: "api-token",
+      fetchImplementation,
+    });
+
+    await Promise.all([client.fetchFixtures(), client.fetchFixtures()]);
+
+    expect(guestRequests).toBe(1);
+  });
+
+  it("retries one unauthorized response and then fails", async () => {
+    let guestRequests = 0;
+    let fixtureRequests = 0;
+    const fetchImplementation: typeof fetch = async (input) => {
+      const url = String(input);
+      if (url.endsWith("/auth/guest/start")) {
+        guestRequests += 1;
+        return Response.json({ token: `guest-${guestRequests}` });
+      }
+      fixtureRequests += 1;
+      return new Response("unauthorized", { status: 401 });
+    };
+    const client = new TxLineClient({
+      origin: "https://txline.example",
+      apiToken: "api-token",
+      fetchImplementation,
+    });
+
+    await expect(client.fetchFixtures()).rejects.toThrow(
+      "failed with HTTP 401",
+    );
+    expect(guestRequests).toBe(2);
+    expect(fixtureRequests).toBe(2);
+  });
 });
