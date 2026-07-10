@@ -21,8 +21,8 @@ TxLINE odds ───┘                └─────────> FAILSAFE
 
 The MVP controls one market deeply: in-running soccer `1X2`. Every transition
 emits a canonical JSON receipt bound to the policy configuration by SHA-256.
-For the submission lifecycle, the triggering TxLINE event will also be checked
-through TxODDS's official Solana mainnet validation path.
+The sponsor-specific proof path is live: a confirmed score stat was checked
+through TxODDS's official Solana mainnet `validateStat` instruction.
 
 ## Current status
 
@@ -30,11 +30,29 @@ through TxODDS's official Solana mainnet validation path.
 - Event-first, odds-first, and stream-failure paths: implemented and tested.
 - Zero-friction public judge replay: implemented with a **synthetic normalized
   fixture**, visibly labeled in the application.
-- TxLINE mainnet program and free service-level-12 row: independently read from
-  Solana mainnet.
-- Live TxLINE feed capture and real-fixture evaluation: gated on the dedicated
-  mainnet subscription wallet and API activation. No live metrics are claimed
-  before that gate passes.
+- TxLINE service-level-12 subscription and API activation: confirmed on Solana
+  mainnet.
+- Dual-stream transport preflight: fixtures loaded, both mainnet SSE transports
+  connected, and both emitted heartbeats without reconnect or parse errors. This
+  is not presented as the still-pending four-hour dual-data gate.
+- Private historical gate: three captured fixtures each produced at least one
+  complete `SUSPEND -> REPRICE -> REOPEN` lifecycle. Raw TxLINE records and
+  real-match vectors remain private under the event data licence.
+- TxLINE on-chain score validation: confirmed on Solana mainnet with a true
+  predicate result.
+- Public real-match metrics: intentionally withheld until the policy freeze and
+  chronological holdout are approved.
+
+## Mainnet evidence
+
+| Proof                         | Public evidence                                                                                                                 |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| TxLINE program                | [`9Exb...cKaA`](https://solscan.io/account/9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA)                                        |
+| Free-tier subscription        | [`27b1...KP3T`](https://solscan.io/tx/27b1KoYCrWD9MkZY86rkUpJmWzqyRjHmi5hC8CNMwA81jr8QBVmR7diYy6tWE3LLfXA3KfLCzZsStGkG7YZWKP3T) |
+| TxLINE `validateStat` success | [`3ZEu...XwPd`](https://solscan.io/tx/3ZEuF4zPtGiwT5iMwHQnPMWpX9U8BsMz1aHybwyzmkjaoMKmCNVQ4eADQtAB11rNwyb1EtDLadn9qQeGZzuXXwPd) |
+
+The validation transaction is the sponsor-specific proof. Stoppage decision
+hashes remain supporting evidence rather than the product's main action.
 
 ## Run locally
 

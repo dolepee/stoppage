@@ -27,8 +27,10 @@ The fixture used in the video cannot be used to tune the thresholds.
 
 ### Event before reprice
 
-A confirmed high-impact event arrives while the latest accepted 1X2 quote
-predates the event. Stoppage suspends immediately and waits for stable consensus.
+A high-impact event arrives while the latest accepted 1X2 quote predates the
+event. Stoppage suspends immediately, including on an unconfirmed first signal,
+then waits for stable consensus. The affected market cannot reopen until that
+incident is confirmed or explicitly discarded.
 
 ### Odds before event
 
