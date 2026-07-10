@@ -40,10 +40,10 @@ through TxODDS's official Solana mainnet `validateStat` instruction.
   real-match vectors remain private under the event data licence.
 - TxLINE on-chain score validation: confirmed on Solana mainnet with a true
   predicate result.
-- Public real-match metrics: prepared privately and withheld pending the second
-  human publication approval. Once approved, `/api/public-claim` exposes only
-  derived holdout aggregates, lifecycle decisions, and public Solana evidence;
-  raw fixture IDs and source vectors remain private.
+- Public real-match metrics: human-approved and available through
+  `/api/public-claim`. The endpoint exposes only derived holdout aggregates,
+  lifecycle decisions, and public Solana evidence; raw fixture IDs and source
+  vectors remain private.
 
 ## Mainnet evidence
 
