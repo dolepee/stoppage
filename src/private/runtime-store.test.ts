@@ -10,12 +10,13 @@ describe("runtime state store", () => {
   afterEach(async () => {
     vi.resetModules();
     vi.restoreAllMocks();
+    delete process.env.STOPPAGE_RUNTIME_ROOT;
     if (root) await rm(root, { recursive: true, force: true });
   });
 
   it("writes and reads compact state atomically", async () => {
     root = await mkdtemp(join(tmpdir(), "stoppage-runtime-"));
-    vi.spyOn(process, "cwd").mockReturnValue(root);
+    process.env.STOPPAGE_RUNTIME_ROOT = root;
     const { readRuntimeState, writeRuntimeState } =
       await import("./runtime-store.js");
 
