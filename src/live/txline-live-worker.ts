@@ -67,10 +67,13 @@ export class TxLineLiveWorker {
       running: true,
       startedAt: new Date().toISOString(),
     };
+    this.#lastHealthEmission = { odds: true, scores: true };
 
     const fixtures = await this.#client.fetchFixtures();
     this.#loadParticipants(fixtures);
     this.#status.fixturesLoaded = this.#participants.size;
+    await this.#setHealth("odds", false, "stream-connecting");
+    await this.#setHealth("scores", false, "stream-connecting");
     await this.#publishStatus();
 
     const monitor = this.#monitorHealth(signal);
@@ -151,7 +154,7 @@ export class TxLineLiveWorker {
 
   async #handleOdds(payload: OddsPayload) {
     const receivedAt = this.#now();
-    this.#touch("odds", receivedAt);
+    await this.#touch("odds", receivedAt);
     const participants = this.#participants.get(payload.FixtureId);
     if (!participants) {
       this.#status.skippedOdds += 1;
@@ -168,7 +171,7 @@ export class TxLineLiveWorker {
 
   async #handleScore(payload: ScorePayload) {
     const receivedAt = this.#now();
-    this.#touch("scores", receivedAt);
+    await this.#touch("scores", receivedAt);
     const inputs = [
       normalizeMatchEvent(payload, receivedAt),
       normalizeEventResolution(payload, receivedAt),
@@ -192,14 +195,15 @@ export class TxLineLiveWorker {
     });
   }
 
-  #touch(name: "odds" | "scores", timestamp = this.#now()) {
+  async #touch(name: "odds" | "scores", timestamp = this.#now()) {
     this.#status.lastMessageAt[name] = timestamp;
-    void this.#setHealth(name, true);
+    await this.#setHealth(name, true);
   }
 
   async #monitorHealth(signal: AbortSignal) {
     while (!signal.aborted) {
       await abortableDelay(1_000, signal);
+      if (signal.aborted) break;
       const now = this.#now();
       for (const name of ["odds", "scores"] as const) {
         const lastMessage = this.#status.lastMessageAt[name];
@@ -210,6 +214,7 @@ export class TxLineLiveWorker {
           await this.#setHealth(name, false, "heartbeat-timeout");
         }
       }
+      await this.#callbacks.onInput({ kind: "tick", observedTs: now });
       await this.#publishStatus();
     }
   }
@@ -240,7 +245,7 @@ function emptyStatus(): LiveWorkerStatus {
     normalizedEvents: 0,
     skippedOdds: 0,
     reconnects: { odds: 0, scores: 0 },
-    streamHealth: { odds: true, scores: true },
+    streamHealth: { odds: false, scores: false },
     lastMessageAt: { odds: null, scores: null },
     startedAt: null,
   };

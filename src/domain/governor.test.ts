@@ -134,6 +134,25 @@ describe("QuoteGovernor", () => {
     expect(suspended[0]?.body.fromMode).toBe("REPRICED");
     expect(governor.getState(42).mode).toBe("SUSPENDED");
   });
+
+  it("applies stream health observed before a fixture is created", () => {
+    const governor = new QuoteGovernor(config);
+    governor.process({
+      kind: "stream-health",
+      stream: "scores",
+      healthy: false,
+      observedTs: 500,
+      reason: "stream-not-open",
+    });
+
+    governor.process(quote("q0", 1_000, probabilities(0.4, 0.3, 0.3)));
+
+    expect(governor.getState(42)).toMatchObject({
+      mode: "FAILSAFE",
+      streamHealth: { odds: true, scores: false },
+      pendingTrigger: "STREAM_UNHEALTHY",
+    });
+  });
 });
 
 function runLifecycle() {

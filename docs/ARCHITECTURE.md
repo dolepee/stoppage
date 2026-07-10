@@ -11,8 +11,9 @@
 4. **Evaluation runtime** maintains the always-open baseline separately from
    the governed book and computes non-financial risk metrics after a stable
    reference exists.
-5. **Operator API** publishes normalized snapshots and decision receipts. It
-   never publishes TxLINE raw payloads or credentials.
+5. **Operator API** publishes synthetic judge snapshots and approved projections
+   of derived lifecycle evidence. It never publishes TxLINE records, odds
+   vectors, source identifiers, or credentials.
 6. **Operator console** renders the same API used by the replay and live worker.
 
 ## State machine
@@ -33,10 +34,11 @@ but it is not exposed until the confirmation delay passes.
 
 ## Determinism
 
-The configuration is canonicalized and hashed. A receipt contains the action,
-trigger, state transition, source identifiers, observed timestamp, optional
-quote vector, and configuration hash. Equivalent inputs and configuration
-produce byte-identical receipt hashes.
+The configuration is canonicalized and hashed. A private receipt contains the
+action, trigger, state transition, source identifiers, observed timestamp,
+optional quote vector, and configuration hash. Equivalent inputs and
+configuration produce byte-identical receipt hashes. Public evidence projects
+only approved derived fields and the receipt hash.
 
 ## Hosted shape
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { GovernorInput } from "../domain/types.js";
 import type { OddsPayload, ScorePayload } from "../txline/types.js";
@@ -66,17 +66,19 @@ describe("TxLineLiveWorker", () => {
       callbacks: {
         onInput: (input) => {
           inputs.push(input);
-          if (inputs.length === 2) controller.abort();
+          const kinds = new Set(inputs.map((candidate) => candidate.kind));
+          if (kinds.has("quote") && kinds.has("match-event")) {
+            controller.abort();
+          }
         },
       },
       capture: async (name) => captures.push(name),
     });
 
     await worker.run(controller.signal);
-    expect(inputs.map((input) => input.kind).sort()).toEqual([
-      "match-event",
-      "quote",
-    ]);
+    expect(inputs.map((input) => input.kind)).toEqual(
+      expect.arrayContaining(["stream-health", "match-event", "quote"]),
+    );
     expect(captures).toHaveLength(2);
     expect(worker.status()).toMatchObject({
       running: false,
@@ -84,6 +86,53 @@ describe("TxLineLiveWorker", () => {
       normalizedOdds: 1,
       normalizedEvents: 1,
     });
+  });
+
+  it("emits clock ticks so fail-safe recovery can advance", async () => {
+    vi.useFakeTimers();
+    const inputs: GovernorInput[] = [];
+    const controller = new AbortController();
+    let now = 1_000;
+    const client = {
+      fetchFixtures: async () => [],
+      streamOdds: async (
+        callbacks: FakeCallbacks<OddsPayload>,
+        signal: AbortSignal,
+      ) => {
+        await callbacks.onOpen();
+        await untilAborted(signal);
+      },
+      streamScores: async (
+        callbacks: FakeCallbacks<ScorePayload>,
+        signal: AbortSignal,
+      ) => {
+        await callbacks.onOpen();
+        await untilAborted(signal);
+      },
+    };
+    const worker = new TxLineLiveWorker({
+      client,
+      now: () => now,
+      callbacks: {
+        onInput: (input) => {
+          inputs.push(input);
+          if (input.kind === "tick") controller.abort();
+        },
+      },
+      capture: async () => undefined,
+    });
+
+    try {
+      const run = worker.run(controller.signal);
+      await vi.advanceTimersByTimeAsync(0);
+      now = 2_000;
+      await vi.advanceTimersByTimeAsync(1_000);
+      await run;
+
+      expect(inputs).toContainEqual({ kind: "tick", observedTs: 2_000 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 

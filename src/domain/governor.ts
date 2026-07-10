@@ -29,6 +29,7 @@ export class QuoteGovernor {
   readonly #config: GovernorConfig;
   readonly #configHash: string;
   readonly #fixtures = new Map<FixtureId, FixtureGovernorState>();
+  readonly #streamHealth = { odds: true, scores: true };
 
   constructor(config: GovernorConfig = DEFAULT_GOVERNOR_CONFIG) {
     if (config.stableUpdatesRequired < 2) {
@@ -245,6 +246,7 @@ export class QuoteGovernor {
 
   #processHealth(input: Extract<GovernorInput, { kind: "stream-health" }>) {
     const receipts: DecisionReceipt[] = [];
+    this.#streamHealth[input.stream] = input.healthy;
     for (const state of this.#fixtures.values()) {
       state.streamHealth[input.stream] = input.healthy;
       const bothHealthy = state.streamHealth.odds && state.streamHealth.scores;
@@ -365,10 +367,11 @@ export class QuoteGovernor {
     const existing = this.#fixtures.get(fixtureId);
     if (existing) return existing;
 
+    const streamsHealthy = this.#streamHealth.odds && this.#streamHealth.scores;
     const created: FixtureGovernorState = {
       fixtureId,
       market: "1X2",
-      mode: "OPEN",
+      mode: streamsHealthy ? "OPEN" : "FAILSAFE",
       quote: null,
       preTriggerQuote: null,
       candidateQuote: null,
@@ -378,9 +381,9 @@ export class QuoteGovernor {
       lastHighImpactEvent: null,
       seenEventIncidentIds: [],
       pendingUnconfirmedIncidentIds: [],
-      pendingTrigger: null,
+      pendingTrigger: streamsHealthy ? null : "STREAM_UNHEALTHY",
       pendingSourceIds: [],
-      streamHealth: { odds: true, scores: true },
+      streamHealth: structuredClone(this.#streamHealth),
       bothStreamsHealthySince: null,
       receipts: [],
     };

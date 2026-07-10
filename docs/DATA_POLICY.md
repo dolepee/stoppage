@@ -16,8 +16,11 @@ hackathon data licence terminates.
 
 - State transitions and policy actions.
 - Aggregate, non-financial evaluation metrics.
-- TxLINE message identifiers and cryptographic hashes.
+- Cryptographic commitments to private inputs, without the source records or
+  identifiers.
 - Decision receipt hashes and approved proof transactions.
 - A normalized synthetic scenario for zero-friction judge testing.
 
 The public API does not expose an endpoint that returns captured TxLINE payloads.
+Real-match quote vectors and score records are not embedded in the deployed app
+or demo media.

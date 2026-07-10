@@ -94,15 +94,16 @@ receipts separately.
 Stoppage is a deterministic state machine. No LLM participates in quote
 decisions.
 
-- `EVENT_BEFORE_REPRICE`: a confirmed goal, red card, penalty, or VAR signal
-  arrives while the last quote predates it.
+- `EVENT_BEFORE_REPRICE`: a goal, red card, penalty, or VAR signal arrives while
+  the last quote predates it. An unconfirmed signal suspends immediately, but
+  confirmation or explicit discard is required before reopening.
 - `UNBACKED_MOVE`: a configured probability jump arrives without a supporting
   high-impact event inside the confirmation window.
 - `STREAM_UNHEALTHY`: either required feed misses its health policy.
 - `REPRICE`: the consensus vector remains inside the configured epsilon for the
   required number of consecutive updates.
-- `REOPEN`: the post-reprice confirmation delay passes without renewed
-  instability.
+- `REOPEN`: all pending incidents are confirmed or discarded and the
+  post-reprice delay passes without renewed instability.
 
 Thresholds shown in the repository are provisional engineering defaults. They
 will be frozen after chronological calibration and approved before holdout
@@ -126,10 +127,12 @@ never available to the live decision path.
 
 ## Data boundary
 
-Raw TxLINE payloads and credentials are private runtime material. They are not
-committed or returned by the public API. The application exposes normalized
-state transitions, aggregate metrics, source identifiers, and hashes. Private
-captures are purged when the hackathon data licence terminates.
+Raw TxLINE payloads, odds vectors, score records, identifiers, and credentials
+are private runtime material. They are not committed or returned by the public
+API. The public application exposes synthetic judge inputs plus Stoppage-derived
+state transitions, approved aggregate metrics, hashes, and public Solana proof
+transactions. Private captures are purged when the hackathon data licence
+terminates.
 
 See [architecture](docs/ARCHITECTURE.md), [rulebook](docs/RULEBOOK.md),
 [mainnet setup](docs/MAINNET_SETUP.md), and [data policy](docs/DATA_POLICY.md).
