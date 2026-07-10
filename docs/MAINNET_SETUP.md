@@ -43,6 +43,15 @@ Run the gate probe afterward:
 pnpm g1:probe
 ```
 
+After G1 reports both streams connected, start the supervised worker:
+
+```bash
+pnpm worker:live
+```
+
+The worker exits if no API token exists. It never logs raw feed payloads to
+stdout; raw capture files remain under ignored `data/private/`.
+
 ## Secret handling
 
 - `.secrets/`, `.env`, raw captures, and runtime data are ignored.

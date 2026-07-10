@@ -26,6 +26,7 @@
     "txline:inspect": "tsx scripts/inspect-mainnet.ts",
     "txline:activate": "tsx scripts/activate-mainnet.ts",
     "txline:validate-score": "tsx scripts/validate-score-mainnet.ts",
+    "worker:live": "tsx scripts/run-live-worker.ts",
     "g1:probe": "tsx scripts/g1-probe.ts",
     "g2:capture": "tsx scripts/capture-history.ts"
   },

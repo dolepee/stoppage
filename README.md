@@ -77,11 +77,17 @@ pnpm wallet:create
 pnpm txline:inspect
 pnpm txline:activate
 pnpm g1:probe
+pnpm worker:live
 ```
 
 `txline:activate` refuses non-mainnet hosts, non-level-12 subscriptions, and
 wallets without enough SOL for Token-2022 account rent and transaction fees.
 Secrets are written only to ignored files with restrictive permissions.
+
+`worker:live` supervises both SSE streams, records raw payloads only under the
+ignored private capture directory, reconnects with bounded backoff, emits
+stream-health inputs into the same governor, and persists only derived decision
+receipts separately.
 
 ## Policy
 
