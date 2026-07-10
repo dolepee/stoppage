@@ -153,6 +153,71 @@ describe("QuoteGovernor", () => {
       pendingTrigger: "STREAM_UNHEALTHY",
     });
   });
+
+  it("keeps an already-updated quote open when an older event arrives", () => {
+    const governor = new QuoteGovernor(config);
+    governor.process(quote("q0", 2_500, probabilities(0.5, 0.25, 0.25)));
+
+    const receipts = governor.process(event("goal-1", 2_000, false, 3_000));
+
+    expect(receipts).toEqual([]);
+    expect(governor.getState(42)).toMatchObject({
+      mode: "OPEN",
+      pendingUnconfirmedIncidentIds: [],
+    });
+  });
+
+  it("restarts the recovery window when either stream degrades again", () => {
+    const governor = new QuoteGovernor(config);
+    governor.process(quote("q0", 1_000, probabilities(0.4, 0.3, 0.3)));
+    governor.process({
+      kind: "stream-health",
+      stream: "scores",
+      healthy: false,
+      observedTs: 2_000,
+    });
+    governor.process({
+      kind: "stream-health",
+      stream: "scores",
+      healthy: true,
+      observedTs: 3_000,
+    });
+    governor.process({
+      kind: "stream-health",
+      stream: "odds",
+      healthy: false,
+      observedTs: 3_600,
+    });
+    governor.process({
+      kind: "stream-health",
+      stream: "odds",
+      healthy: true,
+      observedTs: 4_000,
+    });
+
+    expect(governor.process({ kind: "tick", observedTs: 4_999 })).toEqual([]);
+    expect(
+      governor
+        .process({ kind: "tick", observedTs: 5_000 })
+        .map((receipt) => receipt.body.action),
+    ).toEqual(["RECOVER_TO_SUSPENDED"]);
+  });
+
+  it("resets stability observations when a new incident arrives", () => {
+    const governor = new QuoteGovernor(config);
+    governor.process(quote("q0", 1_000, probabilities(0.4, 0.3, 0.3)));
+    governor.process(event("goal-1", 2_000));
+    governor.process(quote("q1", 2_400, probabilities(0.54, 0.25, 0.21)));
+    governor.process(quote("q2", 2_600, probabilities(0.545, 0.247, 0.208)));
+
+    expect(governor.getState(42).stableUpdateCount).toBe(2);
+    expect(governor.process(event("red-card-2", 2_800))).toEqual([]);
+    expect(governor.getState(42).stableUpdateCount).toBe(0);
+    expect(
+      governor.process(quote("q3", 2_900, probabilities(0.546, 0.246, 0.208))),
+    ).toEqual([]);
+    expect(governor.getState(42).stableUpdateCount).toBe(1);
+  });
 });
 
 function runLifecycle() {
@@ -186,6 +251,7 @@ function event(
   eventId: string,
   timestamp: number,
   confirmed = true,
+  receivedTimestamp = timestamp,
 ): MatchEvent {
   return {
     kind: "match-event",
@@ -194,7 +260,7 @@ function event(
     incidentId: eventId,
     eventType: "GOAL",
     sourceTs: timestamp,
-    receivedTs: timestamp,
+    receivedTs: receivedTimestamp,
     confirmed,
   };
 }

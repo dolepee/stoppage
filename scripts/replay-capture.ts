@@ -2,14 +2,9 @@ import { readFile } from "node:fs/promises";
 import { basename, resolve } from "node:path";
 
 import { QuoteGovernor } from "../src/domain/governor.js";
-import { maximumProbabilityMove } from "../src/domain/probability.js";
-import type {
-  ConsensusQuote,
-  DecisionReceipt,
-  GovernorInput,
-  MatchEvent,
-} from "../src/domain/types.js";
+import type { DecisionReceipt } from "../src/domain/types.js";
 import { writePrivateCapture } from "../src/private/capture-store.js";
+import { completeLifecycles } from "../src/replay/lifecycles.js";
 import {
   buildReplayInputs,
   inputTimestamp,
@@ -87,78 +82,6 @@ console.log(
     2,
   ),
 );
-
-function completeLifecycles(
-  receipts: DecisionReceipt[],
-  inputs: GovernorInput[],
-) {
-  const quoteInputs = inputs.filter(
-    (input): input is ConsensusQuote => input.kind === "quote",
-  );
-  const eventInputs = new Map(
-    inputs
-      .filter((input): input is MatchEvent => input.kind === "match-event")
-      .map((event) => [event.eventId, event]),
-  );
-  const completed: Array<{
-    trigger: string;
-    eventType: string | null;
-    sourceEventId: string | null;
-    suspendTs: number;
-    repriceTs: number;
-    reopenTs: number;
-    suspensionMs: number;
-    repriceToReopenMs: number;
-    maximumProbabilityMove: number | null;
-    suspendHash: string;
-    repriceHash: string;
-    reopenHash: string;
-  }> = [];
-  let suspended: DecisionReceipt | null = null;
-  let repriced: DecisionReceipt | null = null;
-
-  for (const receipt of receipts) {
-    if (receipt.body.action === "SUSPEND") {
-      suspended = receipt;
-      repriced = null;
-    } else if (receipt.body.action === "REPRICE" && suspended) {
-      repriced = receipt;
-    } else if (receipt.body.action === "REOPEN" && suspended && repriced) {
-      const sourceEventId =
-        suspended.body.sourceIds.find((sourceId) =>
-          eventInputs.has(sourceId),
-        ) ?? null;
-      const event = sourceEventId ? eventInputs.get(sourceEventId) : undefined;
-      const preTriggerQuote = [...quoteInputs]
-        .reverse()
-        .find((quote) => quote.receivedTs <= suspended!.body.observedTs);
-      const probabilityMove =
-        preTriggerQuote && repriced.body.quote
-          ? maximumProbabilityMove(
-              preTriggerQuote.probabilities,
-              repriced.body.quote,
-            )
-          : null;
-      completed.push({
-        trigger: suspended.body.trigger,
-        eventType: event?.eventType ?? null,
-        sourceEventId,
-        suspendTs: suspended.body.observedTs,
-        repriceTs: repriced.body.observedTs,
-        reopenTs: receipt.body.observedTs,
-        suspensionMs: receipt.body.observedTs - suspended.body.observedTs,
-        repriceToReopenMs: receipt.body.observedTs - repriced.body.observedTs,
-        maximumProbabilityMove: probabilityMove,
-        suspendHash: suspended.hash,
-        repriceHash: repriced.hash,
-        reopenHash: receipt.hash,
-      });
-      suspended = null;
-      repriced = null;
-    }
-  }
-  return completed;
-}
 
 function countBy<T>(values: T[], key: (value: T) => string) {
   return Object.fromEntries(

@@ -84,10 +84,13 @@ export class QuoteGovernor {
         state.quote.probabilities,
         quote.probabilities,
       );
+      const eventAge = state.lastHighImpactEvent
+        ? quote.receivedTs - state.lastHighImpactEvent.receivedTs
+        : null;
       const eventSupportsMove =
-        state.lastHighImpactEvent !== null &&
-        quote.receivedTs - state.lastHighImpactEvent.receivedTs <=
-          this.#config.eventConfirmationWindowMs;
+        eventAge !== null &&
+        eventAge >= 0 &&
+        eventAge <= this.#config.eventConfirmationWindowMs;
 
       if (move >= this.#config.sharpMoveThreshold && !eventSupportsMove) {
         state.preTriggerQuote = state.quote;
@@ -172,7 +175,18 @@ export class QuoteGovernor {
         state.pendingUnconfirmedIncidentIds.filter(
           (incidentId) => incidentId !== event.incidentId,
         );
-    } else if (
+    }
+
+    const quotePredatesEvent =
+      state.quote === null || state.quote.sourceTs < event.sourceTs;
+    const incidentAffectsCurrentState =
+      state.mode === "FAILSAFE" ||
+      state.mode === "SUSPENDED" ||
+      state.mode === "REPRICED" ||
+      (state.mode === "OPEN" && firstObservation && quotePredatesEvent);
+    if (
+      !event.confirmed &&
+      incidentAffectsCurrentState &&
       !state.pendingUnconfirmedIncidentIds.includes(event.incidentId)
     ) {
       state.pendingUnconfirmedIncidentIds.push(event.incidentId);
@@ -184,30 +198,34 @@ export class QuoteGovernor {
         ...state.pendingSourceIds,
         event.eventId,
       ]);
-      if (state.pendingTrigger === "UNBACKED_MOVE") {
+      if (state.pendingTrigger === "UNBACKED_MOVE" && event.confirmed) {
         state.pendingTrigger = "EVENT_CONFIRMED_MOVE";
       }
-      if (state.mode === "REPRICED" && firstObservation) {
-        state.pendingTrigger = "EVENT_BEFORE_REPRICE";
-        state.suspendedAt = event.receivedTs;
+      if (firstObservation) {
         state.stableUpdateCount = 0;
         state.candidateQuote = null;
-        state.repricedAt = null;
-        return [
-          this.#transition(
-            state,
-            "SUSPENDED",
-            "SUSPEND",
-            "EVENT_BEFORE_REPRICE",
-            event.receivedTs,
-            state.pendingSourceIds,
-          ),
-        ];
+        if (state.pendingTrigger !== "EVENT_CONFIRMED_MOVE") {
+          state.pendingTrigger = "EVENT_BEFORE_REPRICE";
+        }
+        if (state.mode === "REPRICED") {
+          state.suspendedAt = event.receivedTs;
+          state.repricedAt = null;
+          return [
+            this.#transition(
+              state,
+              "SUSPENDED",
+              "SUSPEND",
+              state.pendingTrigger,
+              event.receivedTs,
+              state.pendingSourceIds,
+            ),
+          ];
+        }
       }
       return this.#maybeReopen(state, event.receivedTs);
     }
 
-    if (!firstObservation) return [];
+    if (!firstObservation || !quotePredatesEvent) return [];
 
     state.preTriggerQuote = state.quote;
     state.pendingTrigger = "EVENT_BEFORE_REPRICE";
@@ -251,19 +269,21 @@ export class QuoteGovernor {
       state.streamHealth[input.stream] = input.healthy;
       const bothHealthy = state.streamHealth.odds && state.streamHealth.scores;
 
-      if (!input.healthy && state.mode !== "FAILSAFE") {
+      if (!input.healthy) {
         state.bothStreamsHealthySince = null;
-        state.pendingTrigger = "STREAM_UNHEALTHY";
-        receipts.push(
-          this.#transition(
-            state,
-            "FAILSAFE",
-            "ENTER_FAILSAFE",
-            "STREAM_UNHEALTHY",
-            input.observedTs,
-            [`${input.stream}:${input.reason ?? "unhealthy"}`],
-          ),
-        );
+        if (state.mode !== "FAILSAFE") {
+          state.pendingTrigger = "STREAM_UNHEALTHY";
+          receipts.push(
+            this.#transition(
+              state,
+              "FAILSAFE",
+              "ENTER_FAILSAFE",
+              "STREAM_UNHEALTHY",
+              input.observedTs,
+              [`${input.stream}:${input.reason ?? "unhealthy"}`],
+            ),
+          );
+        }
       } else if (bothHealthy && state.mode === "FAILSAFE") {
         state.bothStreamsHealthySince ??= input.observedTs;
       }
