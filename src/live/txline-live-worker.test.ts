@@ -83,6 +83,8 @@ describe("TxLineLiveWorker", () => {
     expect(worker.status()).toMatchObject({
       running: false,
       fixturesLoaded: 1,
+      oddsMessages: 1,
+      scoreMessages: 1,
       normalizedOdds: 1,
       normalizedEvents: 1,
     });

@@ -80,6 +80,8 @@ describe("operator API", () => {
       readWorkerStatus: async () => ({
         running: true,
         fixturesLoaded: 6,
+        oddsMessages: 12,
+        scoreMessages: 9,
         normalizedOdds: 4,
         normalizedEvents: 2,
         skippedOdds: 8,
@@ -104,6 +106,7 @@ describe("operator API", () => {
       available: true,
       running: true,
       fixturesLoaded: 6,
+      messages: { odds: 12, scores: 9 },
       streamHealth: { odds: true, scores: true },
     });
     expect(response.body).not.toContain("lastMessageAt");

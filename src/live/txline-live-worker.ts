@@ -183,6 +183,7 @@ export class TxLineLiveWorker {
   async #handleOdds(payload: OddsPayload) {
     const receivedAt = this.#now();
     await this.#touch("odds", receivedAt);
+    this.#status.oddsMessages += 1;
     const participants = this.#participants.get(payload.FixtureId);
     if (!participants) {
       this.#status.skippedOdds += 1;
@@ -200,6 +201,7 @@ export class TxLineLiveWorker {
   async #handleScore(payload: ScorePayload) {
     const receivedAt = this.#now();
     await this.#touch("scores", receivedAt);
+    this.#status.scoreMessages += 1;
     const inputs = [
       normalizeMatchEvent(payload, receivedAt),
       normalizeEventResolution(payload, receivedAt),
@@ -269,6 +271,8 @@ function emptyStatus(): LiveWorkerStatus {
   return {
     running: false,
     fixturesLoaded: 0,
+    oddsMessages: 0,
+    scoreMessages: 0,
     normalizedOdds: 0,
     normalizedEvents: 0,
     skippedOdds: 0,

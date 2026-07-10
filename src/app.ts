@@ -82,6 +82,10 @@ export async function createApplication(options: ApplicationOptions = {}) {
       configured: Boolean(config.txlineApiToken),
       running: status.running,
       fixturesLoaded: status.fixturesLoaded,
+      messages: {
+        odds: status.oddsMessages,
+        scores: status.scoreMessages,
+      },
       normalizedOdds: status.normalizedOdds,
       normalizedEvents: status.normalizedEvents,
       reconnects: status.reconnects,

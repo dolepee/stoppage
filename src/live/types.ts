@@ -3,6 +3,8 @@ import type { GovernorInput, StreamName } from "../domain/types.js";
 export interface LiveWorkerStatus {
   running: boolean;
   fixturesLoaded: number;
+  oddsMessages: number;
+  scoreMessages: number;
   normalizedOdds: number;
   normalizedEvents: number;
   skippedOdds: number;
