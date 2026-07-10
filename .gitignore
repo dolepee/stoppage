@@ -4,6 +4,7 @@ dist/
 .env.*
 !.env.example
 .secrets/
+.vercel/
 data/private/
 data/raw/
 data/runtime/
@@ -18,4 +19,4 @@ demo-script.*
 SUBMISSION_CHECKLIST.md
 submission-checklist.*
 docs/*SUBMISSION*.md
-
+.vercel

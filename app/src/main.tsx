@@ -13,8 +13,18 @@ import {
   ShieldCheck,
   Waves,
 } from "lucide-react";
-import { StrictMode, useEffect, useMemo, useState } from "react";
+import {
+  StrictMode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { createRoot } from "react-dom/client";
+
+import { publicJudgeScenario } from "../../src/replay/public-scenario";
+import { StoppageRuntime } from "../../src/runtime/stoppage-runtime";
 
 import type {
   GovernorMode,
@@ -30,41 +40,77 @@ const selections: Array<{ key: Selection; label: string }> = [
   { key: "AWAY", label: "Away" },
 ];
 
+type ConnectionMode = "connecting" | "live" | "local" | "offline";
+
 function App() {
   const [snapshot, setSnapshot] = useState<RuntimeSnapshot | null>(null);
-  const [connection, setConnection] = useState<
-    "connecting" | "live" | "offline"
-  >("connecting");
+  const [connection, setConnection] = useState<ConnectionMode>("connecting");
   const [actionPending, setActionPending] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const localRuntime = useRef<StoppageRuntime | null>(null);
 
   useEffect(() => {
     let active = true;
+    let backendReady = false;
+    let unsubscribeLocal: (() => boolean) | null = null;
+    let source: EventSource | null = null;
+
+    const enableLocalJudgeMode = () => {
+      if (!active || backendReady || localRuntime.current) return;
+      const runtime = new StoppageRuntime(publicJudgeScenario);
+      localRuntime.current = runtime;
+      unsubscribeLocal = runtime.subscribe((next) => setSnapshot(next));
+      setSnapshot(runtime.snapshot());
+      setConnection("local");
+      source?.close();
+    };
+
     void fetch("/api/status")
       .then((response) => {
         if (!response.ok) throw new Error(`Status failed: ${response.status}`);
         return response.json() as Promise<RuntimeSnapshot>;
       })
-      .then((next) => active && setSnapshot(next))
-      .catch(() => active && setConnection("offline"));
+      .then((next) => {
+        if (!active) return;
+        backendReady = true;
+        setSnapshot(next);
+      })
+      .catch(enableLocalJudgeMode);
 
-    const source = new EventSource("/api/events");
+    source = new EventSource("/api/events");
     source.addEventListener("snapshot", (event) => {
+      backendReady = true;
       setSnapshot(
         JSON.parse((event as MessageEvent<string>).data) as RuntimeSnapshot,
       );
       setConnection("live");
     });
-    source.onerror = () => setConnection("offline");
+    source.onerror = () => {
+      if (backendReady) setConnection("offline");
+      else enableLocalJudgeMode();
+    };
 
     return () => {
       active = false;
-      source.close();
+      source?.close();
+      unsubscribeLocal?.();
+      localRuntime.current?.stop();
+      localRuntime.current = null;
     };
   }, []);
 
   async function startReplay() {
     setActionPending(true);
+    setActionError(null);
     try {
+      if (localRuntime.current) {
+        const run = localRuntime.current.start(4);
+        setActionPending(false);
+        void run.catch((error: unknown) =>
+          setActionError((error as Error).message),
+        );
+        return;
+      }
       const response = await fetch("/api/replay/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -72,6 +118,8 @@ function App() {
       });
       if (!response.ok) throw new Error(`Replay failed: ${response.status}`);
       setSnapshot((await response.json()) as RuntimeSnapshot);
+    } catch (error) {
+      setActionError((error as Error).message);
     } finally {
       setActionPending(false);
     }
@@ -79,10 +127,18 @@ function App() {
 
   async function stopReplay() {
     setActionPending(true);
+    setActionError(null);
     try {
+      if (localRuntime.current) {
+        localRuntime.current.stop();
+        setSnapshot(localRuntime.current.snapshot());
+        return;
+      }
       const response = await fetch("/api/replay/stop", { method: "POST" });
       if (!response.ok) throw new Error(`Stop failed: ${response.status}`);
       setSnapshot((await response.json()) as RuntimeSnapshot);
+    } catch (error) {
+      setActionError((error as Error).message);
     } finally {
       setActionPending(false);
     }
@@ -115,6 +171,7 @@ function App() {
                   type="button"
                   onClick={isRunning ? stopReplay : startReplay}
                   disabled={actionPending}
+                  aria-busy={actionPending}
                 >
                   {isRunning ? (
                     <CircleStop size={17} />
@@ -131,6 +188,11 @@ function App() {
                 </button>
                 <span className="scenario-name">{snapshot.scenarioLabel}</span>
               </div>
+              {actionError ? (
+                <p className="action-error" role="alert">
+                  {actionError}
+                </p>
+              ) : null}
             </div>
 
             <StateCommand snapshot={snapshot} />
@@ -227,11 +289,7 @@ function App() {
   );
 }
 
-function Header({
-  connection,
-}: {
-  connection: "connecting" | "live" | "offline";
-}) {
+function Header({ connection }: { connection: ConnectionMode }) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -252,16 +310,20 @@ function Header({
           TxLINE <ExternalLink size={13} />
         </a>
         <a
-          href="https://github.com/dolepee/stoppage"
+          href="https://solscan.io/account/9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA"
           target="_blank"
           rel="noreferrer"
         >
-          Source <ExternalLink size={13} />
+          Mainnet program <ExternalLink size={13} />
         </a>
       </nav>
-      <div className={`connection-pill ${connection}`}>
+      <div className={`connection-pill ${connection}`} role="status">
         <span />
-        {connection === "live" ? "Console live" : connection}
+        {connection === "live"
+          ? "Console live"
+          : connection === "local"
+            ? "Judge mode ready"
+            : connection}
       </div>
     </header>
   );
@@ -281,7 +343,10 @@ function StateCommand({ snapshot }: { snapshot: RuntimeSnapshot }) {
     .find((item) => item.kind === "DECISION");
 
   return (
-    <div className={`state-command mode-${snapshot.mode.toLowerCase()}`}>
+    <div
+      className={`state-command mode-${snapshot.mode.toLowerCase()}`}
+      aria-live="polite"
+    >
       <div className="state-command-head">
         <span>Quote state</span>
         <StatusIcon mode={snapshot.mode} />
@@ -484,6 +549,7 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
             type="button"
             onClick={copyHash}
             title="Copy decision receipt hash"
+            aria-label="Copy decision receipt hash"
           >
             <code>{shortHash(latest.hash, 14)}</code>
             {copied ? <Check size={15} /> : <Copy size={15} />}
@@ -506,14 +572,16 @@ function SystemStatus({
   value,
   healthy,
 }: {
-  icon: React.ReactNode;
+  icon: ReactNode;
   label: string;
   value: string;
   healthy: boolean;
 }) {
   return (
     <div className="system-status">
-      <span className={healthy ? "healthy" : "degraded"}>{icon}</span>
+      <span className={healthy ? "healthy" : "degraded"} aria-hidden="true">
+        {icon}
+      </span>
       <div>
         <small>{label}</small>
         <strong>{value}</strong>
@@ -539,8 +607,8 @@ function Footer({ snapshot }: { snapshot: RuntimeSnapshot }) {
 
 function LoadingState({ connection }: { connection: string }) {
   return (
-    <div className="loading-state">
-      <ShieldCheck size={26} />
+    <div className="loading-state" role="status" aria-live="polite">
+      <ShieldCheck size={26} aria-hidden="true" />
       <strong>Stoppage</strong>
       <span>{connection} to operator console</span>
     </div>

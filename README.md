@@ -4,6 +4,8 @@
 
 **An autonomous in-play quote governor driven by TxLINE on Solana.**
 
+Live judge console: <https://stoppage-txline.vercel.app>
+
 Stoppage freezes, reprices, and reopens a simulated operator book when the
 match-event stream and the StablePrice market stream disagree. It is operator
 risk tooling, not a wagering product: there is no custody, bet placement, or

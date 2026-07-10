@@ -145,6 +145,10 @@ footer > div {
   background: var(--green);
   box-shadow: 0 0 0 4px rgba(116, 223, 143, 0.1);
 }
+.connection-pill.local > span {
+  background: var(--mint);
+  box-shadow: 0 0 0 4px rgba(66, 221, 183, 0.1);
+}
 .connection-pill.offline > span {
   background: var(--red);
 }
@@ -231,6 +235,11 @@ footer > div {
 }
 .scenario-name {
   color: var(--faint);
+  font-size: 11px;
+}
+.action-error {
+  margin: 12px 0 0;
+  color: var(--red);
   font-size: 11px;
 }
 

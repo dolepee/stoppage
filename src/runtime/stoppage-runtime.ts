@@ -1,5 +1,3 @@
-import { EventEmitter } from "node:events";
-
 import { QuoteGovernor } from "../domain/governor.js";
 import { evaluateSuspendedWindow } from "../domain/metrics.js";
 import type {
@@ -17,7 +15,9 @@ interface EvaluationSegment {
   baselineProbability: ProbabilityVector;
 }
 
-export class StoppageRuntime extends EventEmitter {
+type SnapshotListener = (snapshot: RuntimeSnapshot) => void;
+
+export class StoppageRuntime {
   #scenario: ReplayScenario;
   #governor = new QuoteGovernor();
   #status: RuntimeSnapshot["replayStatus"] = "IDLE";
@@ -29,10 +29,15 @@ export class StoppageRuntime extends EventEmitter {
   #segments: EvaluationSegment[] = [];
   #metrics: RuntimeMetrics = emptyMetrics();
   #abortController: AbortController | null = null;
+  #listeners = new Set<SnapshotListener>();
 
   constructor(scenario: ReplayScenario) {
-    super();
     this.#scenario = scenario;
+  }
+
+  subscribe(listener: SnapshotListener) {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
   }
 
   snapshot(): RuntimeSnapshot {
@@ -190,7 +195,8 @@ export class StoppageRuntime extends EventEmitter {
   }
 
   #publish() {
-    this.emit("snapshot", this.snapshot());
+    const snapshot = this.snapshot();
+    for (const listener of this.#listeners) listener(snapshot);
   }
 }
 

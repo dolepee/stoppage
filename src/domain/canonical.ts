@@ -1,4 +1,5 @@
-import { createHash } from "node:crypto";
+import { sha256 as sha256Digest } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 
 function normalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(normalize);
@@ -17,5 +18,5 @@ export function canonicalJson(value: unknown): string {
 }
 
 export function sha256(value: unknown): string {
-  return `0x${createHash("sha256").update(canonicalJson(value)).digest("hex")}`;
+  return `0x${bytesToHex(sha256Digest(utf8ToBytes(canonicalJson(value))))}`;
 }
