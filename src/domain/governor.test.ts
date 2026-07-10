@@ -83,6 +83,57 @@ describe("QuoteGovernor", () => {
     const second = runLifecycle();
     expect(first).toEqual(second);
   });
+
+  it("waits for event confirmation after repricing before reopening", () => {
+    const governor = new QuoteGovernor(config);
+    governor.process(quote("q0", 1_000, probabilities(0.4, 0.3, 0.3)));
+    governor.process(event("goal-1", 2_000, false));
+    governor.process(quote("q1", 2_500, probabilities(0.54, 0.25, 0.21)));
+    governor.process(quote("q2", 2_700, probabilities(0.545, 0.247, 0.208)));
+    governor.process(quote("q3", 2_900, probabilities(0.548, 0.245, 0.207)));
+
+    expect(governor.process({ kind: "tick", observedTs: 4_000 })).toEqual([]);
+    const reopened = governor.process(event("goal-1", 4_100, true));
+    expect(reopened.map((receipt) => receipt.body.action)).toEqual(["REOPEN"]);
+    expect(governor.process(event("goal-1", 4_200, true))).toEqual([]);
+  });
+
+  it("allows a discarded incident to resolve the confirmation hold", () => {
+    const governor = new QuoteGovernor(config);
+    governor.process(quote("q0", 1_000, probabilities(0.4, 0.3, 0.3)));
+    governor.process(event("goal-1", 2_000, false));
+    governor.process(quote("q1", 2_500, probabilities(0.4, 0.3, 0.3)));
+    governor.process(quote("q2", 2_700, probabilities(0.401, 0.299, 0.3)));
+    governor.process(quote("q3", 2_900, probabilities(0.402, 0.298, 0.3)));
+
+    const reopened = governor.process({
+      kind: "event-resolution",
+      fixtureId: 42,
+      resolutionId: "discard-goal-1",
+      incidentId: "goal-1",
+      resolution: "DISCARDED",
+      sourceTs: 4_000,
+      receivedTs: 4_000,
+    });
+    expect(reopened.map((receipt) => receipt.body.action)).toEqual(["REOPEN"]);
+  });
+
+  it("suspends a repriced market again when a new incident arrives", () => {
+    const governor = new QuoteGovernor(config);
+    governor.process(quote("q0", 1_000, probabilities(0.4, 0.3, 0.3)));
+    governor.process(event("goal-1", 2_000));
+    governor.process(quote("q1", 2_500, probabilities(0.54, 0.25, 0.21)));
+    governor.process(quote("q2", 2_700, probabilities(0.545, 0.247, 0.208)));
+    governor.process(quote("q3", 2_900, probabilities(0.548, 0.245, 0.207)));
+    expect(governor.getState(42).mode).toBe("REPRICED");
+
+    const suspended = governor.process(event("red-card-2", 3_100, false));
+    expect(suspended.map((receipt) => receipt.body.action)).toEqual([
+      "SUSPEND",
+    ]);
+    expect(suspended[0]?.body.fromMode).toBe("REPRICED");
+    expect(governor.getState(42).mode).toBe("SUSPENDED");
+  });
 });
 
 function runLifecycle() {
@@ -112,15 +163,20 @@ function quote(
   };
 }
 
-function event(eventId: string, timestamp: number): MatchEvent {
+function event(
+  eventId: string,
+  timestamp: number,
+  confirmed = true,
+): MatchEvent {
   return {
     kind: "match-event",
     fixtureId: 42,
-    eventId,
+    eventId: `${eventId}:${timestamp}`,
+    incidentId: eventId,
     eventType: "GOAL",
     sourceTs: timestamp,
     receivedTs: timestamp,
-    confirmed: true,
+    confirmed,
   };
 }
 

@@ -63,10 +63,29 @@ export function normalizeMatchEvent(
     kind: "match-event",
     fixtureId: payload.fixtureId,
     eventId: `score:${payload.fixtureId}:${payload.id}:${payload.seq}`,
+    incidentId: `score:${payload.fixtureId}:${payload.id}`,
     eventType,
     sourceTs: payload.ts,
     receivedTs,
     confirmed: payload.confirmed !== false,
+  };
+}
+
+export function normalizeEventResolution(
+  payload: ScorePayload,
+  receivedTs = Date.now(),
+) {
+  const action = payload.action.toLowerCase().replace(/[^a-z]+/g, "_");
+  if (action !== "action_discarded") return null;
+
+  return {
+    kind: "event-resolution" as const,
+    fixtureId: payload.fixtureId,
+    resolutionId: `score:${payload.fixtureId}:${payload.id}:${payload.seq}`,
+    incidentId: `score:${payload.fixtureId}:${payload.id}`,
+    resolution: "DISCARDED" as const,
+    sourceTs: payload.ts,
+    receivedTs,
   };
 }
 
@@ -80,8 +99,18 @@ function resolveSelectionIndexes(
   );
   if (drawIndex < 0) return null;
 
-  const homeIndex = findTeamIndex(normalized, participants.home, ["1", "home"]);
-  const awayIndex = findTeamIndex(normalized, participants.away, ["2", "away"]);
+  const homeIndex = findTeamIndex(normalized, participants.home, [
+    "1",
+    "home",
+    "part1",
+    "participant1",
+  ]);
+  const awayIndex = findTeamIndex(normalized, participants.away, [
+    "2",
+    "away",
+    "part2",
+    "participant2",
+  ]);
 
   if (homeIndex >= 0 && awayIndex >= 0 && homeIndex !== awayIndex) {
     return { HOME: homeIndex, DRAW: drawIndex, AWAY: awayIndex };
@@ -112,13 +141,10 @@ function normalizeLabel(value: string) {
 
 function matchEventType(payload: ScorePayload): MatchEventType | null {
   const action = payload.action.toLowerCase().replace(/[^a-z]+/g, "_");
-  const data = payload.dataSoccer ?? {};
 
-  if (action.includes("goal") || data["Goal"] === true) return "GOAL";
-  if (action.includes("red_card") || data["RedCard"] === true)
-    return "RED_CARD";
-  if (action.includes("penalty") || data["Penalty"] === true) return "PENALTY";
-  if (action === "var" || action === "var_end" || data["VAR"] === true)
-    return "VAR";
+  if (action === "goal") return "GOAL";
+  if (action === "red_card") return "RED_CARD";
+  if (action === "penalty") return "PENALTY";
+  if (action === "var" || action === "var_end") return "VAR";
   return null;
 }

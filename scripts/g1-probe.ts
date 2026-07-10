@@ -5,6 +5,7 @@ import { TXLINE_MAINNET } from "../src/txline/constants.js";
 import { TxLineClient } from "../src/txline/client.js";
 
 const config = loadConfig();
+const probeDurationMs = readProbeDuration();
 
 async function main() {
   const startedAt = Date.now();
@@ -47,17 +48,31 @@ async function main() {
     }));
 
     const [oddsStream, scoresStream] = await Promise.all([
-      probeStream("odds", (callbacks, signal) =>
-        client.streamOdds(callbacks, signal),
+      probeStream(
+        "odds",
+        (callbacks, signal) => client.streamOdds(callbacks, signal),
+        probeDurationMs,
       ),
-      probeStream("scores", (callbacks, signal) =>
-        client.streamScores(callbacks, signal),
+      probeStream(
+        "scores",
+        (callbacks, signal) => client.streamScores(callbacks, signal),
+        probeDurationMs,
       ),
     ]);
     result.streams = { odds: oddsStream, scores: scoresStream };
+    result.preflightComplete =
+      fixtures.length > 0 &&
+      streamTransportHealthy(oddsStream) &&
+      streamTransportHealthy(scoresStream);
     result.g1Complete =
-      fixtures.length > 0 && oddsStream.connected && scoresStream.connected;
-    result.ok = result.g1Complete;
+      result.preflightComplete &&
+      oddsStream.actualDataObserved &&
+      scoresStream.actualDataObserved;
+    result.ok = result.preflightComplete;
+    if (!result.g1Complete) {
+      result.g1PendingReason =
+        "Both streams must emit parsed data during an active match window";
+    }
   } else {
     result.blockedReason = "TXLINE_API_TOKEN is not configured";
   }
@@ -77,6 +92,7 @@ async function probeStream<T>(
     },
     signal: AbortSignal,
   ) => Promise<void>,
+  durationMs: number,
 ) {
   const controller = new AbortController();
   const startedAt = Date.now();
@@ -105,7 +121,7 @@ async function probeStream<T>(
       error = (caught as Error).message;
   });
 
-  await new Promise((resolve) => setTimeout(resolve, 12_000));
+  await new Promise((resolve) => setTimeout(resolve, durationMs));
   controller.abort();
   await stream;
 
@@ -119,4 +135,25 @@ async function probeStream<T>(
     durationMs: Date.now() - startedAt,
     error,
   };
+}
+
+function streamTransportHealthy(stream: {
+  connected: boolean;
+  error: string | null;
+}) {
+  return stream.connected && stream.error === null;
+}
+
+function readProbeDuration() {
+  const index = process.argv.indexOf("--duration-ms");
+  const raw = index >= 0 ? process.argv[index + 1] : undefined;
+  const duration = raw ? Number(raw) : 12_000;
+  if (
+    !Number.isInteger(duration) ||
+    duration < 1_000 ||
+    duration > 14_400_000
+  ) {
+    throw new Error("--duration-ms must be an integer from 1000 to 14400000");
+  }
+  return duration;
 }

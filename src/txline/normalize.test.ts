@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { normalize1x2Quote, normalizeMatchEvent } from "./normalize.js";
+import { oddsPayloadSchema, scorePayloadSchema } from "./types.js";
 
 describe("TxLINE normalization", () => {
   it("normalizes de-margined percentages by named 1X2 selections", () => {
@@ -46,6 +47,48 @@ describe("TxLINE normalization", () => {
     expect(normalized).toBeNull();
   });
 
+  it("maps TxLINE part1 and part2 labels to the home and away sides", () => {
+    const normalized = normalize1x2Quote(
+      {
+        FixtureId: 77,
+        MessageId: "odds-participants",
+        Ts: 1_000,
+        Bookmaker: "TXLineStablePriceDemargined",
+        BookmakerId: 1,
+        SuperOddsType: "1X2_PARTICIPANT_RESULT",
+        InRunning: true,
+        PriceNames: ["part1", "draw", "part2"],
+        Pct: ["60.000", "25.000", "15.000"],
+      },
+      { home: "part1", away: "part2" },
+    );
+
+    expect(normalized?.probabilities).toEqual({
+      HOME: 0.6,
+      DRAW: 0.25,
+      AWAY: 0.15,
+    });
+  });
+
+  it("accepts TxLINE pre-market messages with nullable state fields", () => {
+    const payload = oddsPayloadSchema.parse({
+      FixtureId: 77,
+      MessageId: "odds-null-state",
+      Ts: 1_000,
+      Bookmaker: "StablePrice",
+      BookmakerId: 1,
+      SuperOddsType: "1X2",
+      GameState: null,
+      InRunning: false,
+      MarketPeriod: null,
+    });
+
+    expect(payload.GameState).toBeNull();
+    expect(
+      normalize1x2Quote(payload, { home: "Home", away: "Away" }),
+    ).toBeNull();
+  });
+
   it("normalizes high-impact score actions", () => {
     const normalized = normalizeMatchEvent(
       {
@@ -67,5 +110,48 @@ describe("TxLINE normalization", () => {
       sourceTs: 2_000,
       receivedTs: 2_180,
     });
+  });
+
+  it("normalizes PascalCase mainnet history records", () => {
+    const payload = scorePayloadSchema.parse({
+      FixtureId: 77,
+      GameState: "H2",
+      Action: "red_card",
+      Id: 10,
+      Ts: 2_100,
+      Seq: 45,
+      Confirmed: true,
+      Data: { RedCard: true },
+      Stats: { "5": 1 },
+    });
+
+    expect(normalizeMatchEvent(payload)).toMatchObject({
+      fixtureId: 77,
+      eventType: "RED_CARD",
+      sourceTs: 2_100,
+    });
+    expect(payload.stats).toEqual({ "5": 1 });
+  });
+
+  it("does not treat goal kicks or penalty outcomes as high-impact triggers", () => {
+    const base = {
+      fixtureId: 77,
+      gameState: "H2",
+      id: 10,
+      ts: 2_100,
+      seq: 45,
+    };
+
+    expect(normalizeMatchEvent({ ...base, action: "goal_kick" })).toBeNull();
+    expect(
+      normalizeMatchEvent({ ...base, action: "penalty_outcome" }),
+    ).toBeNull();
+    expect(
+      normalizeMatchEvent({
+        ...base,
+        action: "action_amend",
+        dataSoccer: { Goal: true },
+      }),
+    ).toBeNull();
   });
 });

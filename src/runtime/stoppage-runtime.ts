@@ -211,7 +211,11 @@ function emptyMetrics(): RuntimeMetrics {
 }
 
 function inputTimestamp(input: GovernorInput): number {
-  if (input.kind === "quote" || input.kind === "match-event") {
+  if (
+    input.kind === "quote" ||
+    input.kind === "match-event" ||
+    input.kind === "event-resolution"
+  ) {
     return input.receivedTs;
   }
   return input.observedTs;
@@ -221,6 +225,9 @@ function inputDetail(input: GovernorInput): string {
   if (input.kind === "quote") return `${input.market} · ${input.messageId}`;
   if (input.kind === "match-event") {
     return `${input.eventType} · ${input.confirmed ? "confirmed" : "unconfirmed"}`;
+  }
+  if (input.kind === "event-resolution") {
+    return `${input.resolution} · ${input.incidentId}`;
   }
   if (input.kind === "stream-health") {
     return `${input.stream} · ${input.healthy ? "healthy" : (input.reason ?? "unhealthy")}`;

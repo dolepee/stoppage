@@ -28,7 +28,9 @@
     "txline:validate-score": "tsx scripts/validate-score-mainnet.ts",
     "worker:live": "tsx scripts/run-live-worker.ts",
     "g1:probe": "tsx scripts/g1-probe.ts",
-    "g2:capture": "tsx scripts/capture-history.ts"
+    "g2:discover": "tsx scripts/discover-history.ts",
+    "g2:capture": "tsx scripts/capture-history.ts",
+    "g2:replay": "tsx scripts/replay-capture.ts"
   },
   "dependencies": {
     "@fastify/static": "9.3.0",

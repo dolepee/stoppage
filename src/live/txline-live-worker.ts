@@ -1,5 +1,9 @@
 import { appendPrivateCapture } from "../private/capture-store.js";
-import { normalize1x2Quote, normalizeMatchEvent } from "../txline/normalize.js";
+import {
+  normalize1x2Quote,
+  normalizeEventResolution,
+  normalizeMatchEvent,
+} from "../txline/normalize.js";
 import type { Fixture, OddsPayload, ScorePayload } from "../txline/types.js";
 import type { LiveWorkerCallbacks, LiveWorkerStatus } from "./types.js";
 
@@ -170,10 +174,14 @@ export class TxLineLiveWorker {
       receivedAt,
       payload,
     });
-    const input = normalizeMatchEvent(payload, receivedAt);
-    if (!input) return;
-    this.#status.normalizedEvents += 1;
-    await this.#callbacks.onInput(input);
+    const inputs = [
+      normalizeMatchEvent(payload, receivedAt),
+      normalizeEventResolution(payload, receivedAt),
+    ].filter((input) => input !== null);
+    for (const input of inputs) {
+      this.#status.normalizedEvents += 1;
+      await this.#callbacks.onInput(input);
+    }
   }
 
   #touch(name: "odds" | "scores", timestamp = this.#now()) {

@@ -118,6 +118,7 @@ function matchEvent(
     kind: "match-event",
     fixtureId,
     eventId,
+    incidentId: eventId,
     eventType: "GOAL",
     sourceTs: baseTs + sourceOffset,
     receivedTs: baseTs + receivedOffset,

@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 
 import { createApplication } from "./app.js";
+import { loadConfig } from "./config.js";
 
 const applications: Awaited<ReturnType<typeof createApplication>>[] = [];
 
@@ -11,6 +12,7 @@ afterEach(async () => {
 describe("operator API", () => {
   it("reports an honest mainnet activation state", async () => {
     const application = await createApplication({
+      config: loadConfig({}),
       logger: false,
       serveStatic: false,
     });

@@ -56,16 +56,32 @@ export class TxLineClient {
     return session.token;
   }
 
-  async fetchFixtures(): Promise<Fixture[]> {
-    const response = await this.#authorizedFetch("/api/fixtures/snapshot");
-    return fixtureSchema.array().parse(await response.json());
+  async fetchFixtures(
+    options: {
+      startEpochDay?: number;
+      competitionId?: number;
+    } = {},
+  ): Promise<Fixture[]> {
+    const query = new URLSearchParams();
+    if (options.startEpochDay !== undefined) {
+      query.set("startEpochDay", String(options.startEpochDay));
+    }
+    if (options.competitionId !== undefined) {
+      query.set("competitionId", String(options.competitionId));
+    }
+    const suffix = query.size ? `?${query.toString()}` : "";
+    const response = await this.#authorizedFetch(
+      `/api/fixtures/snapshot${suffix}`,
+    );
+    return parseResponseArray(response, fixtureSchema);
   }
 
   async fetchHistoricalScores(fixtureId: number): Promise<ScorePayload[]> {
     const response = await this.#authorizedFetch(
       `/api/scores/historical/${fixtureId}`,
+      { signal: AbortSignal.timeout(30_000) },
     );
-    return scorePayloadSchema.array().parse(await response.json());
+    return parseResponseArray(response, scorePayloadSchema);
   }
 
   async fetchHistoricalOddsInterval(input: {
@@ -79,8 +95,9 @@ export class TxLineClient {
       : "";
     const response = await this.#authorizedFetch(
       `/api/odds/updates/${input.epochDay}/${input.hourOfDay}/${input.interval}${query}`,
+      { signal: AbortSignal.timeout(15_000) },
     );
-    return oddsPayloadSchema.array().parse(await response.json());
+    return parseResponseArray(response, oddsPayloadSchema);
   }
 
   async fetchScoreStatValidation(input: {
@@ -199,5 +216,32 @@ export class TxLineClient {
     }
 
     return response;
+  }
+}
+
+async function parseResponseArray<T>(
+  response: Response,
+  schema: { parse(value: unknown): T },
+): Promise<T[]> {
+  const body = await response.text();
+  try {
+    const value = JSON.parse(body) as unknown;
+    if (!Array.isArray(value)) {
+      throw new Error("TxLINE response was not an array");
+    }
+    return value.map((item) => schema.parse(item));
+  } catch (jsonError) {
+    const parsed: T[] = [];
+    const sseResponse = new Response(body, {
+      headers: { "Content-Type": "text/event-stream" },
+    });
+    for await (const message of readSseMessages(sseResponse)) {
+      if (message.event === "heartbeat") continue;
+      const value = parseSseData(message.data);
+      if (typeof value === "string") throw jsonError;
+      parsed.push(schema.parse(value));
+    }
+    if (!parsed.length && body.trim()) throw jsonError;
+    return parsed;
   }
 }

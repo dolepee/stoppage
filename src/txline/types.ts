@@ -27,29 +27,34 @@ export const oddsPayloadSchema = z
     Bookmaker: z.string(),
     BookmakerId: z.number().int(),
     SuperOddsType: z.string(),
-    GameState: z.string().optional(),
+    GameState: z.string().nullish(),
     InRunning: z.boolean(),
-    MarketParameters: z.string().optional(),
-    MarketPeriod: z.string().optional(),
-    PriceNames: z.array(z.string()).optional(),
-    Prices: z.array(z.number().int()).optional(),
-    Pct: z.array(z.string()).optional(),
+    MarketParameters: z.string().nullish(),
+    MarketPeriod: z.string().nullish(),
+    PriceNames: z.array(z.string()).nullish(),
+    Prices: z.array(z.number().int()).nullish(),
+    Pct: z.array(z.string()).nullish(),
   })
   .passthrough();
 
-export const scorePayloadSchema = z
-  .object({
-    fixtureId: z.number().int(),
-    gameState: z.string(),
-    action: z.string(),
-    id: z.number().int(),
-    ts: z.number().int(),
-    seq: z.number().int(),
-    participant: z.number().int().optional(),
-    confirmed: z.boolean().optional(),
-    dataSoccer: z.record(z.string(), z.unknown()).optional(),
-  })
-  .passthrough();
+export const scorePayloadSchema = z.preprocess(
+  normalizeScoreWireKeys,
+  z
+    .object({
+      fixtureId: z.number().int(),
+      gameState: z.string(),
+      startTime: z.number().int().nullish(),
+      action: z.string(),
+      id: z.number().int(),
+      ts: z.number().int(),
+      seq: z.number().int(),
+      participant: z.number().int().nullish(),
+      confirmed: z.boolean().nullish(),
+      dataSoccer: z.record(z.string(), z.unknown()).nullish(),
+      stats: z.record(z.string(), z.number()).nullish(),
+    })
+    .passthrough(),
+);
 
 export type Fixture = z.infer<typeof fixtureSchema>;
 export type OddsPayload = z.infer<typeof oddsPayloadSchema>;
@@ -60,4 +65,25 @@ export interface SseMessage {
   event?: string;
   data: string;
   retry?: number;
+}
+
+function normalizeScoreWireKeys(value: unknown): unknown {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+  const record = value as Record<string, unknown>;
+  if (!("FixtureId" in record)) return value;
+
+  return {
+    ...record,
+    fixtureId: record["FixtureId"],
+    gameState: record["GameState"],
+    startTime: record["StartTime"],
+    action: record["Action"],
+    id: record["Id"],
+    ts: record["Ts"],
+    seq: record["Seq"],
+    participant: record["Participant"],
+    confirmed: record["Confirmed"],
+    dataSoccer: record["DataSoccer"] ?? record["Data"],
+    stats: record["Stats"],
+  };
 }

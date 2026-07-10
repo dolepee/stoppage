@@ -37,16 +37,52 @@ The command:
 4. signs the activation message with the same wallet;
 5. stores the returned API token in ignored `.env` with mode `0600`.
 
+If the on-chain subscription confirmed but token activation was interrupted,
+resume without submitting another subscription:
+
+```bash
+pnpm txline:activate -- --tx-signature <CONFIRMED_SUBSCRIBE_SIGNATURE>
+```
+
+The resume path verifies that the transaction is a successful TxLINE
+subscription from the configured wallet before using it.
+
+If activation succeeded upstream but the local process failed before storing
+the returned token, the token can be supplied over standard input without
+placing it in shell history:
+
+```bash
+pnpm txline:activate -- --tx-signature <CONFIRMED_SUBSCRIBE_SIGNATURE> --activation-token-stdin
+```
+
 Run the gate probe afterward:
 
 ```bash
 pnpm g1:probe
 ```
 
-After G1 reports both streams connected, start the supervised worker:
+The default 12-second run is a transport preflight. It reports
+`preflightComplete: true` only when fixtures load and both SSE connections stay
+parse-error-free. `g1Complete: true` is stricter: both streams must emit parsed
+data during the observation window. For the full four-hour gate:
+
+```bash
+pnpm g1:probe -- --duration-ms 14400000
+```
+
+After the transport preflight passes, start the supervised worker:
 
 ```bash
 pnpm worker:live
+```
+
+Discover recent fixtures eligible for TxLINE's historical endpoint before
+capturing G2 evidence:
+
+```bash
+pnpm g2:discover
+pnpm g2:capture -- --fixture <FIXTURE_ID>
+pnpm g2:replay -- --fixture <FIXTURE_ID>
 ```
 
 The worker exits if no API token exists. It never logs raw feed payloads to

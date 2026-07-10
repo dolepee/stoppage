@@ -21,8 +21,18 @@ if (!scores.length)
   throw new Error(`No historical scores returned for fixture ${fixtureId}`);
 
 const scoreTimestamps = scores.map((score) => score.ts);
-const startTs = Math.min(...scoreTimestamps) - 10 * 60_000;
-const endTs = Math.max(...scoreTimestamps) + 10 * 60_000;
+const kickoffTs = scores.find((score) => score.startTime)?.startTime;
+if (!kickoffTs) {
+  throw new Error(`Historical scores for fixture ${fixtureId} lack StartTime`);
+}
+const finalTs = Math.max(
+  ...scores
+    .filter((score) => score.action === "game_finalised")
+    .map((score) => score.ts),
+  kickoffTs + 3 * 60 * 60_000,
+);
+const startTs = kickoffTs - 30 * 60_000;
+const endTs = Math.min(finalTs + 15 * 60_000, kickoffTs + 4 * 60 * 60_000);
 const odds = [];
 
 for (const interval of fiveMinuteIntervals(startTs, endTs)) {
@@ -68,6 +78,9 @@ console.log(
       scoreActions,
       firstScoreTs: Math.min(...scoreTimestamps),
       lastScoreTs: Math.max(...scoreTimestamps),
+      oddsWindowStartTs: startTs,
+      oddsWindowEndTs: endTs,
+      oddsIntervals: fiveMinuteIntervals(startTs, endTs).length,
       privateCapture: path,
     },
     null,

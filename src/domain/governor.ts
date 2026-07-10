@@ -49,6 +49,9 @@ export class QuoteGovernor {
   process(input: GovernorInput): DecisionReceipt[] {
     if (input.kind === "stream-health") return this.#processHealth(input);
     if (input.kind === "tick") return this.#processTick(input.observedTs);
+    if (input.kind === "event-resolution") {
+      return this.#processEventResolution(this.#state(input.fixtureId), input);
+    }
 
     const state = this.#state(input.fixtureId);
     if (input.kind === "match-event")
@@ -159,6 +162,20 @@ export class QuoteGovernor {
     event: MatchEvent,
   ): DecisionReceipt[] {
     state.lastHighImpactEvent = event;
+    const firstObservation = !state.seenEventIncidentIds.includes(
+      event.incidentId,
+    );
+    if (firstObservation) state.seenEventIncidentIds.push(event.incidentId);
+    if (event.confirmed) {
+      state.pendingUnconfirmedIncidentIds =
+        state.pendingUnconfirmedIncidentIds.filter(
+          (incidentId) => incidentId !== event.incidentId,
+        );
+    } else if (
+      !state.pendingUnconfirmedIncidentIds.includes(event.incidentId)
+    ) {
+      state.pendingUnconfirmedIncidentIds.push(event.incidentId);
+    }
     if (state.mode === "FAILSAFE") return [];
 
     if (state.mode === "SUSPENDED" || state.mode === "REPRICED") {
@@ -169,8 +186,27 @@ export class QuoteGovernor {
       if (state.pendingTrigger === "UNBACKED_MOVE") {
         state.pendingTrigger = "EVENT_CONFIRMED_MOVE";
       }
-      return [];
+      if (state.mode === "REPRICED" && firstObservation) {
+        state.pendingTrigger = "EVENT_BEFORE_REPRICE";
+        state.suspendedAt = event.receivedTs;
+        state.stableUpdateCount = 0;
+        state.candidateQuote = null;
+        state.repricedAt = null;
+        return [
+          this.#transition(
+            state,
+            "SUSPENDED",
+            "SUSPEND",
+            "EVENT_BEFORE_REPRICE",
+            event.receivedTs,
+            state.pendingSourceIds,
+          ),
+        ];
+      }
+      return this.#maybeReopen(state, event.receivedTs);
     }
+
+    if (!firstObservation) return [];
 
     state.preTriggerQuote = state.quote;
     state.pendingTrigger = "EVENT_BEFORE_REPRICE";
@@ -189,6 +225,22 @@ export class QuoteGovernor {
         [event.eventId],
       ),
     ];
+  }
+
+  #processEventResolution(
+    state: FixtureGovernorState,
+    resolution: Extract<GovernorInput, { kind: "event-resolution" }>,
+  ): DecisionReceipt[] {
+    state.pendingUnconfirmedIncidentIds =
+      state.pendingUnconfirmedIncidentIds.filter(
+        (incidentId) => incidentId !== resolution.incidentId,
+      );
+    if (state.mode !== "SUSPENDED" && state.mode !== "REPRICED") return [];
+    state.pendingSourceIds = unique([
+      ...state.pendingSourceIds,
+      resolution.resolutionId,
+    ]);
+    return this.#maybeReopen(state, resolution.receivedTs);
   }
 
   #processHealth(input: Extract<GovernorInput, { kind: "stream-health" }>) {
@@ -254,6 +306,7 @@ export class QuoteGovernor {
     if (
       state.mode !== "REPRICED" ||
       state.repricedAt === null ||
+      state.pendingUnconfirmedIncidentIds.length > 0 ||
       observedTs - state.repricedAt < this.#config.reopenDelayMs
     ) {
       return [];
@@ -275,6 +328,7 @@ export class QuoteGovernor {
     state.stableUpdateCount = 0;
     state.candidateQuote = null;
     state.preTriggerQuote = null;
+    state.pendingUnconfirmedIncidentIds = [];
     return [receipt];
   }
 
@@ -322,6 +376,8 @@ export class QuoteGovernor {
       suspendedAt: null,
       repricedAt: null,
       lastHighImpactEvent: null,
+      seenEventIncidentIds: [],
+      pendingUnconfirmedIncidentIds: [],
       pendingTrigger: null,
       pendingSourceIds: [],
       streamHealth: { odds: true, scores: true },

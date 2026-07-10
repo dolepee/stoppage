@@ -32,10 +32,21 @@ export interface MatchEvent {
   kind: "match-event";
   fixtureId: FixtureId;
   eventId: string;
+  incidentId: string;
   eventType: MatchEventType;
   sourceTs: number;
   receivedTs: number;
   confirmed: boolean;
+}
+
+export interface EventResolution {
+  kind: "event-resolution";
+  fixtureId: FixtureId;
+  resolutionId: string;
+  incidentId: string;
+  resolution: "DISCARDED";
+  sourceTs: number;
+  receivedTs: number;
 }
 
 export interface StreamHealth {
@@ -52,7 +63,7 @@ export interface ClockTick {
 }
 
 export type GovernorInput =
-  ConsensusQuote | MatchEvent | StreamHealth | ClockTick;
+  ConsensusQuote | MatchEvent | EventResolution | StreamHealth | ClockTick;
 
 export interface GovernorConfig {
   sharpMoveThreshold: number;
@@ -93,6 +104,8 @@ export interface FixtureGovernorState {
   suspendedAt: number | null;
   repricedAt: number | null;
   lastHighImpactEvent: MatchEvent | null;
+  seenEventIncidentIds: string[];
+  pendingUnconfirmedIncidentIds: string[];
   pendingTrigger: TriggerCode | null;
   pendingSourceIds: string[];
   streamHealth: Record<StreamName, boolean>;
