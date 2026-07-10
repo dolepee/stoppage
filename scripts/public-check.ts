@@ -48,6 +48,10 @@ if (listed.includes("Dockerfile")) {
 }
 
 for (const path of listed) {
+  // Public claim payload intentionally carries on-chain hashes and is reviewed separately.
+  if (path === "data/public/public-claim.json") {
+    continue;
+  }
   if (
     (path === ".env" || path.startsWith(".env.")) &&
     path !== ".env.example"

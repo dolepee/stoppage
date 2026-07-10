@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "status": "AVAILABLE",
+  "network": "solana-mainnet",
+  "approvedConfigHash": "0xe2ad4818c05817f6d5d483b27a7c3670c7aae205fd1eed32cbbe74d00b491461",
+  "evaluatedAt": "2026-07-10T13:23:46.682Z",
+  "approvedAt": "2026-07-10T13:33:53.949Z",
+  "dataBoundary": "No TxLINE records, vectors, identifiers, or absolute source timestamps.",
+  "holdout": {
+    "fixtures": 2,
+    "completeProtectedWindows": 11,
+    "staleQuoteSeconds": 1230.071,
+    "mispricingIntegral": 180.90332025737035,
+    "eventSuspensions": 11,
+    "unconfirmedEventSuspensions": 11,
+    "unconfirmedSuspensionRate": null
+  },
+  "lifecycleEvidence": {
+    "evidenceType": "DERIVED_LIFECYCLE_EVIDENCE",
+    "lifecycleDurationMs": 169636,
+    "maximumProbabilityMove": 0.7620899775363666,
+    "txlineValidation": {
+      "transactionSignature": "3ZEuF4zPtGiwT5iMwHQnPMWpX9U8BsMz1aHybwyzmkjaoMKmCNVQ4eADQtAB11rNwyb1EtDLadn9qQeGZzuXXwPd",
+      "explorer": "https://solscan.io/tx/3ZEuF4zPtGiwT5iMwHQnPMWpX9U8BsMz1aHybwyzmkjaoMKmCNVQ4eADQtAB11rNwyb1EtDLadn9qQeGZzuXXwPd"
+    },
+    "decisions": [
+      {
+        "action": "SUSPEND",
+        "trigger": "EVENT_BEFORE_REPRICE",
+        "fromMode": "OPEN",
+        "toMode": "SUSPENDED",
+        "elapsedMs": 0,
+        "receiptHash": "0x3f71d8aa397601d71d22c36e56201ecc02644e4266a6b4bfd21d672e6a8c8f2b"
+      },
+      {
+        "action": "REPRICE",
+        "trigger": "EVENT_BEFORE_REPRICE",
+        "fromMode": "SUSPENDED",
+        "toMode": "REPRICED",
+        "elapsedMs": 162640,
+        "receiptHash": "0x371850678690469d066f908fc79bd89a08d0cc1d698faef52c2fbbda4dad48e6"
+      },
+      {
+        "action": "REOPEN",
+        "trigger": "EVENT_BEFORE_REPRICE",
+        "fromMode": "REPRICED",
+        "toMode": "OPEN",
+        "elapsedMs": 169636,
+        "receiptHash": "0x386c3355d356fdebf5f7d44bb2d177b2a27324cac30e3d1ddd6e5946e8d003ce"
+      }
+    ]
+  }
+}
