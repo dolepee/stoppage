@@ -18,6 +18,14 @@ const forbiddenPaths = [
   /(^|\/)(submission[_-]?checklist)/i,
 ];
 
+const requiredDockerIgnores = [
+  ".env",
+  ".env.*",
+  ".secrets",
+  "data",
+  "TXODDS_STOPPAGE_MASTER_PLAN.md",
+];
+
 const secretPatterns: Array<[string, RegExp]> = [
   ["GitHub token", /\bgh[opsu]_[A-Za-z0-9_]{20,}\b/],
   ["OpenAI-style key", /\bsk-[A-Za-z0-9_-]{20,}\b/],
@@ -27,6 +35,17 @@ const secretPatterns: Array<[string, RegExp]> = [
 ];
 
 const failures: string[] = [];
+
+if (listed.includes("Dockerfile")) {
+  const dockerIgnore = listed.includes(".dockerignore")
+    ? await readFile(new URL(".dockerignore", repositoryRoot), "utf8")
+    : "";
+  for (const required of requiredDockerIgnores) {
+    if (!dockerIgnore.split(/\r?\n/).includes(required)) {
+      failures.push(`.dockerignore is missing: ${required}`);
+    }
+  }
+}
 
 for (const path of listed) {
   if (

@@ -1,11 +1,20 @@
 .git
 .github
+.vercel
+node_modules
+dist
 .env
 .env.*
 .secrets
-node_modules
-dist
 data
-TXODDS_STOPPAGE_MASTER_PLAN.md
 *.log
+.DS_Store
 
+# Private hackathon operations never enter a container build context.
+TXODDS_STOPPAGE_MASTER_PLAN.md
+DEMO_SCRIPT.md
+demo-script.*
+*-demo-script.*
+SUBMISSION_CHECKLIST.md
+submission-checklist.*
+docs/*SUBMISSION*.md
