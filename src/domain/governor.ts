@@ -250,6 +250,9 @@ export class QuoteGovernor {
     state: FixtureGovernorState,
     resolution: Extract<GovernorInput, { kind: "event-resolution" }>,
   ): DecisionReceipt[] {
+    if (!state.pendingUnconfirmedIncidentIds.includes(resolution.incidentId)) {
+      return [];
+    }
     state.pendingUnconfirmedIncidentIds =
       state.pendingUnconfirmedIncidentIds.filter(
         (incidentId) => incidentId !== resolution.incidentId,

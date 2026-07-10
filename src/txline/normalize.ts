@@ -18,6 +18,9 @@ export function normalize1x2Quote(
   receivedTs = Date.now(),
 ): ConsensusQuote | null {
   if (
+    (payload.SuperOddsType !== "1X2" &&
+      payload.SuperOddsType !== "1X2_PARTICIPANT_RESULT") ||
+    payload.MarketPeriod != null ||
     !payload.InRunning ||
     payload.Pct?.length !== 3 ||
     payload.PriceNames?.length !== 3
@@ -115,10 +118,7 @@ function resolveSelectionIndexes(
   if (homeIndex >= 0 && awayIndex >= 0 && homeIndex !== awayIndex) {
     return { HOME: homeIndex, DRAW: drawIndex, AWAY: awayIndex };
   }
-
-  const remaining = [0, 1, 2].filter((index) => index !== drawIndex);
-  if (remaining.length !== 2) return null;
-  return { HOME: remaining[0]!, DRAW: drawIndex, AWAY: remaining[1]! };
+  return null;
 }
 
 function findTeamIndex(

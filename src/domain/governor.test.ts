@@ -118,6 +118,30 @@ describe("QuoteGovernor", () => {
     expect(reopened.map((receipt) => receipt.body.action)).toEqual(["REOPEN"]);
   });
 
+  it("ignores a discard record unrelated to an active incident", () => {
+    const governor = new QuoteGovernor(config);
+    governor.process(quote("q0", 1_000, probabilities(0.4, 0.3, 0.3)));
+    governor.process(event("goal-1", 2_000, false));
+    governor.process(quote("q1", 2_500, probabilities(0.4, 0.3, 0.3)));
+    governor.process(quote("q2", 2_700, probabilities(0.401, 0.299, 0.3)));
+    governor.process(quote("q3", 2_900, probabilities(0.402, 0.298, 0.3)));
+
+    const ignored = governor.process({
+      kind: "event-resolution",
+      fixtureId: 42,
+      resolutionId: "discard-unrelated",
+      incidentId: "unrelated",
+      resolution: "DISCARDED",
+      sourceTs: 4_000,
+      receivedTs: 4_000,
+    });
+
+    expect(ignored).toEqual([]);
+    expect(governor.getState(42).pendingUnconfirmedIncidentIds).toEqual([
+      "goal-1",
+    ]);
+  });
+
   it("suspends a repriced market again when a new incident arrives", () => {
     const governor = new QuoteGovernor(config);
     governor.process(quote("q0", 1_000, probabilities(0.4, 0.3, 0.3)));

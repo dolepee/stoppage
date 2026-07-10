@@ -70,6 +70,45 @@ describe("TxLINE normalization", () => {
     });
   });
 
+  it("rejects period-specific 1X2 records on the full-match governor", () => {
+    const normalized = normalize1x2Quote(
+      {
+        FixtureId: 77,
+        MessageId: "odds-first-half",
+        Ts: 1_000,
+        Bookmaker: "TXLineStablePriceDemargined",
+        BookmakerId: 10_021,
+        SuperOddsType: "1X2_PARTICIPANT_RESULT",
+        InRunning: true,
+        MarketPeriod: "half=1",
+        PriceNames: ["part1", "draw", "part2"],
+        Pct: ["60.000", "25.000", "15.000"],
+      },
+      { home: "part1", away: "part2" },
+    );
+
+    expect(normalized).toBeNull();
+  });
+
+  it("rejects unknown selection labels instead of guessing their order", () => {
+    const normalized = normalize1x2Quote(
+      {
+        FixtureId: 77,
+        MessageId: "odds-unknown-labels",
+        Ts: 1_000,
+        Bookmaker: "StablePrice",
+        BookmakerId: 1,
+        SuperOddsType: "1X2",
+        InRunning: true,
+        PriceNames: ["Side A", "Draw", "Side B"],
+        Pct: ["50.000", "25.000", "25.000"],
+      },
+      { home: "Northbridge", away: "Eastport" },
+    );
+
+    expect(normalized).toBeNull();
+  });
+
   it("accepts TxLINE pre-market messages with nullable state fields", () => {
     const payload = oddsPayloadSchema.parse({
       FixtureId: 77,
