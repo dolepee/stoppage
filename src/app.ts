@@ -11,12 +11,14 @@ import type { LiveWorkerStatus } from "./live/types.js";
 import { readRuntimeState } from "./private/runtime-store.js";
 import { publicJudgeScenario } from "./replay/public-scenario.js";
 import { StoppageRuntime } from "./runtime/stoppage-runtime.js";
+import { loadLatestPublicClaim } from "./evidence/public-claim.js";
 
 interface ApplicationOptions {
   config?: AppConfig;
   logger?: boolean;
   serveStatic?: boolean;
   readWorkerStatus?: WorkerStatusReader;
+  publicClaimRoot?: string;
 }
 
 type PersistedWorkerStatus = LiveWorkerStatus & { updatedAt: string };
@@ -29,6 +31,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
   const readWorkerStatus =
     options.readWorkerStatus ??
     (() => readRuntimeState<PersistedWorkerStatus>("worker-status.json"));
+  const publicClaimRoot = options.publicClaimRoot ?? "data/private";
 
   app.addHook("onRequest", async (_request, reply) => {
     reply
@@ -146,6 +149,32 @@ export async function createApplication(options: ApplicationOptions = {}) {
       unsubscribe();
       response.end();
     });
+  });
+
+  app.get("/api/public-claim", async (request, reply) => {
+    const query = z
+      .object({
+        approvedConfigHash: z
+          .string()
+          .regex(/^0x[0-9a-fA-F]{64}$/)
+          .optional(),
+      })
+      .passthrough()
+      .default({})
+      .parse(request.query);
+
+    const claim = await loadLatestPublicClaim(
+      publicClaimRoot,
+      query.approvedConfigHash,
+    );
+
+    if (!claim) {
+      return reply.code(404).send({
+        error: "Public claim not available",
+      });
+    }
+
+    return claim;
   });
 
   const publicRoot = resolve("dist/public");

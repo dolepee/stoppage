@@ -40,8 +40,9 @@ through TxODDS's official Solana mainnet `validateStat` instruction.
   real-match vectors remain private under the event data licence.
 - TxLINE on-chain score validation: confirmed on Solana mainnet with a true
   predicate result.
-- Public real-match metrics: intentionally withheld until the policy freeze and
-  chronological holdout are approved.
+- Public real-match metrics: available after approval through `/api/public-claim`
+  for approved config and lifecycle evidence, including holdout aggregates and
+  public Solana receipt hashes. Raw fixture IDs and source vectors remain private.
 
 ## Mainnet evidence
 
@@ -87,6 +88,7 @@ Stoppage uses the TxLINE mainnet deployment:
 | Historical scores   | `/api/scores/historical/{fixtureId}`             |
 | Historical odds     | `/api/odds/updates/{epochDay}/{hour}/{interval}` |
 | Score proof         | `/api/scores/stat-validation`                    |
+| Public claim        | `/api/public-claim`                              |
 
 The setup scripts deliberately separate wallet operations from the server:
 
@@ -137,7 +139,8 @@ decisions.
 
 Thresholds shown in the repository are provisional engineering defaults. They
 will be frozen after chronological calibration and approved before holdout
-evaluation. Public metrics will come only from that holdout.
+evaluation. Public aggregates are exposed only via `/api/public-claim` after
+`APPROVED` holdout and lifecycle gates align on the same config hash.
 
 ## Metrics
 
@@ -161,8 +164,8 @@ Raw TxLINE payloads, odds vectors, score records, identifiers, and credentials
 are private runtime material. They are not committed or returned by the public
 API. The public application exposes synthetic judge inputs plus Stoppage-derived
 state transitions, approved aggregate metrics, hashes, and public Solana proof
-transactions. Private captures are purged when the hackathon data licence
-terminates.
+transactions from `/api/public-claim`. Private captures are purged when the
+hackathon data licence terminates.
 
 See [architecture](docs/ARCHITECTURE.md), [rulebook](docs/RULEBOOK.md),
 [mainnet setup](docs/MAINNET_SETUP.md), and [data policy](docs/DATA_POLICY.md).
