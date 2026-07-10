@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.server.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "."
+  },
+  "include": ["scripts/**/*.ts", "src/**/*.ts", "vendor/txodds/*.ts"],
+  "exclude": ["node_modules", "dist", "app"]
+}

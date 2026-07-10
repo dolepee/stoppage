@@ -1,0 +1,21 @@
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+.secrets/
+data/private/
+data/raw/
+data/runtime/
+*.log
+.DS_Store
+
+# Private hackathon operations stay outside the public repository.
+TXODDS_STOPPAGE_MASTER_PLAN.md
+DEMO_SCRIPT.md
+demo-script.*
+*-demo-script.*
+SUBMISSION_CHECKLIST.md
+submission-checklist.*
+docs/*SUBMISSION*.md
+

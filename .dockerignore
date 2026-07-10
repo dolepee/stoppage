@@ -1,0 +1,11 @@
+.git
+.github
+.env
+.env.*
+.secrets
+node_modules
+dist
+data
+TXODDS_STOPPAGE_MASTER_PLAN.md
+*.log
+

@@ -1,0 +1,7 @@
+dist/
+node_modules/
+vendor/
+TXODDS_STOPPAGE_MASTER_PLAN.md
+data/private/
+data/raw/
+data/runtime/
