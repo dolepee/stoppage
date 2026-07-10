@@ -15,7 +15,7 @@ interface StreamCallbacks<T> {
 }
 
 interface LiveTxLineClient {
-  fetchFixtures(): Promise<Fixture[]>;
+  fetchFixtures(options?: { signal?: AbortSignal }): Promise<Fixture[]>;
   streamOdds(
     callbacks: StreamCallbacks<OddsPayload>,
     signal: AbortSignal,
@@ -31,6 +31,7 @@ interface LiveWorkerOptions {
   callbacks: LiveWorkerCallbacks;
   heartbeatTimeoutMs?: number;
   reconnectBaseMs?: number;
+  fixtureRefreshMs?: number;
   now?: () => number;
   capture?: (name: string, value: unknown) => Promise<unknown>;
 }
@@ -40,6 +41,7 @@ export class TxLineLiveWorker {
   readonly #callbacks: LiveWorkerCallbacks;
   readonly #heartbeatTimeoutMs: number;
   readonly #reconnectBaseMs: number;
+  readonly #fixtureRefreshMs: number;
   readonly #now: () => number;
   readonly #capture: (name: string, value: unknown) => Promise<unknown>;
   readonly #participants = new Map<number, { home: string; away: string }>();
@@ -51,6 +53,7 @@ export class TxLineLiveWorker {
     this.#callbacks = options.callbacks;
     this.#heartbeatTimeoutMs = options.heartbeatTimeoutMs ?? 45_000;
     this.#reconnectBaseMs = options.reconnectBaseMs ?? 1_000;
+    this.#fixtureRefreshMs = options.fixtureRefreshMs ?? 300_000;
     this.#now = options.now ?? Date.now;
     this.#capture = options.capture ?? appendPrivateCapture;
   }
@@ -69,21 +72,24 @@ export class TxLineLiveWorker {
     };
     this.#lastHealthEmission = { odds: true, scores: true };
 
-    const fixtures = await this.#client.fetchFixtures();
-    this.#loadParticipants(fixtures);
-    this.#status.fixturesLoaded = this.#participants.size;
-    await this.#setHealth("odds", false, "stream-connecting");
-    await this.#setHealth("scores", false, "stream-connecting");
-    await this.#publishStatus();
+    try {
+      await this.#refreshFixtures(signal);
+      await this.#setHealth("odds", false, "stream-connecting");
+      await this.#setHealth("scores", false, "stream-connecting");
+      await this.#publishStatus();
 
-    const monitor = this.#monitorHealth(signal);
-    await Promise.all([
-      this.#runStream("odds", signal),
-      this.#runStream("scores", signal),
-      monitor,
-    ]);
-    this.#status.running = false;
-    await this.#publishStatus();
+      const monitor = this.#monitorHealth(signal);
+      const fixtureRefresh = this.#refreshFixtureLoop(signal);
+      await Promise.all([
+        this.#runStream("odds", signal),
+        this.#runStream("scores", signal),
+        monitor,
+        fixtureRefresh,
+      ]);
+    } finally {
+      this.#status.running = false;
+      await this.#publishStatus();
+    }
   }
 
   #loadParticipants(fixtures: Fixture[]) {
@@ -94,6 +100,28 @@ export class TxLineLiveWorker {
         home: participant1IsHome ? fixture.Participant1 : fixture.Participant2,
         away: participant1IsHome ? fixture.Participant2 : fixture.Participant1,
       });
+    }
+  }
+
+  async #refreshFixtures(signal: AbortSignal) {
+    const fixtures = await this.#client.fetchFixtures({ signal });
+    this.#loadParticipants(fixtures);
+    this.#status.fixturesLoaded = this.#participants.size;
+    this.#status.fixtureRefreshes += 1;
+    this.#status.lastFixtureRefreshAt = this.#now();
+  }
+
+  async #refreshFixtureLoop(signal: AbortSignal) {
+    while (!signal.aborted) {
+      await abortableDelay(this.#fixtureRefreshMs, signal);
+      if (signal.aborted) break;
+      try {
+        await this.#refreshFixtures(signal);
+      } catch (error) {
+        if (signal.aborted || (error as Error).name === "AbortError") break;
+        this.#status.fixtureRefreshFailures += 1;
+      }
+      await this.#publishStatus();
     }
   }
 
@@ -245,6 +273,9 @@ function emptyStatus(): LiveWorkerStatus {
     normalizedEvents: 0,
     skippedOdds: 0,
     reconnects: { odds: 0, scores: 0 },
+    fixtureRefreshes: 0,
+    fixtureRefreshFailures: 0,
+    lastFixtureRefreshAt: null,
     streamHealth: { odds: false, scores: false },
     lastMessageAt: { odds: null, scores: null },
     startedAt: null,

@@ -7,6 +7,9 @@ export interface LiveWorkerStatus {
   normalizedEvents: number;
   skippedOdds: number;
   reconnects: Record<StreamName, number>;
+  fixtureRefreshes: number;
+  fixtureRefreshFailures: number;
+  lastFixtureRefreshAt: number | null;
   streamHealth: Record<StreamName, boolean>;
   lastMessageAt: Record<StreamName, number | null>;
   startedAt: string | null;

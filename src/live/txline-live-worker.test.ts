@@ -134,6 +134,98 @@ describe("TxLineLiveWorker", () => {
       vi.useRealTimers();
     }
   });
+
+  it("refreshes the fixture catalog without restarting", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    let fixtureRequests = 0;
+    let now = 1_000;
+    const client = {
+      fetchFixtures: async () => {
+        fixtureRequests += 1;
+        return [
+          {
+            FixtureId: fixtureRequests === 1 ? 77 : 88,
+            StartTime: 1_000,
+            Participant1: `Home ${fixtureRequests}`,
+            Participant2: `Away ${fixtureRequests}`,
+          },
+        ];
+      },
+      streamOdds: async (
+        callbacks: FakeCallbacks<OddsPayload>,
+        signal: AbortSignal,
+      ) => {
+        await callbacks.onOpen();
+        await untilAborted(signal);
+      },
+      streamScores: async (
+        callbacks: FakeCallbacks<ScorePayload>,
+        signal: AbortSignal,
+      ) => {
+        await callbacks.onOpen();
+        await untilAborted(signal);
+      },
+    };
+    const worker = new TxLineLiveWorker({
+      client,
+      fixtureRefreshMs: 1_000,
+      now: () => now,
+      callbacks: { onInput: () => undefined },
+      capture: async () => undefined,
+    });
+
+    try {
+      const run = worker.run(controller.signal);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(worker.status()).toMatchObject({
+        fixturesLoaded: 1,
+        fixtureRefreshes: 1,
+      });
+
+      now = 2_000;
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(worker.status()).toMatchObject({
+        fixturesLoaded: 2,
+        fixtureRefreshes: 2,
+        fixtureRefreshFailures: 0,
+        lastFixtureRefreshAt: 2_000,
+      });
+
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(0);
+      await run;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("publishes a stopped status when startup fails", async () => {
+    const statuses: boolean[] = [];
+    const client = {
+      fetchFixtures: async () => {
+        throw new Error("fixture snapshot unavailable");
+      },
+      streamOdds: async () => undefined,
+      streamScores: async () => undefined,
+    };
+    const worker = new TxLineLiveWorker({
+      client,
+      callbacks: {
+        onInput: () => undefined,
+        onStatus: (status) => {
+          statuses.push(status.running);
+        },
+      },
+      capture: async () => undefined,
+    });
+
+    await expect(worker.run(new AbortController().signal)).rejects.toThrow(
+      "fixture snapshot unavailable",
+    );
+    expect(worker.status().running).toBe(false);
+    expect(statuses.at(-1)).toBe(false);
+  });
 });
 
 interface FakeCallbacks<T> {

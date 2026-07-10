@@ -61,6 +61,7 @@ export class TxLineClient {
     options: {
       startEpochDay?: number;
       competitionId?: number;
+      signal?: AbortSignal;
     } = {},
   ): Promise<Fixture[]> {
     const query = new URLSearchParams();
@@ -73,6 +74,11 @@ export class TxLineClient {
     const suffix = query.size ? `?${query.toString()}` : "";
     const response = await this.#authorizedFetch(
       `/api/fixtures/snapshot${suffix}`,
+      {
+        signal: options.signal
+          ? AbortSignal.any([options.signal, AbortSignal.timeout(30_000)])
+          : AbortSignal.timeout(30_000),
+      },
     );
     return parseResponseArray(response, fixtureSchema);
   }
