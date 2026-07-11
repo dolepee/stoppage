@@ -25,12 +25,15 @@ const kickoffTs = scores.find((score) => score.startTime)?.startTime;
 if (!kickoffTs) {
   throw new Error(`Historical scores for fixture ${fixtureId} lack StartTime`);
 }
-const finalTs = Math.max(
-  ...scores
-    .filter((score) => score.action === "game_finalised")
-    .map((score) => score.ts),
-  kickoffTs + 3 * 60 * 60_000,
+const finalizedScores = scores.filter(
+  (score) => score.action === "game_finalised",
 );
+if (!finalizedScores.length) {
+  throw new Error(
+    `Historical scores for fixture ${fixtureId} are not finalized yet`,
+  );
+}
+const finalTs = Math.max(...finalizedScores.map((score) => score.ts));
 const startTs = kickoffTs - 30 * 60_000;
 const endTs = Math.min(finalTs + 15 * 60_000, kickoffTs + 4 * 60 * 60_000);
 const odds = [];
