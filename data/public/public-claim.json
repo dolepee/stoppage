@@ -3,24 +3,20 @@
   "status": "AVAILABLE",
   "network": "solana-mainnet",
   "approvedConfigHash": "0xe2ad4818c05817f6d5d483b27a7c3670c7aae205fd1eed32cbbe74d00b491461",
-  "evaluatedAt": "2026-07-10T16:11:26.837Z",
-  "approvedAt": "2026-07-10T21:46:44.036Z",
-  "approval": {
-    "statement": "APPROVE STOPPAGE PUBLIC CLAIM 0xe2ad4818c05817f6d5d483b27a7c3670c7aae205fd1eed32cbbe74d00b491461"
-  },
+  "evaluatedAt": "2026-07-12T21:42:11.859Z",
   "dataBoundary": "No TxLINE records, vectors, identifiers, or absolute source timestamps.",
   "holdout": {
-    "fixtures": 2,
-    "completeProtectedWindows": 11,
-    "staleQuoteSeconds": 1230.071,
-    "mispricingIntegral": 180.90332025737035,
-    "eventLedProtectedWindows": 11,
+    "fixtures": 4,
+    "completeProtectedWindows": 18,
+    "staleQuoteSeconds": 1853.7229999999997,
+    "mispricingIntegral": 302.49957467513565,
+    "eventLedProtectedWindows": 18,
     "oddsLedProtectedWindows": 0,
     "confirmedOddsLedProtectedWindows": 0,
     "unconfirmedOddsLedProtectedWindows": 0,
     "unconfirmedOddsLedSuspensionRate": null,
     "failsafeProtectedWindows": 0,
-    "provisionalEventProtectedWindows": 11,
+    "provisionalEventProtectedWindows": 18,
     "definitions": {
       "unconfirmedOddsLedSuspensionRate": "Odds-led protected windows that remained UNBACKED_MOVE through repricing divided by all odds-led protected windows; null when no odds-led window was observed.",
       "provisionalEventProtectedWindows": "Event-led windows entered from a provisional TxLINE event. Reopening still required later confirmation or explicit discard."
@@ -60,5 +56,10 @@
         "receiptHash": "0x386c3355d356fdebf5f7d44bb2d177b2a27324cac30e3d1ddd6e5946e8d003ce"
       }
     ]
+  },
+  "candidateHash": "0x49db3786a711ec20993ad1899f010432f966ac57f86b4036cbf1a52f6f0e0656",
+  "approvedAt": "2026-07-12T21:52:56.944Z",
+  "approval": {
+    "statement": "APPROVE STOPPAGE PUBLIC CLAIM 0xe2ad4818c05817f6d5d483b27a7c3670c7aae205fd1eed32cbbe74d00b491461 0x49db3786a711ec20993ad1899f010432f966ac57f86b4036cbf1a52f6f0e0656"
   }
 }

@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
+import { scrubApprovedPublicClaimHashes } from "../src/security/public-hash-scrub.js";
 
 const repositoryRoot = new URL("../", import.meta.url);
 const listed = execFileSync(
@@ -70,7 +71,7 @@ for (const path of listed) {
   const content = await readFile(url, "utf8");
   const contentForSecretScan =
     path === "data/public/public-claim.json"
-      ? scrubApprovedPublicHashes(content)
+      ? scrubApprovedPublicClaimHashes(content)
       : content;
   for (const [label, pattern] of secretPatterns) {
     if (pattern.test(contentForSecretScan))
@@ -83,21 +84,4 @@ if (failures.length) {
   process.exitCode = 1;
 } else {
   console.log(`Public gate passed for ${listed.length} repository files.`);
-}
-
-function scrubApprovedPublicHashes(content: string) {
-  const claim = JSON.parse(content) as {
-    approvedConfigHash?: string;
-    lifecycleEvidence?: { decisions?: Array<{ receiptHash?: string }> };
-  };
-  const approvedHashes = [
-    claim.approvedConfigHash,
-    ...(claim.lifecycleEvidence?.decisions ?? []).map(
-      (decision) => decision.receiptHash,
-    ),
-  ].filter((value): value is string => Boolean(value));
-  return approvedHashes.reduce(
-    (scrubbed, hash) => scrubbed.replaceAll(hash, "<approved-public-hash>"),
-    content,
-  );
 }
