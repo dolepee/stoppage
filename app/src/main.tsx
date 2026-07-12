@@ -6,6 +6,7 @@ import {
   Copy,
   Database,
   ExternalLink,
+  FileCheck2,
   Gauge,
   Play,
   Radio,
@@ -32,6 +33,7 @@ import type {
   RuntimeSnapshot,
   Selection,
 } from "./types";
+import { parsePublicClaim, type PublicClaim } from "./public-claim";
 import "./styles.css";
 
 const selections: Array<{ key: Selection; label: string }> = [
@@ -41,10 +43,13 @@ const selections: Array<{ key: Selection; label: string }> = [
 ];
 
 type ConnectionMode = "connecting" | "live" | "local" | "offline";
+type ClaimStatus = "loading" | "available" | "unavailable";
 
 function App() {
   const [snapshot, setSnapshot] = useState<RuntimeSnapshot | null>(null);
   const [connection, setConnection] = useState<ConnectionMode>("connecting");
+  const [publicClaim, setPublicClaim] = useState<PublicClaim | null>(null);
+  const [claimStatus, setClaimStatus] = useState<ClaimStatus>("loading");
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const localRuntime = useRef<StoppageRuntime | null>(null);
@@ -97,6 +102,27 @@ function App() {
       localRuntime.current?.stop();
       localRuntime.current = null;
     };
+  }, []);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void fetch("/api/public-claim", { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) throw new Error(`Claim failed: ${response.status}`);
+        return response.json() as Promise<unknown>;
+      })
+      .then((value) => {
+        setPublicClaim(parsePublicClaim(value));
+        setClaimStatus("available");
+      })
+      .catch((error: unknown) => {
+        if ((error as Error).name !== "AbortError") {
+          setClaimStatus("unavailable");
+        }
+      });
+
+    return () => controller.abort();
   }, []);
 
   async function startReplay() {
@@ -199,6 +225,8 @@ function App() {
           </div>
         </section>
 
+        <ApprovedEvidenceBand claim={publicClaim} status={claimStatus} />
+
         <div className="workspace">
           <section className="match-strip" aria-label="Current fixture">
             <div className="match-meta">
@@ -294,10 +322,173 @@ function App() {
               healthy
             />
           </section>
+
+          <ApprovedEvidencePanel claim={publicClaim} status={claimStatus} />
         </div>
       </main>
       <Footer snapshot={snapshot} />
     </div>
+  );
+}
+
+function ApprovedEvidenceBand({
+  claim,
+  status,
+}: {
+  claim: PublicClaim | null;
+  status: ClaimStatus;
+}) {
+  return (
+    <section className="evidence-band" aria-label="Approved mainnet evidence">
+      <div className="evidence-band-inner">
+        <div className="evidence-band-lead">
+          <span>Approved mainnet holdout</span>
+          <strong>
+            {status === "available"
+              ? "Real TxLINE evidence, frozen policy"
+              : status === "loading"
+                ? "Reading approved evidence"
+                : "Evidence endpoint unavailable"}
+          </strong>
+        </div>
+        {claim ? (
+          <>
+            <EvidenceStat
+              label="Held-out fixtures"
+              value={String(claim.holdout.fixtures)}
+            />
+            <EvidenceStat
+              label="Protected windows"
+              value={String(claim.holdout.completeProtectedWindows)}
+            />
+            <EvidenceStat
+              label="Baseline-open time"
+              value={formatDuration(claim.holdout.staleQuoteSeconds)}
+            />
+            <a className="evidence-jump" href="#mainnet-evidence">
+              Inspect evidence <FileCheck2 size={15} />
+            </a>
+          </>
+        ) : (
+          <p className="evidence-band-empty">
+            No metrics are substituted when the approved claim cannot be read.
+          </p>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function EvidenceStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="evidence-stat">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function ApprovedEvidencePanel({
+  claim,
+  status,
+}: {
+  claim: PublicClaim | null;
+  status: ClaimStatus;
+}) {
+  if (!claim) {
+    return (
+      <section className="mainnet-evidence unavailable" id="mainnet-evidence">
+        <div>
+          <span>Public evidence</span>
+          <h2>
+            {status === "loading"
+              ? "Reading the approved claim"
+              : "Approved claim unavailable"}
+          </h2>
+        </div>
+        <p>
+          The console does not replace unavailable mainnet evidence with demo
+          values.
+        </p>
+      </section>
+    );
+  }
+
+  return (
+    <section className="mainnet-evidence" id="mainnet-evidence">
+      <div className="evidence-heading">
+        <div>
+          <span>Approved public evidence</span>
+          <h2>Frozen policy, held-out match windows</h2>
+          <p>
+            The replay above demonstrates the product. These aggregates come
+            from {claim.holdout.fixtures} held-out TxLINE mainnet fixtures and
+            are bound to the approved candidate digest below.
+          </p>
+        </div>
+        <span className="approval-state">
+          <Check size={14} /> Approved
+        </span>
+      </div>
+
+      <div className="evidence-grid">
+        <div className="evidence-aggregate">
+          <EvidenceStat
+            label="Complete protected windows"
+            value={String(claim.holdout.completeProtectedWindows)}
+          />
+          <EvidenceStat
+            label="Baseline-open time"
+            value={formatDuration(claim.holdout.staleQuoteSeconds)}
+          />
+          <EvidenceStat
+            label="Mispricing integral"
+            value={`${claim.holdout.mispricingIntegral.toFixed(3)} p·s`}
+          />
+          <EvidenceStat
+            label="Strongest lifecycle move"
+            value={formatPercent(
+              claim.lifecycleEvidence.maximumProbabilityMove,
+            )}
+          />
+        </div>
+
+        <div className="verified-lifecycle">
+          <span>Verified lifecycle</span>
+          <div className="lifecycle-path">
+            {claim.lifecycleEvidence.decisions.map((decision, index) => (
+              <div className="lifecycle-step" key={decision.receiptHash}>
+                <small>{String(index + 1).padStart(2, "0")}</small>
+                <strong>{decision.action}</strong>
+                <span>{formatElapsed(decision.elapsedMs)}</span>
+              </div>
+            ))}
+          </div>
+          <p>{claim.dataBoundary}</p>
+        </div>
+      </div>
+
+      <div className="evidence-links">
+        <a
+          href={claim.lifecycleEvidence.txlineValidation.explorer}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Verify TxLINE validation <ExternalLink size={14} />
+        </a>
+        <a href="/api/public-claim" target="_blank" rel="noreferrer">
+          Inspect approved JSON <ExternalLink size={14} />
+        </a>
+        <div>
+          <span>Candidate digest</span>
+          <code>
+            {claim.candidateHash
+              ? shortHash(claim.candidateHash, 14)
+              : "Legacy approval"}
+          </code>
+        </div>
+      </div>
+    </section>
   );
 }
 
@@ -662,6 +853,16 @@ function formatMetric(value: number | null, suffix: string, precision = 0) {
 function formatReplayClock(milliseconds: number) {
   const total = Math.floor(milliseconds / 1_000);
   return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+function formatDuration(seconds: number) {
+  const rounded = Math.round(seconds);
+  const minutes = Math.floor(rounded / 60);
+  const remainder = rounded % 60;
+  return `${minutes}m ${String(remainder).padStart(2, "0")}s`;
+}
+function formatElapsed(milliseconds: number) {
+  if (milliseconds === 0) return "trigger";
+  return `+${(milliseconds / 1_000).toFixed(1)}s`;
 }
 function formatEventTime(timestamp: number) {
   return new Date(timestamp).toISOString().slice(11, 19);

@@ -1,0 +1,77 @@
+import { describe, expect, it } from "vitest";
+import { parsePublicClaim } from "./public-claim";
+
+const hash = `0x${"a".repeat(64)}`;
+
+function claim() {
+  return {
+    status: "AVAILABLE",
+    network: "solana-mainnet",
+    approvedConfigHash: hash,
+    candidateHash: hash,
+    evaluatedAt: "2026-07-12T21:42:11.859Z",
+    approvedAt: "2026-07-12T21:52:56.944Z",
+    dataBoundary: "No source data.",
+    holdout: {
+      fixtures: 4,
+      completeProtectedWindows: 18,
+      staleQuoteSeconds: 1853.723,
+      mispricingIntegral: 302.499,
+    },
+    lifecycleEvidence: {
+      lifecycleDurationMs: 169636,
+      maximumProbabilityMove: 0.762,
+      txlineValidation: {
+        transactionSignature: "3".repeat(64),
+        explorer: `https://solscan.io/tx/${"3".repeat(64)}`,
+      },
+      decisions: [
+        {
+          action: "SUSPEND",
+          trigger: "EVENT_BEFORE_REPRICE",
+          fromMode: "OPEN",
+          toMode: "SUSPENDED",
+          elapsedMs: 0,
+          receiptHash: hash,
+        },
+        {
+          action: "REPRICE",
+          trigger: "EVENT_BEFORE_REPRICE",
+          fromMode: "SUSPENDED",
+          toMode: "REPRICED",
+          elapsedMs: 162640,
+          receiptHash: hash,
+        },
+        {
+          action: "REOPEN",
+          trigger: "EVENT_BEFORE_REPRICE",
+          fromMode: "REPRICED",
+          toMode: "OPEN",
+          elapsedMs: 169636,
+          receiptHash: hash,
+        },
+      ],
+    },
+  };
+}
+
+describe("parsePublicClaim", () => {
+  it("accepts the approved lifecycle shape", () => {
+    expect(parsePublicClaim(claim()).holdout.completeProtectedWindows).toBe(18);
+  });
+
+  it("rejects reordered lifecycle decisions", () => {
+    const value = claim();
+    value.lifecycleEvidence.decisions.reverse();
+    expect(() => parsePublicClaim(value)).toThrow(
+      "Lifecycle must be SUSPEND, REPRICE, REOPEN",
+    );
+  });
+
+  it("rejects non-Solscan validation links", () => {
+    const value = claim();
+    value.lifecycleEvidence.txlineValidation.explorer =
+      "https://example.com/not-proof";
+    expect(() => parsePublicClaim(value)).toThrow();
+  });
+});

@@ -35,12 +35,13 @@ through TxODDS's official Solana mainnet `validateStat` instruction.
 - Dual-stream transport gate: mainnet fixtures, odds, and scores were observed
   together through the full private runtime gate. Raw transport records remain
   private under the event data licence.
-- Private historical gate: three captured fixtures each produced at least one
+- Private historical gate: four captured fixtures each produced at least one
   complete `SUSPEND -> REPRICE -> REOPEN` lifecycle. Raw TxLINE records and
   real-match vectors remain private under the event data licence.
 - TxLINE on-chain score validation: confirmed on Solana mainnet with a true
   predicate result.
-- Public real-match metrics: human-approved and available through
+- Public real-match metrics: four held-out fixtures and 18 complete protected
+  windows, human-approved and displayed in the judge console from
   `/api/public-claim`. The endpoint exposes only derived holdout aggregates,
   lifecycle decisions, and public Solana evidence; raw fixture IDs and source
   vectors remain private.
