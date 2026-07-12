@@ -3,11 +3,12 @@ import { resolve } from "node:path";
 
 import {
   buildApprovedPublicClaim,
+  buildPublicClaimCandidate,
   loadLatestPrivateEvidence,
 } from "../src/evidence/public-claim.js";
 
 const approvedConfigHash = readStringArgument("--approved-config-hash");
-const approvalStatement = readStringArgument("--approval");
+const approvalStatement = readOptionalStringArgument("--approval");
 const evidence = await loadLatestPrivateEvidence(
   "data/private",
   approvedConfigHash,
@@ -16,6 +17,28 @@ if (!evidence) {
   throw new Error(
     "No matching holdout and lifecycle candidate are ready for publication",
   );
+}
+
+const candidate = buildPublicClaimCandidate(evidence);
+if (!approvalStatement) {
+  console.log(
+    JSON.stringify(
+      {
+        ok: true,
+        status: "AWAITING_HUMAN_APPROVAL",
+        approvedConfigHash,
+        candidateHash: candidate.candidateHash,
+        requiredApproval: candidate.requiredApproval,
+        evaluatedAt: candidate.payload.evaluatedAt,
+        holdout: candidate.payload.holdout,
+        lifecycleEvidence: candidate.payload.lifecycleEvidence,
+        publicClaimWritten: false,
+      },
+      null,
+      2,
+    ),
+  );
+  process.exit(0);
 }
 
 const claim = buildApprovedPublicClaim({
@@ -52,4 +75,9 @@ function readStringArgument(name: string) {
     throw new Error(`${name} requires a lowercase 32-byte hash`);
   }
   return value;
+}
+
+function readOptionalStringArgument(name: string) {
+  const index = process.argv.indexOf(name);
+  return index >= 0 ? process.argv[index + 1] : undefined;
 }

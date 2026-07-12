@@ -1,6 +1,8 @@
 import { readFile, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 
+import { sha256 } from "../domain/canonical.js";
+
 export const PUBLIC_CLAIM_APPROVAL_PREFIX = "APPROVE STOPPAGE PUBLIC CLAIM";
 
 export interface PublicLifecycleEvidence {
@@ -67,6 +69,7 @@ export interface PublicClaimResponse {
   status: "AVAILABLE";
   network: "solana-mainnet";
   approvedConfigHash: string;
+  candidateHash?: string;
   evaluatedAt: string;
   approvedAt: string;
   approval: {
@@ -96,6 +99,15 @@ export interface PublicClaimResponse {
       receiptHash: string;
     }>;
   };
+}
+
+export interface PublicClaimCandidate {
+  candidateHash: string;
+  requiredApproval: string;
+  payload: Omit<
+    PublicClaimResponse,
+    "approvedAt" | "approval" | "candidateHash"
+  >;
 }
 
 export async function loadLatestPublicClaim(
@@ -139,26 +151,43 @@ export function buildApprovedPublicClaim({
   approvalStatement: string;
   approvedAt: string;
 }): PublicClaimResponse {
-  if (holdout.approvedConfigHash !== lifecycle.configHash) {
-    throw new Error("Holdout and lifecycle config hashes do not match");
-  }
-  const expectedApproval = `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${holdout.approvedConfigHash}`;
-  if (approvalStatement !== expectedApproval) {
-    throw new Error(`Human approval must exactly equal: ${expectedApproval}`);
+  const candidate = buildPublicClaimCandidate({ holdout, lifecycle });
+  if (approvalStatement !== candidate.requiredApproval) {
+    throw new Error(
+      `Human approval must exactly equal: ${candidate.requiredApproval}`,
+    );
   }
   if (!Number.isFinite(Date.parse(approvedAt))) {
     throw new Error("approvedAt must be a valid timestamp");
   }
-  assertAggregate(holdout.aggregate);
 
   return {
+    ...candidate.payload,
+    candidateHash: candidate.candidateHash,
+    approvedAt,
+    approval: { statement: approvalStatement },
+  };
+}
+
+export function buildPublicClaimCandidate({
+  holdout,
+  lifecycle,
+}: {
+  holdout: PrivateHoldoutReport;
+  lifecycle: PublicLifecycleCandidate;
+}): PublicClaimCandidate {
+  if (holdout.approvedConfigHash !== lifecycle.configHash) {
+    throw new Error("Holdout and lifecycle config hashes do not match");
+  }
+  assertAggregate(holdout.aggregate);
+  assertLifecycleCandidate(lifecycle);
+
+  const payload: PublicClaimCandidate["payload"] = {
     version: 2,
     status: "AVAILABLE",
     network: holdout.network,
     approvedConfigHash: holdout.approvedConfigHash,
     evaluatedAt: holdout.evaluatedAt,
-    approvedAt,
-    approval: { statement: approvalStatement },
     dataBoundary: lifecycle.dataBoundary,
     holdout: {
       ...holdout.aggregate,
@@ -184,6 +213,12 @@ export function buildApprovedPublicClaim({
       })),
     },
   };
+  const candidateHash = sha256(payload);
+  return {
+    candidateHash,
+    requiredApproval: `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${holdout.approvedConfigHash} ${candidateHash}`,
+    payload,
+  };
 }
 
 function isApprovedPublicClaim(value: PublicClaimResponse) {
@@ -197,8 +232,16 @@ function isApprovedPublicClaim(value: PublicClaimResponse) {
   ) {
     return false;
   }
-  const expectedApproval = `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${value.approvedConfigHash}`;
+  const expectedApproval = value.candidateHash
+    ? `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${value.approvedConfigHash} ${value.candidateHash}`
+    : `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${value.approvedConfigHash}`;
   if (value.approval?.statement !== expectedApproval) return false;
+  if (
+    value.candidateHash &&
+    value.candidateHash !== sha256(publicClaimPayload(value))
+  ) {
+    return false;
+  }
   try {
     assertAggregate(value.holdout);
   } catch {
@@ -240,19 +283,45 @@ async function findLatestLifecycleEvidence(
   approvedConfigHash: string,
 ): Promise<PublicLifecycleCandidate | null> {
   const files = await listJsonFiles(dataRoot, "public-evidence-candidate-");
+  let strongest: PublicLifecycleCandidate | null = null;
   for (const file of files) {
     const candidate = (await safeParseJson(
       resolve(dataRoot, file),
     )) as PublicLifecycleCandidate | null;
-    if (
-      candidate?.status === "AWAITING_HUMAN_APPROVAL" &&
-      candidate.configHash === approvedConfigHash &&
-      candidate.decisions?.length
-    ) {
-      return candidate;
+    try {
+      if (
+        candidate?.status !== "AWAITING_HUMAN_APPROVAL" ||
+        candidate.configHash !== approvedConfigHash
+      ) {
+        continue;
+      }
+      assertLifecycleCandidate(candidate);
+      if (
+        !strongest ||
+        candidate.maximumProbabilityMove > strongest.maximumProbabilityMove
+      ) {
+        strongest = candidate;
+      }
+    } catch {
+      continue;
     }
   }
-  return null;
+  return strongest;
+}
+
+function publicClaimPayload(
+  value: PublicClaimResponse,
+): PublicClaimCandidate["payload"] {
+  return {
+    version: value.version,
+    status: value.status,
+    network: value.network,
+    approvedConfigHash: value.approvedConfigHash,
+    evaluatedAt: value.evaluatedAt,
+    dataBoundary: value.dataBoundary,
+    holdout: value.holdout,
+    lifecycleEvidence: value.lifecycleEvidence,
+  };
 }
 
 async function listJsonFiles(dataRoot: string, prefix: string) {
@@ -286,6 +355,43 @@ function assertAggregate(value: PrivateHoldoutAggregate) {
   const rate = value.unconfirmedOddsLedSuspensionRate;
   if (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 1)) {
     throw new Error("Invalid unconfirmed odds-led suspension rate");
+  }
+}
+
+function assertLifecycleCandidate(value: PublicLifecycleCandidate) {
+  if (
+    value.network !== "solana-mainnet" ||
+    value.evidenceType !== "DERIVED_LIFECYCLE_EVIDENCE" ||
+    !Number.isFinite(value.lifecycleDurationMs) ||
+    value.lifecycleDurationMs <= 0 ||
+    !Number.isFinite(value.maximumProbabilityMove) ||
+    value.maximumProbabilityMove < 0 ||
+    value.maximumProbabilityMove > 1 ||
+    !/^0x[0-9a-f]{64}$/.test(value.configHash)
+  ) {
+    throw new Error("Invalid lifecycle evidence metadata");
+  }
+  const actions = value.decisions.map((decision) => decision.action);
+  if (actions.join(",") !== "SUSPEND,REPRICE,REOPEN") {
+    throw new Error("Lifecycle evidence must contain a complete decision path");
+  }
+  if (
+    value.decisions.some(
+      (decision) =>
+        decision.configHash !== value.configHash ||
+        !/^0x[0-9a-f]{64}$/.test(decision.receiptHash) ||
+        !Number.isFinite(decision.elapsedMs) ||
+        decision.elapsedMs < 0,
+    )
+  ) {
+    throw new Error("Invalid lifecycle decision evidence");
+  }
+  const signature = value.txlineValidation?.transactionSignature;
+  if (
+    !/^[1-9A-HJ-NP-Za-km-z]{80,90}$/.test(signature) ||
+    value.txlineValidation.explorer !== `https://solscan.io/tx/${signature}`
+  ) {
+    throw new Error("Invalid TxLINE validation evidence");
   }
 }
 

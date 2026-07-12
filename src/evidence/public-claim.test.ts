@@ -1,13 +1,18 @@
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import {
   buildApprovedPublicClaim,
+  buildPublicClaimCandidate,
+  loadLatestPrivateEvidence,
   type PrivateHoldoutReport,
   type PublicLifecycleCandidate,
 } from "./public-claim.js";
 
 const configHash = `0x${"ab".repeat(32)}`;
-const approval = `APPROVE STOPPAGE PUBLIC CLAIM ${configHash}`;
 
 describe("public claim approval", () => {
   it("requires the exact second human approval statement", () => {
@@ -22,17 +27,22 @@ describe("public claim approval", () => {
   });
 
   it("builds an unambiguous approved projection", () => {
+    const candidate = buildPublicClaimCandidate({
+      holdout: holdout(),
+      lifecycle: lifecycle(),
+    });
     const claim = buildApprovedPublicClaim({
       holdout: holdout(),
       lifecycle: lifecycle(),
-      approvalStatement: approval,
+      approvalStatement: candidate.requiredApproval,
       approvedAt: "2026-07-10T15:00:00.000Z",
     });
 
     expect(claim).toMatchObject({
       version: 2,
       status: "AVAILABLE",
-      approval: { statement: approval },
+      candidateHash: candidate.candidateHash,
+      approval: { statement: candidate.requiredApproval },
       holdout: {
         completeProtectedWindows: 11,
         eventLedProtectedWindows: 11,
@@ -43,6 +53,63 @@ describe("public claim approval", () => {
       },
     });
     expect(JSON.stringify(claim)).not.toContain("fixtureId");
+  });
+
+  it("binds approval to the exact public candidate payload", () => {
+    const candidate = buildPublicClaimCandidate({
+      holdout: holdout(),
+      lifecycle: lifecycle(),
+    });
+    const changed = holdout();
+    changed.aggregate.completeProtectedWindows += 1;
+
+    expect(() =>
+      buildApprovedPublicClaim({
+        holdout: changed,
+        lifecycle: lifecycle(),
+        approvalStatement: candidate.requiredApproval,
+        approvedAt: "2026-07-10T15:00:00.000Z",
+      }),
+    ).toThrow("Human approval must exactly equal");
+  });
+
+  it("selects the strongest verified lifecycle for the latest holdout", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stoppage-evidence-"));
+    try {
+      const olderHoldout = holdout();
+      olderHoldout.aggregate.fixtures = 2;
+      const latestHoldout = holdout();
+      latestHoldout.aggregate.fixtures = 4;
+      const weaker = lifecycle();
+      weaker.maximumProbabilityMove = 0.4;
+      const strongest = lifecycle();
+      strongest.maximumProbabilityMove = 0.8;
+
+      await Promise.all([
+        writeFile(
+          join(root, "holdout-2026-07-10.json"),
+          JSON.stringify(olderHoldout),
+        ),
+        writeFile(
+          join(root, "holdout-2026-07-12.json"),
+          JSON.stringify(latestHoldout),
+        ),
+        writeFile(
+          join(root, "public-evidence-candidate-2026-07-11.json"),
+          JSON.stringify(strongest),
+        ),
+        writeFile(
+          join(root, "public-evidence-candidate-2026-07-12.json"),
+          JSON.stringify(weaker),
+        ),
+      ]);
+
+      const evidence = await loadLatestPrivateEvidence(root, configHash);
+      expect(evidence?.holdout.aggregate.fixtures).toBe(4);
+      expect(evidence?.lifecycle.maximumProbabilityMove).toBe(0.8);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });
 
@@ -90,11 +157,30 @@ function lifecycle(): PublicLifecycleCandidate {
         receiptHash: `0x${"cd".repeat(32)}`,
         configHash,
       },
+      {
+        action: "REPRICE",
+        trigger: "EVENT_BEFORE_REPRICE",
+        fromMode: "SUSPENDED",
+        toMode: "REPRICED",
+        elapsedMs: 160_000,
+        receiptHash: `0x${"de".repeat(32)}`,
+        configHash,
+      },
+      {
+        action: "REOPEN",
+        trigger: "EVENT_BEFORE_REPRICE",
+        fromMode: "REPRICED",
+        toMode: "OPEN",
+        elapsedMs: 169_636,
+        receiptHash: `0x${"ef".repeat(32)}`,
+        configHash,
+      },
     ],
     txlineValidation: {
       transactionSignature:
         "3ZEuF4zPtGiwT5iMwHQnPMWpX9U8BsMz1aHybwyzmkjaoMKmCNVQ4eADQtAB11rNwyb1EtDLadn9qQeGZzuXXwPd",
-      explorer: "https://solscan.io/tx/test",
+      explorer:
+        "https://solscan.io/tx/3ZEuF4zPtGiwT5iMwHQnPMWpX9U8BsMz1aHybwyzmkjaoMKmCNVQ4eADQtAB11rNwyb1EtDLadn9qQeGZzuXXwPd",
     },
   };
 }

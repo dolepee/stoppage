@@ -32,9 +32,9 @@ through TxODDS's official Solana mainnet `validateStat` instruction.
   fixture**, visibly labeled in the application.
 - TxLINE service-level-12 subscription and API activation: confirmed on Solana
   mainnet.
-- Dual-stream transport preflight: fixtures loaded, both mainnet SSE transports
-  connected, and both emitted heartbeats without reconnect or parse errors. This
-  is not presented as the still-pending four-hour dual-data gate.
+- Dual-stream transport gate: mainnet fixtures, odds, and scores were observed
+  together through the full private runtime gate. Raw transport records remain
+  private under the event data licence.
 - Private historical gate: three captured fixtures each produced at least one
   complete `SUSPEND -> REPRICE -> REOPEN` lifecycle. Raw TxLINE records and
   real-match vectors remain private under the event data licence.
@@ -141,7 +141,8 @@ decisions.
 The thresholds shown in the repository were frozen after chronological
 calibration and approved before holdout evaluation. Public aggregates are
 exposed only via `/api/public-claim` after a separate human publication approval
-and only when the holdout and lifecycle evidence share the approved config hash.
+that binds both the approved config hash and the exact candidate digest. The
+holdout and lifecycle evidence must share that approved config hash.
 
 ## Metrics
 
