@@ -2,7 +2,7 @@
 
 ![Stoppage operator console social card](app/public/og-stoppage.png)
 
-**Stops the market, then proves when it is safe to reopen.**
+**Stops the market, then certifies every condition required to reopen.**
 
 Live judge console: <https://stoppage-txline.vercel.app>
 

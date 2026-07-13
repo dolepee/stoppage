@@ -198,7 +198,7 @@ function App() {
               <h1 id="product-title">Stoppage</h1>
               <p className="product-lede">
                 Stops an in-play market when the match and odds disagree, then
-                proves when it is safe to reopen.
+                certifies every release condition before reopening.
               </p>
               <div className="command-actions">
                 <button
@@ -756,7 +756,7 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
               </span>
               <div>
                 <span>Every release condition passed</span>
-                <strong>Safe to reopen</strong>
+                <strong>Reopen authorized</strong>
               </div>
               <code>{shortHash(certificate.hash)}</code>
             </div>
