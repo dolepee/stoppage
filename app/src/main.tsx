@@ -504,7 +504,7 @@ function Header({ connection }: { connection: ConnectionMode }) {
       </div>
       <nav aria-label="Primary navigation">
         <a href="#product-title">Console</a>
-        <a href="#evidence">Evidence</a>
+        <a href="#mainnet-evidence">Evidence</a>
         <a
           href="https://txline.txodds.com/documentation/worldcup"
           target="_blank"
