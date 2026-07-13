@@ -6,13 +6,21 @@
 
 Live judge console: <https://stoppage-txline.vercel.app>
 
-Stoppage is an autonomous, resolution-aware quote governor driven by TxLINE on
-Solana. When a provisional goal or VAR incident moves the market, it keeps a
-simulated operator book closed, invalidates any price branch formed before the
-incident resolves, and requires fresh post-resolution consensus before a
-machine-verifiable reopen certificate can exist. It is operator risk tooling,
-not a wagering product: there is no custody, bet placement, or claim of
-executable bookmaker fills.
+Stoppage is an autonomous execution firewall driven by TxLINE on Solana. A
+reference market-maker agent must ask Stoppage before publishing a simulated
+quote. When a provisional goal or VAR incident moves the market, Stoppage
+returns `BLOCK`, invalidates any branch formed before the incident resolves,
+and issues a short-lived, machine-verifiable `ALLOW` permit only after fresh
+post-resolution consensus. It is operator risk tooling, not a wagering product:
+there is no custody, bet placement, or claim of executable bookmaker fills.
+
+The failure is operationally real. Sportradar's
+[`bet_stop` documentation](https://docs.sportradar.com/uof/data-and-features/messages/event/bet-stop)
+keeps active markets suspended until a later active status, while
+[Betfair's football rules](https://support.betfair.com/app/answers/detail/a_id/10642/)
+allow bets between a material event and its VAR cancellation to be voided.
+Stoppage controls the narrower downstream question: whether an autonomous agent
+may act on the current price branch.
 
 ## Product loop
 
@@ -21,6 +29,8 @@ TxLINE provisional event ─> HOLD ─> candidate reprice
                                       │
 TxLINE confirm / discard ─────────────┴─> INVALIDATE PRE-RESOLUTION BRANCH
 TxLINE fresh odds ─> stable 3/3 ─> REPRICE ─> CERTIFIED REOPEN
+                                                  │
+agent PUBLISH_QUOTE ─> BLOCK during hold ──────────┴─> verified ALLOW permit
 ```
 
 The MVP controls one market deeply: in-running soccer `1X2`. Every transition
@@ -57,12 +67,47 @@ the public synthetic VAR-overturn lifecycle and verify every certificate with:
 pnpm reopen:verify
 ```
 
+## Execution Gate
+
+The Execution Gate is a pure projection of the existing governor state, not a
+second policy engine. A downstream client submits `PUBLISH_QUOTE` with a
+privacy-safe subject hash and exact quote hash. The gate returns a block reason
+or a canonical permit binding the quote, policy, latest state receipt, current
+Certified Reopen proof where required, execution sequence, issue time, and
+expiry.
+
+The reference agent verifies the permit immediately before its simulated
+publish. A new quote, event, resolution, receipt, stream failure, sequence,
+policy, or expiry revokes the previous permit. The candidate permit TTL is five
+seconds, approximately five measured median quote intervals; quote and sequence
+changes still revoke immediately. This parameter remains subject to the final
+human publication checkpoint.
+
+```bash
+pnpm gate:verify
+```
+
+The same evaluator is available from `POST /api/execution-gate/evaluate` on the
+persistent application runtime. The live worker writes a private per-fixture
+context after every processed input; the API resolves it by subject hash and
+returns only the gate result. A context older than five seconds fails closed,
+and fixture IDs, quote vectors, source IDs, and feed records never enter the
+response. A downstream agent that already consumes TxLINE computes the subject
+and quote hashes with the exported helpers before requesting authorization. The
+public static console runs the evaluator locally over the synthetic fixture so
+judges need no token or login.
+
 ## Current status
 
 - Resolution-aware quote governor: implemented and adversarially tested.
 - Provisional reprice invalidation and post-resolution freshness gate:
   implemented in policy revision 2.
 - Event-first, odds-first, and stream-failure paths: implemented and tested.
+- Execution Gate and deterministic reference agent: implemented with canonical
+  permit verification, expiry, sequence revocation, and adversarial tamper tests.
+- Live gate bridge: the persistent worker projects private governor state into a
+  shared runtime context, and the application API fails closed if that context
+  is missing, invalid, or more than five seconds old.
 - Certified Reopen proofs: implemented, receipt-bound, policy-bound, and
   independently reproducible from the normalized replay.
 - Zero-friction public judge replay: implemented with a **synthetic normalized
@@ -83,6 +128,9 @@ pnpm reopen:verify
   under revision 2 in `/api/public-claim`. The endpoint exposes only derived
   aggregates, lifecycle decisions, hashes, and public Solana evidence; raw
   fixture IDs, records, source timestamps, and vectors remain private.
+- Trigger coverage is explicit: all 18 real holdout windows were event-led. The
+  odds-led `UNBACKED_MOVE` detector is implemented and tested but was not
+  exercised by the real holdout, so no odds-led success rate is claimed.
 
 ## Mainnet evidence
 
@@ -94,6 +142,16 @@ pnpm reopen:verify
 
 The validation transaction is the sponsor-specific proof. Stoppage decision
 hashes remain supporting evidence rather than the product's main action.
+
+## Why Solana
+
+The TxLINE data licence and validation layer live on Solana: access is activated
+through a mainnet Token-2022 subscription, and finalized score states are
+checked through TxODDS's own on-chain Merkle-validation instruction. The
+real-time execution control plane stays off-chain because quote gating is
+latency-sensitive and the available on-chain stat proof does not prove VAR
+timing or odds freshness. Stoppage does not disguise a generic account write as
+on-chain enforcement.
 
 ## Run locally
 
@@ -129,6 +187,7 @@ Stoppage uses the TxLINE mainnet deployment:
 | Historical odds     | `/api/odds/updates/{epochDay}/{hour}/{interval}` |
 | Score proof         | `/api/scores/stat-validation`                    |
 | Public claim        | `/api/public-claim`                              |
+| Execution Gate      | `/api/execution-gate/evaluate`                   |
 
 The setup scripts deliberately separate wallet operations from the server:
 
@@ -162,6 +221,16 @@ The live profile keeps raw captures and runtime state in separate persistent
 volumes. The health endpoint exposes only derived counters, stream state, and
 message age; it never returns credentials, source identifiers, or feed records.
 
+The repository also includes a `render.yaml` blueprint for one persistent web
+service. It starts the public console and supervised live worker in the same
+process group, stores private captures and health state on an encrypted service
+disk, injects `TXLINE_API_TOKEN` only through the host secret environment, and
+fails `/api/host-health` with HTTP 503 when the worker state is stale or either
+required feed is unhealthy. The console displays live-worker status only when
+the same application runtime can read real state; the static judge build does
+not substitute demo uptime. A hosted URL and uptime claim remain pending until
+the service has been created and observed live.
+
 ## Policy
 
 Stoppage is a deterministic state machine. No LLM participates in quote
@@ -171,7 +240,9 @@ decisions.
   the last quote predates it. An unconfirmed signal suspends immediately, but
   confirmation or explicit discard is required before reopening.
 - `UNBACKED_MOVE`: a configured probability jump arrives without a supporting
-  high-impact event inside the confirmation window.
+  high-impact event inside the confirmation window. This path is implemented
+  and adversarially tested, but all 18 real holdout windows were event-led; the
+  odds-led path is not presented as real-data proof.
 - `STREAM_UNHEALTHY`: either required feed misses its health policy.
 - `REPRICE`: the consensus vector remains inside the configured epsilon for the
   required number of consecutive updates.
@@ -220,6 +291,11 @@ state transitions, approved aggregate metrics, hashes, and public Solana proof
 transactions from `/api/public-claim`. Private captures are purged when the
 hackathon data licence terminates.
 
+The approved hashes establish that the evaluated candidate was not silently
+changed after human approval; they do not make licensed raw records publicly
+reproducible. Judges may request a live screen-share reproduction of the private
+holdout without redistribution of the underlying data.
+
 See [architecture](docs/ARCHITECTURE.md), [rulebook](docs/RULEBOOK.md),
 [mainnet setup](docs/MAINNET_SETUP.md), and [data policy](docs/DATA_POLICY.md).
 
@@ -227,13 +303,15 @@ See [architecture](docs/ARCHITECTURE.md), [rulebook](docs/RULEBOOK.md),
 
 ```bash
 pnpm check
+pnpm gate:verify
 pnpm reopen:verify
 ```
 
 `pnpm check` runs formatting checks, TypeScript checks, domain and integration
-tests, and a production build. `pnpm reopen:verify` independently reruns the
-public normalized lifecycle and rejects a modified proof, receipt, or policy
-binding.
+tests, and a production build. `pnpm gate:verify` runs the reference agent from
+blocked execution to a verified Certified Reopen permit. `pnpm reopen:verify`
+independently reruns the public normalized lifecycle and rejects a modified
+proof, receipt, or policy binding.
 
 ## License
 

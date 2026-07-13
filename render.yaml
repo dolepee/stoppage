@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: stoppage-control-plane
+    runtime: node
+    plan: starter
+    region: frankfurt
+    buildCommand: corepack enable && pnpm install --frozen-lockfile && pnpm build
+    startCommand: pnpm start:hosted
+    healthCheckPath: /api/host-health
+    envVars:
+      - key: NODE_VERSION
+        value: 22.18.0
+      - key: HOST
+        value: 0.0.0.0
+      - key: STOPPAGE_PRIVATE_ROOT
+        value: /var/data/private
+      - key: STOPPAGE_RUNTIME_ROOT
+        value: /var/data/runtime
+      - key: TXLINE_ORIGIN
+        value: https://txline.txodds.com
+      - key: TXLINE_SERVICE_LEVEL
+        value: 12
+      - key: TXLINE_API_TOKEN
+        sync: false
+    disk:
+      name: stoppage-private-runtime
+      mountPath: /var/data
+      sizeGB: 1

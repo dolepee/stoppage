@@ -3,15 +3,26 @@
 The defaults below are engineering values used to test the implementation.
 They are not calibrated claims.
 
-| Parameter                 | Default | Purpose                                          |
-| ------------------------- | ------: | ------------------------------------------------ |
-| Sharp move threshold      |  `0.04` | Maximum absolute 1X2 probability change          |
-| Stability epsilon         | `0.006` | Maximum move between stable updates              |
-| Stable updates            |     `3` | Consecutive updates required before repricing    |
-| Reopen delay              |    `5s` | Confirmation window after repricing              |
-| Event confirmation window |   `30s` | Associates an odds-first move with a later event |
-| Recovery stability        |    `5s` | Both streams must remain healthy before recovery |
-| Post-resolution freshness |    `on` | Rebuild stability after confirmation or discard  |
+| Parameter                 | Default | Purpose                                           |
+| ------------------------- | ------: | ------------------------------------------------- |
+| Sharp move threshold      |  `0.04` | Maximum absolute 1X2 probability change           |
+| Stability epsilon         | `0.006` | Maximum move between stable updates               |
+| Stable updates            |     `3` | Consecutive updates required before repricing     |
+| Reopen delay              |    `5s` | Confirmation window after repricing               |
+| Event confirmation window |   `30s` | Associates an odds-first move with a later event  |
+| Recovery stability        |    `5s` | Both streams must remain healthy before recovery  |
+| Post-resolution freshness |    `on` | Rebuild stability after confirmation or discard   |
+| Execution permit TTL      |    `5s` | Upper bound; any new sequence revokes immediately |
+| Live context maximum age  |    `5s` | Missing or older worker state fails closed        |
+
+The five-second permit candidate spans roughly five measured median quote
+intervals (1,001 ms) while preserving immediate sequence and quote revocation.
+It is additive to the approved governor configuration and requires the final
+human publication checkpoint before it becomes a public product claim.
+The live context bound is operational rather than market-calibrated: the worker
+advances every active fixture on a one-second tick, so five seconds allows
+normal scheduling jitter while preventing a stopped worker from authorizing
+against a cached healthy state.
 
 ## Calibration discipline
 
@@ -47,6 +58,10 @@ incident is confirmed or explicitly discarded.
 A probability component moves by at least the sharp-move threshold without a
 recent high-impact event. Stoppage suspends conservatively. A later event may
 confirm the move; otherwise the lifecycle remains labeled unconfirmed.
+
+All 18 approved real holdout windows were event-led. This odds-led path is
+implemented and tested but was not exercised by the real holdout; synthetic
+coverage must remain visibly labeled and cannot be presented as live evidence.
 
 The reported unconfirmed odds-led suspension rate uses only these windows as its
 denominator. It is `null` when a holdout contains no odds-led suspension. An
@@ -84,4 +99,17 @@ normalized inputs without changing the original decision receipt:
 
 ```bash
 pnpm reopen:verify
+```
+
+## Execution permits
+
+The gate returns `BLOCK_UNRESOLVED_INCIDENT`, `BLOCK_INVALIDATED_BRANCH`,
+`BLOCK_STREAM_UNHEALTHY`, or `BLOCK_QUOTE_STALE` while execution is unsafe. It
+returns `ALLOW_HEALTHY_QUOTE` before an incident, and
+`ALLOW_CERTIFIED_REOPEN` only when the current release receipt has an exact valid
+Certified Reopen proof. An expired or sequence-mismatched permit verifies as
+`BLOCK_PERMIT_EXPIRED`.
+
+```bash
+pnpm gate:verify
 ```

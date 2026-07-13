@@ -40,5 +40,22 @@ describe("StoppageRuntime", () => {
     expect(snapshot.metrics.mispricingIntegral).toBeCloseTo(1.22648);
     expect(snapshot.metrics.invalidatedReprices).toBe(1);
     expect(snapshot.metrics.failoverCount).toBe(0);
+    expect(snapshot.metrics.protectedWindowSeconds).toBeCloseTo(20.56);
+    expect(snapshot.metrics.currentBranchDisplacement).toBeCloseTo(0.12);
+    expect(
+      snapshot.timeline
+        .filter((item) => item.kind === "AGENT")
+        .map((item) => item.label),
+    ).toContain("QUOTE_BLOCKED");
+    expect(snapshot.execution.agent).toMatchObject({
+      decision: "ALLOW",
+      decisionCode: "ALLOW_CERTIFIED_REOPEN",
+      result: "SIMULATED_QUOTE_PUBLISHED",
+      permitVerified: true,
+      simulated: true,
+    });
+    expect(snapshot.execution.agent.permit?.body.reopenProofHash).toBe(
+      snapshot.reopenProofs[0]?.hash,
+    );
   }, 5_000);
 });

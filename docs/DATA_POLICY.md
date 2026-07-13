@@ -26,3 +26,20 @@ The public API does not expose an endpoint that returns captured TxLINE payloads
 Real-match quote vectors and score records are not embedded in the deployed app
 or demo media. Real-match certificate sidecars remain private unless a derived
 projection receives separate publication approval.
+
+Approval hashes establish candidate integrity; they do not make licensed source
+records publicly reproducible. A judge may request a live screen-share replay of
+the private holdout. The records remain on the private runtime during that
+session and are not transferred, downloaded, or exposed by an endpoint.
+
+On a persistent cloud host, the TxLINE token is stored only in the service's
+secret environment and raw captures use a private volume. That volume is part of
+the same licence-end purge obligation as local captures. Public health responses
+remain limited to derived counters, booleans, reconnect counts, and message age.
+
+The live Execution Gate bridge stores full governor context only in the private
+runtime root with mode-0600 files. Public requests identify a context by a
+domain-separated subject hash and exact quote hash. Responses contain only the
+decision, reason, sequence, and permit fields; they never return the private
+state used for evaluation. A stale, missing, or malformed context returns
+`BLOCK_STREAM_UNHEALTHY` with no permit.

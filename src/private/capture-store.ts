@@ -1,7 +1,9 @@
 import { appendFile, chmod, mkdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
-const privateRoot = resolve("data/private");
+const privateRoot = resolve(
+  process.env.STOPPAGE_PRIVATE_ROOT ?? "data/private",
+);
 const appendQueues = new Map<string, Promise<void>>();
 
 export async function writePrivateCapture(

@@ -5,12 +5,13 @@ import type {
   ReopenProof,
   StreamName,
 } from "../domain/types.js";
+import type { ReferenceAgentSnapshot } from "../execution-gate/reference-agent.js";
 import type { ReplayMatch } from "../replay/types.js";
 
 export interface TimelineItem {
   id: string;
   at: number;
-  kind: "INPUT" | "DECISION";
+  kind: "INPUT" | "DECISION" | "AGENT";
   label: string;
   detail: string;
   mode?: GovernorMode;
@@ -24,10 +25,12 @@ export interface RuntimeMetrics {
   maximumProbabilityDivergence: number | null;
   invalidatedReprices: number;
   failoverCount: number;
+  protectedWindowSeconds: number;
+  currentBranchDisplacement: number | null;
 }
 
 export interface RuntimeSnapshot {
-  version: 1;
+  version: 2;
   scenarioId: string;
   scenarioLabel: string;
   dataMode: "SYNTHETIC" | "TXLINE_REPLAY";
@@ -44,6 +47,12 @@ export interface RuntimeSnapshot {
   timeline: TimelineItem[];
   receipts: DecisionReceipt[];
   reopenProofs: ReopenProof[];
+  execution: {
+    subjectHash: string;
+    sequence: number;
+    permitTtlMs: number;
+    agent: ReferenceAgentSnapshot;
+  };
   metrics: RuntimeMetrics;
   updatedAt: string;
 }

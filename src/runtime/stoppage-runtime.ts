@@ -1,11 +1,22 @@
 import { QuoteGovernor } from "../domain/governor.js";
 import { evaluateSuspendedWindow } from "../domain/metrics.js";
+import { maximumProbabilityMove } from "../domain/probability.js";
 import type {
   ConsensusQuote,
   DecisionReceipt,
   GovernorInput,
   ProbabilityVector,
 } from "../domain/types.js";
+import {
+  DEFAULT_EXECUTION_GATE_CONFIG,
+  evaluateExecutionGate,
+  hashExecutionSubject,
+} from "../execution-gate/execution-gate.js";
+import { ReferenceMarketMaker } from "../execution-gate/reference-agent.js";
+import type {
+  ExecutionGateContext,
+  ExecutionGateRequest,
+} from "../execution-gate/types.js";
 import type { ReplayScenario } from "../replay/types.js";
 import type { RuntimeMetrics, RuntimeSnapshot, TimelineItem } from "./types.js";
 
@@ -30,9 +41,16 @@ export class StoppageRuntime {
   #metrics: RuntimeMetrics = emptyMetrics();
   #abortController: AbortController | null = null;
   #listeners = new Set<SnapshotListener>();
+  readonly #subjectHash: string;
+  #referenceAgent = new ReferenceMarketMaker(DEFAULT_EXECUTION_GATE_CONFIG);
+  #executionSequence = 0;
+  #observedTs: number;
+  #lastAgentEventKey: string | null = null;
 
   constructor(scenario: ReplayScenario) {
     this.#scenario = scenario;
+    this.#subjectHash = hashExecutionSubject(scenario.id);
+    this.#observedTs = scenario.match.kickoffTs;
   }
 
   subscribe(listener: SnapshotListener) {
@@ -42,8 +60,19 @@ export class StoppageRuntime {
 
   snapshot(): RuntimeSnapshot {
     const state = this.#governor.getState(this.#scenario.match.fixtureId);
+    const protectedWindowSeconds =
+      this.#activeSegmentStart === null
+        ? (this.#metrics.staleQuoteSeconds ?? 0)
+        : Math.max(0, this.#observedTs - this.#activeSegmentStart) / 1_000;
+    const currentBranchDisplacement =
+      state.preTriggerQuote && this.#baselineQuote
+        ? maximumProbabilityMove(
+            state.preTriggerQuote.probabilities,
+            this.#baselineQuote.probabilities,
+          )
+        : this.#metrics.maximumProbabilityDivergence;
     return {
-      version: 1,
+      version: 2,
       scenarioId: this.#scenario.id,
       scenarioLabel: this.#scenario.label,
       dataMode: this.#scenario.dataMode,
@@ -62,9 +91,27 @@ export class StoppageRuntime {
       reopenProofs: structuredClone([
         ...this.#governor.getReopenProofs(this.#scenario.match.fixtureId),
       ]),
-      metrics: structuredClone(this.#metrics),
+      execution: {
+        subjectHash: this.#subjectHash,
+        sequence: this.#executionSequence,
+        permitTtlMs: DEFAULT_EXECUTION_GATE_CONFIG.permitTtlMs,
+        agent: this.#referenceAgent.snapshot(),
+      },
+      metrics: {
+        ...structuredClone(this.#metrics),
+        protectedWindowSeconds,
+        currentBranchDisplacement,
+      },
       updatedAt: new Date().toISOString(),
     };
+  }
+
+  evaluateExecution(request: ExecutionGateRequest) {
+    return evaluateExecutionGate(
+      request,
+      this.#executionContext(),
+      DEFAULT_EXECUTION_GATE_CONFIG,
+    );
   }
 
   async start(speed = 4): Promise<void> {
@@ -86,10 +133,13 @@ export class StoppageRuntime {
         if (this.#abortController.signal.aborted) return;
 
         this.#elapsedMs = step.atMs;
+        this.#executionSequence += 1;
+        this.#observedTs = inputTimestamp(step.input);
         this.#recordInput(step.input, step.label);
         const receipts = this.#governor.process(step.input);
         this.#updateEvaluation(step.input, receipts);
         this.#recordReceipts(receipts);
+        this.#runReferenceAgent();
         previousAt = step.atMs;
         this.#publish();
       }
@@ -116,6 +166,12 @@ export class StoppageRuntime {
     this.#activeSegmentStart = null;
     this.#segments = [];
     this.#metrics = emptyMetrics();
+    this.#referenceAgent = new ReferenceMarketMaker(
+      DEFAULT_EXECUTION_GATE_CONFIG,
+    );
+    this.#executionSequence = 0;
+    this.#observedTs = this.#scenario.match.kickoffTs;
+    this.#lastAgentEventKey = null;
   }
 
   #recordInput(input: GovernorInput, label: string) {
@@ -147,6 +203,37 @@ export class StoppageRuntime {
         this.#metrics.invalidatedReprices += 1;
       }
     }
+  }
+
+  #runReferenceAgent() {
+    const agent = this.#referenceAgent.attempt(
+      this.#baselineQuote,
+      this.#executionContext(),
+    );
+    const eventKey = `${agent.decisionCode}:${agent.result}`;
+    if (eventKey === this.#lastAgentEventKey) return;
+    this.#lastAgentEventKey = eventKey;
+    this.#timeline.push({
+      id: `agent-${this.#executionSequence}-${agent.result}`,
+      at: this.#observedTs,
+      kind: "AGENT",
+      label: agent.result,
+      detail: agent.decisionCode ?? "WAITING_FOR_QUOTE",
+      mode: this.#governor.getState(this.#scenario.match.fixtureId).mode,
+    });
+  }
+
+  #executionContext(): ExecutionGateContext {
+    return {
+      subjectHash: this.#subjectHash,
+      configHash: this.#governor.configHash,
+      sequence: this.#executionSequence,
+      observedTs: this.#observedTs,
+      state: this.#governor.getState(this.#scenario.match.fixtureId),
+      reopenProofs: this.#governor.getReopenProofs(
+        this.#scenario.match.fixtureId,
+      ),
+    };
   }
 
   #updateEvaluation(input: GovernorInput, receipts: DecisionReceipt[]) {
@@ -214,6 +301,8 @@ function emptyMetrics(): RuntimeMetrics {
     maximumProbabilityDivergence: null,
     invalidatedReprices: 0,
     failoverCount: 0,
+    protectedWindowSeconds: 0,
+    currentBranchDisplacement: null,
   };
 }
 

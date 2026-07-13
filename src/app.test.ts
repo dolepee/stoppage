@@ -1,17 +1,24 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { createApplication } from "./app.js";
 import { loadConfig } from "./config.js";
+import { QuoteGovernor } from "./domain/governor.js";
+import {
+  hashExecutionSubject,
+  hashQuote,
+} from "./execution-gate/execution-gate.js";
+import type { PersistedLiveExecutionState } from "./execution-gate/live-context.js";
 import {
   buildApprovedPublicClaim,
   buildPublicClaimCandidate,
   type PrivateHoldoutReport,
   type PublicLifecycleCandidate,
 } from "./evidence/public-claim.js";
+import { publicJudgeScenario } from "./replay/public-scenario.js";
 
 const applications: Awaited<ReturnType<typeof createApplication>>[] = [];
 const CONFIG_HASH = [
@@ -60,6 +67,80 @@ afterEach(async () => {
 });
 
 describe("operator API", () => {
+  it("serves rebuilt hashed assets with strict MIME types after startup", async () => {
+    const staticRoot = await mkdtemp(
+      join(tmpdir(), "txodds-static-" + "XXXXXX"),
+    );
+    try {
+      await writeFile(
+        join(staticRoot, "index.html"),
+        '<!doctype html><html><body><div id="root">Stoppage</div></body></html>',
+      );
+      const application = await createApplication({
+        logger: false,
+        staticRoot,
+      });
+      applications.push(application);
+
+      const initial = await application.app.inject({
+        method: "GET",
+        url: "/",
+      });
+      expect(initial.statusCode).toBe(200);
+      expect(initial.headers["content-type"]).toContain("text/html");
+
+      await mkdir(join(staticRoot, "assets"));
+      await writeFile(join(staticRoot, "assets", "index-rebuilt.css"), "*");
+      await writeFile(
+        join(staticRoot, "assets", "index-rebuilt.js"),
+        'document.title = "Stoppage";',
+      );
+
+      const css = await application.app.inject({
+        method: "GET",
+        url: "/assets/index-rebuilt.css",
+      });
+      expect(css.statusCode).toBe(200);
+      expect(css.headers["content-type"]).toContain("text/css");
+      expect(css.body).toBe("*");
+
+      const script = await application.app.inject({
+        method: "GET",
+        url: "/assets/index-rebuilt.js",
+      });
+      expect(script.statusCode).toBe(200);
+      expect(script.headers["content-type"]).toContain("text/javascript");
+      expect(script.body).toContain("Stoppage");
+
+      const missingAsset = await application.app.inject({
+        method: "GET",
+        url: "/assets/index-missing.js",
+      });
+      expect(missingAsset.statusCode).toBe(404);
+      expect(missingAsset.headers["content-type"]).toContain(
+        "application/json",
+      );
+      expect(missingAsset.json()).toEqual({ error: "Not found" });
+
+      const deepLink = await application.app.inject({
+        method: "GET",
+        url: "/judge/replay",
+      });
+      expect(deepLink.statusCode).toBe(200);
+      expect(deepLink.headers["content-type"]).toContain("text/html");
+      expect(deepLink.body).toContain("Stoppage");
+
+      const missingApi = await application.app.inject({
+        method: "GET",
+        url: "/api/not-a-route",
+      });
+      expect(missingApi.statusCode).toBe(404);
+      expect(missingApi.json()).toEqual({ error: "Not found" });
+    } finally {
+      await rm(staticRoot, { recursive: true, force: true });
+    }
+  });
+
   it("serves a public approved claim when available", async () => {
     const dataRoot = await mkdtemp(
       join(tmpdir(), "txodds-public-claim-" + "XXXXXX"),
@@ -223,6 +304,121 @@ describe("operator API", () => {
     expect(stopped.json().replayStatus).toBe("STOPPED");
   });
 
+  it("serves the same execution gate used by the reference agent", async () => {
+    const application = await createApplication({
+      logger: false,
+      serveStatic: false,
+    });
+    applications.push(application);
+    await application.runtime.start(16);
+    const snapshot = application.runtime.snapshot();
+    const request = {
+      version: 1,
+      command: "PUBLISH_QUOTE",
+      subjectHash: snapshot.execution.subjectHash,
+      market: "1X2",
+      quoteHash: snapshot.execution.agent.requestedQuoteHash,
+    };
+
+    const response = await application.app.inject({
+      method: "POST",
+      url: "/api/execution-gate/evaluate",
+      payload: request,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      decision: "ALLOW_CERTIFIED_REOPEN",
+      permit: {
+        body: {
+          subjectHash: snapshot.execution.subjectHash,
+          quoteHash: snapshot.execution.agent.requestedQuoteHash,
+          reopenProofHash: snapshot.reopenProofs[0]?.hash,
+        },
+      },
+    });
+  }, 5_000);
+
+  it("evaluates a fresh private live-worker context without exposing its fixture", async () => {
+    const live = liveExecutionFixture();
+    const application = await createApplication({
+      logger: false,
+      serveStatic: false,
+      readLiveGateState: async () => live.state,
+    });
+    applications.push(application);
+
+    const response = await application.app.inject({
+      method: "POST",
+      url: "/api/execution-gate/evaluate",
+      payload: live.request,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      decision: "ALLOW_CERTIFIED_REOPEN",
+      permit: {
+        body: {
+          subjectHash: live.request.subjectHash,
+          quoteHash: live.request.quoteHash,
+        },
+      },
+    });
+    expect(response.body).not.toContain("fixtureId");
+  });
+
+  it("fails a stale live-worker context closed without issuing a permit", async () => {
+    const live = liveExecutionFixture();
+    live.state.contexts[0]!.updatedAt = "2026-01-01T00:00:00.000Z";
+    const application = await createApplication({
+      logger: false,
+      serveStatic: false,
+      readLiveGateState: async () => live.state,
+    });
+    applications.push(application);
+
+    const response = await application.app.inject({
+      method: "POST",
+      url: "/api/execution-gate/evaluate",
+      payload: live.request,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      decision: "BLOCK_STREAM_UNHEALTHY",
+      permit: null,
+    });
+  });
+
+  it("fails an unreadable live-worker context closed", async () => {
+    const application = await createApplication({
+      logger: false,
+      serveStatic: false,
+      readLiveGateState: async () => {
+        throw new Error("corrupt private context");
+      },
+    });
+    applications.push(application);
+
+    const response = await application.app.inject({
+      method: "POST",
+      url: "/api/execution-gate/evaluate",
+      payload: {
+        version: 1,
+        command: "PUBLISH_QUOTE",
+        subjectHash: SUSPEND_RECEIPT,
+        market: "1X2",
+        quoteHash: REPRICE_RECEIPT,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      decision: "BLOCK_STREAM_UNHEALTHY",
+      permit: null,
+    });
+  });
+
   it("rejects invalid replay speeds", async () => {
     const application = await createApplication({
       logger: false,
@@ -271,12 +467,51 @@ describe("operator API", () => {
     expect(response.json()).toMatchObject({
       available: true,
       running: true,
+      statusFresh: true,
       fixturesLoaded: 6,
       messages: { odds: 12, scores: 9 },
       streamHealth: { odds: true, scores: true },
     });
     expect(response.body).not.toContain("lastMessageAt");
     expect(response.body).not.toContain("api-token");
+  });
+
+  it("fails the hosted health check closed when worker state is stale", async () => {
+    const now = Date.now();
+    const application = await createApplication({
+      logger: false,
+      serveStatic: false,
+      readWorkerStatus: async () => ({
+        running: true,
+        fixturesLoaded: 6,
+        oddsMessages: 12,
+        scoreMessages: 9,
+        normalizedOdds: 4,
+        normalizedEvents: 2,
+        skippedOdds: 8,
+        reconnects: { odds: 0, scores: 0 },
+        fixtureRefreshes: 3,
+        fixtureRefreshFailures: 0,
+        lastFixtureRefreshAt: now - 100_000,
+        streamHealth: { odds: true, scores: true },
+        lastMessageAt: { odds: now - 100_000, scores: now - 100_000 },
+        startedAt: new Date(now - 200_000).toISOString(),
+        updatedAt: new Date(now - 100_000).toISOString(),
+      }),
+    });
+    applications.push(application);
+
+    const response = await application.app.inject({
+      method: "GET",
+      url: "/api/host-health",
+    });
+
+    expect(response.statusCode).toBe(503);
+    expect(response.json()).toMatchObject({
+      ok: false,
+      worker: { statusFresh: false },
+    });
+    expect(response.body).not.toContain("lastMessageAt");
   });
 });
 
@@ -355,6 +590,42 @@ function approvedClaimFixture() {
     approvalStatement: candidate.requiredApproval,
     approvedAt: "2026-07-10T12:30:00.000Z",
   });
+}
+
+function liveExecutionFixture() {
+  const governor = new QuoteGovernor();
+  for (const step of publicJudgeScenario.steps) governor.process(step.input);
+  const fixtureId = publicJudgeScenario.match.fixtureId;
+  const state = governor.getState(fixtureId);
+  const subjectHash = hashExecutionSubject({ fixtureId });
+  const now = new Date().toISOString();
+  const persisted: PersistedLiveExecutionState = {
+    version: 1,
+    updatedAt: now,
+    contexts: [
+      {
+        version: 1,
+        subjectHash,
+        configHash: governor.configHash,
+        sequence: publicJudgeScenario.steps.length,
+        observedTs: Date.now(),
+        state,
+        reopenProofs: [...governor.getReopenProofs(fixtureId)],
+        updatedAt: now,
+      },
+    ],
+  };
+  if (!state.quote) throw new Error("Expected a completed live quote");
+  return {
+    state: persisted,
+    request: {
+      version: 1 as const,
+      command: "PUBLISH_QUOTE" as const,
+      subjectHash,
+      market: "1X2" as const,
+      quoteHash: hashQuote(state.quote),
+    },
+  };
 }
 
 function decision(

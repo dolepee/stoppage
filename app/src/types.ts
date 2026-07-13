@@ -50,7 +50,7 @@ export interface ReopenProof {
 export interface TimelineItem {
   id: string;
   at: number;
-  kind: "INPUT" | "DECISION";
+  kind: "INPUT" | "DECISION" | "AGENT";
   label: string;
   detail: string;
   mode?: GovernorMode;
@@ -58,7 +58,7 @@ export interface TimelineItem {
 }
 
 export interface RuntimeSnapshot {
-  version: 1;
+  version: 2;
   scenarioId: string;
   scenarioLabel: string;
   dataMode: "SYNTHETIC" | "TXLINE_REPLAY";
@@ -81,6 +81,49 @@ export interface RuntimeSnapshot {
   timeline: TimelineItem[];
   receipts: DecisionReceipt[];
   reopenProofs: ReopenProof[];
+  execution: {
+    subjectHash: string;
+    sequence: number;
+    permitTtlMs: number;
+    agent: {
+      version: 1;
+      name: "Reference market-maker";
+      command: "PUBLISH_QUOTE";
+      decision: "WAITING" | "BLOCK" | "ALLOW";
+      decisionCode:
+        | "BLOCK_UNRESOLVED_INCIDENT"
+        | "BLOCK_INVALIDATED_BRANCH"
+        | "BLOCK_STREAM_UNHEALTHY"
+        | "BLOCK_QUOTE_STALE"
+        | "BLOCK_PERMIT_EXPIRED"
+        | "ALLOW_HEALTHY_QUOTE"
+        | "ALLOW_CERTIFIED_REOPEN"
+        | null;
+      reason: string;
+      result: "NO_QUOTE" | "QUOTE_BLOCKED" | "SIMULATED_QUOTE_PUBLISHED";
+      requestedQuoteHash: string | null;
+      permit: {
+        body: {
+          version: 1;
+          decision: "ALLOW_HEALTHY_QUOTE" | "ALLOW_CERTIFIED_REOPEN";
+          reason: string;
+          subjectHash: string;
+          market: "1X2";
+          quoteHash: string;
+          configHash: string;
+          stateReceiptHash: string | null;
+          reopenProofHash: string | null;
+          sequence: number;
+          issuedAt: number;
+          expiresAt: number;
+        };
+        hash: string;
+      } | null;
+      permitVerified: boolean;
+      attemptedAt: number | null;
+      simulated: true;
+    };
+  };
   metrics: {
     suspensionReactionMs: number | null;
     staleQuoteSeconds: number | null;
@@ -88,6 +131,37 @@ export interface RuntimeSnapshot {
     maximumProbabilityDivergence: number | null;
     invalidatedReprices: number;
     failoverCount: number;
+    protectedWindowSeconds: number;
+    currentBranchDisplacement: number | null;
   };
   updatedAt: string;
+}
+
+export interface WorkerHealthSnapshot {
+  available: boolean;
+  configured: boolean;
+  running?: boolean;
+  statusFresh?: boolean;
+  fixturesLoaded?: number;
+  messages?: {
+    odds: number;
+    scores: number;
+  };
+  normalizedOdds?: number;
+  normalizedEvents?: number;
+  reconnects?: {
+    odds: number;
+    scores: number;
+  };
+  fixtureRefreshes?: number;
+  fixtureRefreshFailures?: number;
+  streamHealth?: {
+    odds: boolean;
+    scores: boolean;
+  };
+  lastMessageAgeMs?: {
+    odds: number | null;
+    scores: number | null;
+  };
+  updatedAt?: string;
 }

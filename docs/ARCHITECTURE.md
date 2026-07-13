@@ -15,10 +15,18 @@
 5. **Evaluation runtime** maintains the always-open baseline separately from
    the governed book and computes non-financial risk metrics after a stable
    reference exists.
-6. **Operator API** publishes synthetic judge snapshots and approved projections
+6. **Execution Gate** projects the exact current governor state into `BLOCK` or
+   a short-lived `ALLOW` permit. It binds the subject, quote, policy, latest
+   state receipt, Certified Reopen proof where required, sequence, and expiry.
+   It contains no independent decision policy.
+7. **Reference market-maker** verifies the permit immediately before every
+   simulated `PUBLISH_QUOTE` action. It cannot publish in `SUSPENDED`,
+   `REPRICED`, or `FAILSAFE`.
+8. **Operator API** publishes synthetic judge snapshots and approved projections
    of derived lifecycle evidence. It never publishes TxLINE records, odds
    vectors, source identifiers, or credentials.
-7. **Operator console** renders the same API used by the replay and live worker.
+9. **Operator console** renders the same gate evaluator used by the API and
+   reference client.
 
 ## State machine
 
@@ -54,6 +62,21 @@ resolution time, first post-resolution quote time, quote count, and the exact
 values used by the remaining release gates. Revision 1 remains available for
 reproducing the approved holdout; revision 2 has a distinct config hash.
 
+The Execution Gate permit is another additive canonical object. A permit is not
+a new source of truth: it is valid only while its quote hash, governor sequence,
+latest state receipt, policy hash, stream health, and expiry still match the
+current context. For post-incident release it must also reference the exact
+verified Certified Reopen proof.
+
+## Solana boundary
+
+Solana is the TxLINE access and validation layer. Stoppage's mainnet Token-2022
+subscription authorizes the feed, and TxODDS's `validateStat` instruction checks
+finalized score states against the sponsor's on-chain root. The latency-sensitive
+execution gate remains off-chain because the available stat proof does not
+establish event timing, VAR resolution timing, or odds freshness. No generic
+Stoppage account write is represented as proof of those facts.
+
 ## Hosted shape
 
 The production service is one persistent Node process serving:
@@ -64,3 +87,21 @@ The production service is one persistent Node process serving:
 
 The persistent host owns reconnect/backoff and health supervision. A local
 `launchd` job may be used as an operational backup, not as the judged service.
+The TxLINE token is injected only through the host's secret environment. Raw
+captures use a private persistent volume, join the licence-end purge list, and
+never pass through the sanitized health endpoint.
+
+`render.yaml` is the production blueprint. `src/hosted.ts` owns the Fastify
+process and a supervised worker child, restarting that child after an unexpected
+exit. Render's health check targets `/api/host-health`, which returns success
+only while the persisted worker heartbeat is fresh and both required streams
+are healthy. The service disk is mounted at `/var/data`; private captures and
+runtime state use separate directories under that mount.
+
+The worker and API do not maintain two policy engines. After each serialized
+TxLINE input, the worker persists the existing governor state and reopen proofs
+to a mode-0600 runtime context keyed by a hashed subject. The API reads that
+private object only when evaluating `POST /api/execution-gate/evaluate`; it
+returns the `BLOCK` result or canonical permit without returning fixture IDs,
+quotes, source IDs, or proofs. Context age is capped at five seconds, so a dead
+worker cannot authorize from a cached healthy state.

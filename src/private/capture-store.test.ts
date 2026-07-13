@@ -10,6 +10,7 @@ describe("private capture store", () => {
   afterEach(async () => {
     vi.resetModules();
     vi.restoreAllMocks();
+    delete process.env.STOPPAGE_PRIVATE_ROOT;
     if (root) await rm(root, { recursive: true, force: true });
   });
 
@@ -37,5 +38,16 @@ describe("private capture store", () => {
     expect(lines.map((line) => line.index).sort((a, b) => a - b)).toEqual(
       Array.from({ length: 100 }, (_, index) => index),
     );
+  });
+
+  it("supports a private persistent-volume root", async () => {
+    root = await mkdtemp(join(tmpdir(), "stoppage-capture-volume-"));
+    process.env.STOPPAGE_PRIVATE_ROOT = root;
+    const { writePrivateCapture } = await import("./capture-store.js");
+
+    const path = await writePrivateCapture("capture.json", { private: true });
+
+    expect(path).toBe(join(root, "capture.json"));
+    expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ private: true });
   });
 });

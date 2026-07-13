@@ -1,17 +1,19 @@
 import {
   Activity,
   AlertTriangle,
+  Bot,
   Check,
   CircleStop,
   Copy,
   Database,
   ExternalLink,
   FileCheck2,
-  Gauge,
+  LockKeyhole,
   Play,
   Radio,
   RotateCcw,
   ShieldCheck,
+  TimerReset,
   Waves,
 } from "lucide-react";
 import {
@@ -32,6 +34,7 @@ import type {
   ProbabilityVector,
   RuntimeSnapshot,
   Selection,
+  WorkerHealthSnapshot,
 } from "./types";
 import { parsePublicClaim, type PublicClaim } from "./public-claim";
 import { resolveRuntimeMode } from "./runtime-mode";
@@ -52,6 +55,9 @@ function App() {
   const [connection, setConnection] = useState<ConnectionMode>("connecting");
   const [publicClaim, setPublicClaim] = useState<PublicClaim | null>(null);
   const [claimStatus, setClaimStatus] = useState<ClaimStatus>("loading");
+  const [workerHealth, setWorkerHealth] = useState<WorkerHealthSnapshot | null>(
+    null,
+  );
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const localRuntime = useRef<StoppageRuntime | null>(null);
@@ -112,6 +118,39 @@ function App() {
 
     return cleanup;
   }, []);
+
+  useEffect(() => {
+    if (runtimeMode === "local" || connection !== "live") return;
+
+    let active = true;
+    const controller = new AbortController();
+
+    const readWorkerHealth = () => {
+      void fetch("/api/worker-health", { signal: controller.signal })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error(`Worker health failed: ${response.status}`);
+          }
+          return response.json() as Promise<WorkerHealthSnapshot>;
+        })
+        .then((health) => {
+          if (active && health.available) setWorkerHealth(health);
+        })
+        .catch((error: unknown) => {
+          if ((error as Error).name !== "AbortError" && active) {
+            setWorkerHealth(null);
+          }
+        });
+    };
+
+    readWorkerHealth();
+    const interval = window.setInterval(readWorkerHealth, 30_000);
+    return () => {
+      active = false;
+      controller.abort();
+      window.clearInterval(interval);
+    };
+  }, [connection]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -197,10 +236,20 @@ function App() {
               </div>
               <h1 id="product-title">Stoppage</h1>
               <p className="product-lede">
-                The VAR firewall for in-play markets. It invalidates a
-                provisional price branch, requires fresh post-resolution
-                consensus, then certifies the reopen.
+                Stoppage blocks trading agents from acting on reversible in-play
+                prices, then issues a verifiable permit after fresh TxLINE
+                consensus.
               </p>
+              <div className="failure-case">
+                <AlertTriangle size={17} aria-hidden="true" />
+                <div>
+                  <strong>Failure under test</strong>
+                  <span>
+                    A provisional goal reprices the book, then VAR overturns it.
+                    The old branch must not remain executable.
+                  </span>
+                </div>
+              </div>
               <div className="command-actions">
                 <button
                   className="primary-action"
@@ -231,7 +280,7 @@ function App() {
               ) : null}
             </div>
 
-            <StateCommand snapshot={snapshot} />
+            <ExecutionStage snapshot={snapshot} />
           </div>
         </section>
 
@@ -333,6 +382,19 @@ function App() {
               value="Solana mainnet"
               healthy
             />
+            {workerHealth ? (
+              <SystemStatus
+                icon={<Activity size={18} />}
+                label="Live worker"
+                value={formatWorkerHealth(workerHealth)}
+                healthy={Boolean(
+                  workerHealth.running &&
+                  workerHealth.statusFresh &&
+                  workerHealth.streamHealth?.scores &&
+                  workerHealth.streamHealth.odds,
+                )}
+              />
+            ) : null}
           </section>
 
           <ApprovedEvidencePanel claim={publicClaim} status={claimStatus} />
@@ -433,9 +495,10 @@ function ApprovedEvidencePanel({
           <span>Approved public evidence</span>
           <h2>Resolution-aware holdout</h2>
           <p>
-            The replay above demonstrates the product. These separately approved
-            aggregates come from {claim.holdout.fixtures} held-out TxLINE
-            mainnet fixtures under the same revision-2 policy hash.
+            The replay above is publicly reproducible. These separately approved
+            aggregates come from private licensed captures across{" "}
+            {claim.holdout.fixtures} held-out TxLINE mainnet fixtures under the
+            same revision-2 policy hash.
           </p>
         </div>
         <span className="approval-state">
@@ -479,6 +542,21 @@ function ApprovedEvidencePanel({
           </div>
           <p>{claim.dataBoundary}</p>
         </div>
+      </div>
+
+      <div className="evidence-disclosure">
+        <strong>Observed trigger coverage</strong>
+        <p>
+          All {claim.holdout.eventLedProtectedWindows} real holdout windows were
+          event-led. The odds-led detector is implemented and adversarially
+          tested, but real data did not exercise it; no zero is presented as a
+          successful rate.
+        </p>
+        <p>
+          Candidate hashes preserve approval integrity, not public
+          reproducibility of licensed records. Private holdout reproduction is
+          available by live screen-share for judges on request.
+        </p>
       </div>
 
       <div className="evidence-links">
@@ -553,31 +631,100 @@ function DataMode({ mode }: { mode: RuntimeSnapshot["dataMode"] }) {
   );
 }
 
-function StateCommand({ snapshot }: { snapshot: RuntimeSnapshot }) {
-  const latestDecision = [...snapshot.timeline]
-    .reverse()
-    .find((item) => item.kind === "DECISION");
+function ExecutionStage({ snapshot }: { snapshot: RuntimeSnapshot }) {
+  const { agent, permitTtlMs } = snapshot.execution;
+  const blocked = agent.decision === "BLOCK";
+  const allowed = agent.decision === "ALLOW";
+  const stateClass = blocked ? "blocked" : allowed ? "allowed" : "waiting";
+  const headline = blocked
+    ? "Agent action blocked"
+    : allowed
+      ? "Quote authorized"
+      : "Agent awaiting quote";
+  const baselineExecutable = Boolean(snapshot.baselineProbability);
 
   return (
-    <div
-      className={`state-command mode-${snapshot.mode.toLowerCase()}`}
+    <section
+      className={`execution-stage ${stateClass}`}
+      aria-label="Reference agent execution gate"
       aria-live="polite"
     >
-      <div className="state-command-head">
-        <span>Quote state</span>
-        <StatusIcon mode={snapshot.mode} />
+      <div className="agent-command-line">
+        <div>
+          <span className="agent-icon" aria-hidden="true">
+            <Bot size={18} />
+          </span>
+          <span>
+            <small>{agent.name}</small>
+            <strong>{agent.command}</strong>
+          </span>
+        </div>
+        <span className={`agent-decision ${stateClass}`}>{agent.decision}</span>
       </div>
-      <strong className="state-name">{snapshot.mode}</strong>
-      <div className="decision-readout">
-        <span>Last policy action</span>
-        <strong>
-          {latestDecision
-            ? formatDecisionLabel(latestDecision.label)
-            : "Awaiting replay"}
-        </strong>
-        <small>{latestDecision?.detail ?? "No transition emitted"}</small>
+
+      <div className="execution-verdict">
+        <span>
+          {blocked ? <LockKeyhole size={23} /> : <ShieldCheck size={23} />}
+        </span>
+        <div>
+          <small>Execution Gate</small>
+          <strong>{headline}</strong>
+          <p>{agent.reason}</p>
+        </div>
       </div>
-    </div>
+
+      <div className="consequence-grid">
+        <div className="consequence-cell governed-agent">
+          <span>Stoppage-gated agent</span>
+          <strong>
+            {blocked ? "CLOSED" : allowed ? "PUBLISHED" : "WAITING"}
+          </strong>
+          <small>
+            {blocked
+              ? "No permit · quote withheld"
+              : allowed
+                ? "Permit verified · simulated publish"
+                : "No quote submitted"}
+          </small>
+        </div>
+        <div
+          className={`consequence-cell baseline-agent ${blocked ? "exposed" : ""}`}
+        >
+          <span>Ungoverned baseline</span>
+          <strong>{baselineExecutable ? "EXECUTABLE" : "WAITING"}</strong>
+          <small>
+            {blocked
+              ? "Reversible branch still available"
+              : "Follows consensus without a gate"}
+          </small>
+        </div>
+        <div className="consequence-cell exposure-clock">
+          <span>
+            <TimerReset size={13} /> Protected window
+          </span>
+          <strong>{snapshot.metrics.protectedWindowSeconds.toFixed(1)}s</strong>
+          <small>
+            {snapshot.metrics.currentBranchDisplacement === null
+              ? "No active branch displacement"
+              : `${formatPercentagePoints(snapshot.metrics.currentBranchDisplacement)} branch displacement`}
+          </small>
+        </div>
+      </div>
+
+      <div className="permit-line">
+        <span>
+          {agent.permitVerified ? "Permit verified" : "No permit emitted"}
+        </span>
+        <code>
+          {agent.permit
+            ? shortHash(agent.permit.hash, 14)
+            : formatDecisionLabel(agent.decisionCode ?? "GATE_IDLE")}
+        </code>
+        <small>
+          {(permitTtlMs / 1_000).toFixed(0)}s TTL · simulated action
+        </small>
+      </div>
+    </section>
   );
 }
 
@@ -646,13 +793,6 @@ function ResolutionGate({ snapshot }: { snapshot: RuntimeSnapshot }) {
       ))}
     </section>
   );
-}
-
-function StatusIcon({ mode }: { mode: GovernorMode }) {
-  if (mode === "FAILSAFE") return <AlertTriangle size={22} />;
-  if (mode === "SUSPENDED") return <CircleStop size={22} />;
-  if (mode === "REPRICED") return <Gauge size={22} />;
-  return <Check size={22} />;
 }
 
 function MarketBook({
@@ -990,6 +1130,26 @@ function SystemStatus({
   );
 }
 
+function formatWorkerHealth(health: WorkerHealthSnapshot) {
+  if (!health.running) return "Worker stopped";
+  if (!health.statusFresh) return "Worker heartbeat stale";
+  if (!health.streamHealth?.scores || !health.streamHealth.odds) {
+    return "Feed degraded";
+  }
+  const ages = [
+    health.lastMessageAgeMs?.scores,
+    health.lastMessageAgeMs?.odds,
+  ].filter((age): age is number => age !== null && age !== undefined);
+  if (ages.length === 0) return "Connected · awaiting match";
+  return `Healthy · last feed ${formatAge(Math.min(...ages))}`;
+}
+
+function formatAge(ageMs: number) {
+  if (ageMs < 1_000) return "now";
+  if (ageMs < 60_000) return `${Math.floor(ageMs / 1_000)}s ago`;
+  return `${Math.floor(ageMs / 60_000)}m ago`;
+}
+
 function Footer({ snapshot }: { snapshot: RuntimeSnapshot }) {
   return (
     <footer>
@@ -1046,6 +1206,9 @@ function formatPercent(value: number) {
 }
 function formatDecisionLabel(value: string) {
   return value.replaceAll("_", " ");
+}
+function formatPercentagePoints(value: number) {
+  return `${(value * 100).toFixed(1)} pp`;
 }
 function formatMetric(value: number | null, suffix: string, precision = 0) {
   return value === null ? "—" : `${value.toFixed(precision)} ${suffix}`;
