@@ -19,6 +19,7 @@
     "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.scripts.json --noEmit && tsc -p app/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
+    "reopen:verify": "tsx scripts/verify-reopen.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "public:check": "tsx scripts/public-check.ts",

@@ -57,3 +57,19 @@ after that incident is confirmed or explicitly discarded.
 If either required stream is unhealthy, the book enters `FAILSAFE`. Restoring
 the stream does not reopen immediately: both streams must remain healthy, then
 the normal stability and reopen rules must pass.
+
+## Certified Reopen
+
+`REOPEN` is not only a state transition. The governor emits a separate
+`CERTIFIED_REOPEN` proof containing the exact release checks, frozen config hash,
+and matching decision receipt hash. Proof construction fails closed if either
+stream is unhealthy, an incident is unresolved, stable updates are below the
+policy minimum, the safety delay has not elapsed, or no replacement quote is
+present.
+
+The proof is deterministic and additive. It can be recomputed from the same
+normalized inputs without changing the original decision receipt:
+
+```bash
+pnpm reopen:verify
+```

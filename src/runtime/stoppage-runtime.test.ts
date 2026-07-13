@@ -20,6 +20,22 @@ describe("StoppageRuntime", () => {
       "REPRICE",
       "REOPEN",
     ]);
+    expect(snapshot.reopenProofs).toHaveLength(2);
+    expect(
+      snapshot.reopenProofs.map((proof) => proof.body.reopenReceiptHash),
+    ).toEqual(
+      snapshot.receipts
+        .filter((receipt) => receipt.body.action === "REOPEN")
+        .map((receipt) => receipt.hash),
+    );
+    expect(
+      snapshot.reopenProofs.every(
+        (proof) =>
+          proof.body.checks.oddsStreamHealthy &&
+          proof.body.checks.scoresStreamHealthy &&
+          proof.body.checks.unresolvedIncidentCount === 0,
+      ),
+    ).toBe(true);
     expect(snapshot.mode).toBe("OPEN");
     expect(snapshot.metrics.suspensionReactionMs).toBe(240);
     expect(snapshot.metrics.staleQuoteSeconds).toBeCloseTo(10.56);

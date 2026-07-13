@@ -192,13 +192,13 @@ function App() {
           <div className="command-inner">
             <div className="product-copy">
               <div className="eyebrow-row">
-                <span className="eyebrow">Autonomous quote control</span>
+                <span className="eyebrow">Certified in-play control</span>
                 <DataMode mode={snapshot.dataMode} />
               </div>
               <h1 id="product-title">Stoppage</h1>
               <p className="product-lede">
-                Freezes, reprices, and reopens in-play markets when the match
-                and the market disagree.
+                Stops an in-play market when the match and odds disagree, then
+                proves when it is safe to reopen.
               </p>
               <div className="command-actions">
                 <button
@@ -718,10 +718,18 @@ function Timeline({ snapshot }: { snapshot: RuntimeSnapshot }) {
 function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
   const [copied, setCopied] = useState(false);
   const latest = snapshot.receipts.at(-1);
+  const certificate =
+    latest?.body.action === "REOPEN"
+      ? ([...(snapshot.reopenProofs ?? [])]
+          .reverse()
+          .find((proof) => proof.body.reopenReceiptHash === latest.hash) ??
+        null)
+      : null;
+  const copyValue = certificate?.hash ?? latest?.hash;
 
   async function copyHash() {
-    if (!latest) return;
-    await navigator.clipboard.writeText(latest.hash);
+    if (!copyValue) return;
+    await navigator.clipboard.writeText(copyValue);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1_400);
   }
@@ -730,40 +738,103 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
     <section className="proof-panel" id="evidence">
       <div className="section-heading">
         <div>
-          <span>Deterministic evidence</span>
-          <h2>Decision receipt</h2>
+          <span>
+            {certificate
+              ? "Machine-verifiable release gate"
+              : "Deterministic evidence"}
+          </span>
+          <h2>{certificate ? "Reopen certified" : "Decision receipt"}</h2>
         </div>
         <ShieldCheck size={19} />
       </div>
       {latest ? (
         <>
+          {certificate ? (
+            <div className="certificate-status" role="status">
+              <span className="certificate-mark" aria-hidden="true">
+                <Check size={17} />
+              </span>
+              <div>
+                <span>Every release condition passed</span>
+                <strong>Safe to reopen</strong>
+              </div>
+              <code>{shortHash(certificate.hash)}</code>
+            </div>
+          ) : null}
           <div className="proof-action">
             <span>{latest.body.fromMode}</span>
             <strong>{latest.body.action}</strong>
             <span>{latest.body.toMode}</span>
           </div>
           <dl className="proof-fields">
-            <div>
-              <dt>Rule</dt>
-              <dd>{latest.body.trigger}</dd>
-            </div>
-            <div>
-              <dt>Sources</dt>
-              <dd>{latest.body.sourceIds.length}</dd>
-            </div>
-            <div>
-              <dt>Config</dt>
-              <dd>{shortHash(latest.body.configHash)}</dd>
-            </div>
+            {certificate ? (
+              <>
+                <div>
+                  <dt>TxLINE feeds</dt>
+                  <dd className="proof-pass">Healthy · 2/2</dd>
+                </div>
+                <div>
+                  <dt>Pending incidents</dt>
+                  <dd className="proof-pass">
+                    {certificate.body.checks.unresolvedIncidentCount}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Stable updates</dt>
+                  <dd className="proof-pass">
+                    {certificate.body.checks.stableUpdatesObserved}/
+                    {certificate.body.checks.stableUpdatesRequired}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Safety delay</dt>
+                  <dd className="proof-pass">
+                    {formatMilliseconds(certificate.body.checks.repriceAgeMs)} /{" "}
+                    {formatMilliseconds(certificate.body.checks.reopenDelayMs)}
+                  </dd>
+                </div>
+                <div>
+                  <dt>Policy</dt>
+                  <dd>{shortHash(certificate.body.configHash)}</dd>
+                </div>
+                <div>
+                  <dt>Decision</dt>
+                  <dd>{shortHash(certificate.body.reopenReceiptHash)}</dd>
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <dt>Rule</dt>
+                  <dd>{latest.body.trigger}</dd>
+                </div>
+                <div>
+                  <dt>Sources</dt>
+                  <dd>{latest.body.sourceIds.length}</dd>
+                </div>
+                <div>
+                  <dt>Config</dt>
+                  <dd>{shortHash(latest.body.configHash)}</dd>
+                </div>
+              </>
+            )}
           </dl>
           <button
             className="hash-button"
             type="button"
             onClick={copyHash}
-            title="Copy decision receipt hash"
-            aria-label="Copy decision receipt hash"
+            title={
+              certificate
+                ? "Copy Certified Reopen proof hash"
+                : "Copy decision receipt hash"
+            }
+            aria-label={
+              certificate
+                ? "Copy Certified Reopen proof hash"
+                : "Copy decision receipt hash"
+            }
           >
-            <code>{shortHash(latest.hash, 14)}</code>
+            <code>{shortHash(copyValue!, 14)}</code>
             {copied ? <Check size={15} /> : <Copy size={15} />}
           </button>
         </>
@@ -772,7 +843,11 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
       )}
       <div className="proof-note">
         <Database size={15} />
-        <span>Canonical JSON · SHA-256 · config-bound</span>
+        <span>
+          {certificate
+            ? "Receipt-bound · policy-bound · independently verifiable"
+            : "Canonical JSON · SHA-256 · config-bound"}
+        </span>
       </div>
     </section>
   );
@@ -872,6 +947,9 @@ function formatDuration(seconds: number) {
 function formatElapsed(milliseconds: number) {
   if (milliseconds === 0) return "trigger";
   return `+${(milliseconds / 1_000).toFixed(1)}s`;
+}
+function formatMilliseconds(milliseconds: number) {
+  return `${(milliseconds / 1_000).toFixed(1)}s`;
 }
 function formatEventTime(timestamp: number) {
   return new Date(timestamp).toISOString().slice(11, 19);

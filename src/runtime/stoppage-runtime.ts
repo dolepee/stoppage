@@ -59,6 +59,9 @@ export class StoppageRuntime {
       configHash: this.#governor.configHash,
       timeline: structuredClone(this.#timeline),
       receipts: structuredClone(state.receipts),
+      reopenProofs: structuredClone([
+        ...this.#governor.getReopenProofs(this.#scenario.match.fixtureId),
+      ]),
       metrics: structuredClone(this.#metrics),
       updatedAt: new Date().toISOString(),
     };

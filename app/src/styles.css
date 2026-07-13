@@ -656,6 +656,43 @@ footer > div {
   border: 1px solid var(--border);
   background: var(--panel-soft);
 }
+.certificate-status {
+  min-height: 72px;
+  margin-bottom: 10px;
+  padding: 0 13px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid rgba(66, 221, 183, 0.42);
+  background: rgba(66, 221, 183, 0.065);
+}
+.certificate-mark {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #07100e;
+  background: var(--mint);
+}
+.certificate-status > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.certificate-status > div span {
+  color: var(--faint);
+  font-size: 9px;
+  text-transform: uppercase;
+}
+.certificate-status > div strong {
+  font-size: 12px;
+}
+.certificate-status code {
+  color: var(--mint);
+  font-size: 9px;
+}
 .proof-action span {
   color: var(--muted);
   font:
@@ -692,6 +729,9 @@ footer > div {
     10px "SFMono-Regular",
     Consolas,
     monospace;
+}
+.proof-fields dd.proof-pass {
+  color: var(--mint);
 }
 .hash-button {
   width: 100%;
@@ -1111,6 +1151,12 @@ a:focus-visible {
   .timeline-panel,
   .proof-panel {
     padding: 18px;
+  }
+  .certificate-status {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+  .certificate-status > code {
+    grid-column: 2;
   }
   .timeline-row {
     grid-template-columns: 52px 12px minmax(0, 1fr);

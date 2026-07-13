@@ -25,6 +25,25 @@ const worker = new TxLineLiveWorker({
       const receipts = governor.process(input);
       for (const receipt of receipts) {
         await appendPrivateCapture("live-decisions.jsonl", receipt);
+        if (receipt.body.action === "REOPEN") {
+          const proof = governor
+            .getReopenProofs(receipt.body.fixtureId)
+            .find(
+              (candidate) => candidate.body.reopenReceiptHash === receipt.hash,
+            );
+          if (!proof) {
+            throw new Error(`Missing reopen proof for receipt ${receipt.hash}`);
+          }
+          await appendPrivateCapture("live-reopen-proofs.jsonl", proof);
+          console.log(
+            JSON.stringify({
+              type: "certified-reopen",
+              fixtureId: receipt.body.fixtureId,
+              receiptHash: receipt.hash,
+              proofHash: proof.hash,
+            }),
+          );
+        }
         console.log(
           JSON.stringify({
             type: "decision",

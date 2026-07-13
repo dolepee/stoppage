@@ -15,6 +15,29 @@ export interface DecisionReceipt {
   hash: string;
 }
 
+export interface ReopenProof {
+  body: {
+    version: 1;
+    kind: "CERTIFIED_REOPEN";
+    fixtureId: number;
+    market: "1X2";
+    reopenReceiptHash: string;
+    configHash: string;
+    observedTs: number;
+    checks: {
+      oddsStreamHealthy: true;
+      scoresStreamHealthy: true;
+      unresolvedIncidentCount: 0;
+      stableUpdatesObserved: number;
+      stableUpdatesRequired: number;
+      repriceAgeMs: number;
+      reopenDelayMs: number;
+      quotePresent: true;
+    };
+  };
+  hash: string;
+}
+
 export interface TimelineItem {
   id: string;
   at: number;
@@ -48,6 +71,7 @@ export interface RuntimeSnapshot {
   configHash: string;
   timeline: TimelineItem[];
   receipts: DecisionReceipt[];
+  reopenProofs: ReopenProof[];
   metrics: {
     suspensionReactionMs: number | null;
     staleQuoteSeconds: number | null;

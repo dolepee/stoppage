@@ -2,6 +2,7 @@ import type {
   DecisionReceipt,
   GovernorMode,
   ProbabilityVector,
+  ReopenProof,
   StreamName,
 } from "../domain/types.js";
 import type { ReplayMatch } from "../replay/types.js";
@@ -41,6 +42,7 @@ export interface RuntimeSnapshot {
   configHash: string;
   timeline: TimelineItem[];
   receipts: DecisionReceipt[];
+  reopenProofs: ReopenProof[];
   metrics: RuntimeMetrics;
   updatedAt: string;
 }

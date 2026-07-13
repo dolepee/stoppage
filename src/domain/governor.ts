@@ -3,6 +3,7 @@ import {
   assertProbabilityVector,
   maximumProbabilityMove,
 } from "./probability.js";
+import { createReopenProof } from "./reopen-proof.js";
 import type {
   ConsensusQuote,
   DecisionAction,
@@ -13,6 +14,7 @@ import type {
   GovernorInput,
   GovernorMode,
   MatchEvent,
+  ReopenProof,
   TriggerCode,
 } from "./types.js";
 
@@ -29,6 +31,7 @@ export class QuoteGovernor {
   readonly #config: GovernorConfig;
   readonly #configHash: string;
   readonly #fixtures = new Map<FixtureId, FixtureGovernorState>();
+  readonly #reopenProofs = new Map<FixtureId, ReopenProof[]>();
   readonly #streamHealth = { odds: true, scores: true };
 
   constructor(config: GovernorConfig = DEFAULT_GOVERNOR_CONFIG) {
@@ -43,6 +46,10 @@ export class QuoteGovernor {
 
   getState(fixtureId: FixtureId): Readonly<FixtureGovernorState> {
     return structuredClone(this.#state(fixtureId));
+  }
+
+  getReopenProofs(fixtureId: FixtureId): readonly ReopenProof[] {
+    return structuredClone(this.#reopenProofs.get(fixtureId) ?? []);
   }
 
   process(input: GovernorInput): DecisionReceipt[] {
@@ -326,10 +333,19 @@ export class QuoteGovernor {
     state: FixtureGovernorState,
     observedTs: number,
   ): DecisionReceipt[] {
+    const oddsStreamHealthy = state.streamHealth.odds;
+    const scoresStreamHealthy = state.streamHealth.scores;
+    const unresolvedIncidentCount = state.pendingUnconfirmedIncidentIds.length;
+    const stableUpdatesObserved = state.stableUpdateCount;
+    const quotePresent = state.quote !== null;
     if (
       state.mode !== "REPRICED" ||
       state.repricedAt === null ||
-      state.pendingUnconfirmedIncidentIds.length > 0 ||
+      !oddsStreamHealthy ||
+      !scoresStreamHealthy ||
+      unresolvedIncidentCount !== 0 ||
+      stableUpdatesObserved < this.#config.stableUpdatesRequired ||
+      !quotePresent ||
       observedTs - state.repricedAt < this.#config.reopenDelayMs
     ) {
       return [];
@@ -344,6 +360,28 @@ export class QuoteGovernor {
       state.pendingSourceIds,
       state.quote ?? undefined,
     );
+    const proof = createReopenProof({
+      version: 1,
+      kind: "CERTIFIED_REOPEN",
+      fixtureId: state.fixtureId,
+      market: state.market,
+      reopenReceiptHash: receipt.hash,
+      configHash: this.#configHash,
+      observedTs,
+      checks: {
+        oddsStreamHealthy,
+        scoresStreamHealthy,
+        unresolvedIncidentCount,
+        stableUpdatesObserved,
+        stableUpdatesRequired: this.#config.stableUpdatesRequired,
+        repriceAgeMs: observedTs - state.repricedAt,
+        reopenDelayMs: this.#config.reopenDelayMs,
+        quotePresent,
+      },
+    });
+    const proofs = this.#reopenProofs.get(state.fixtureId) ?? [];
+    proofs.push(proof);
+    this.#reopenProofs.set(state.fixtureId, proofs);
     state.pendingTrigger = null;
     state.pendingSourceIds = [];
     state.suspendedAt = null;

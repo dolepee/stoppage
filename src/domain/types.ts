@@ -93,6 +93,31 @@ export interface DecisionReceipt {
   hash: string;
 }
 
+export interface ReopenProofBody {
+  version: 1;
+  kind: "CERTIFIED_REOPEN";
+  fixtureId: FixtureId;
+  market: Market;
+  reopenReceiptHash: string;
+  configHash: string;
+  observedTs: number;
+  checks: {
+    oddsStreamHealthy: true;
+    scoresStreamHealthy: true;
+    unresolvedIncidentCount: 0;
+    stableUpdatesObserved: number;
+    stableUpdatesRequired: number;
+    repriceAgeMs: number;
+    reopenDelayMs: number;
+    quotePresent: true;
+  };
+}
+
+export interface ReopenProof {
+  body: ReopenProofBody;
+  hash: string;
+}
+
 export interface FixtureGovernorState {
   fixtureId: FixtureId;
   market: Market;

@@ -35,6 +35,7 @@ if (inputs.length) {
 }
 
 const lifecycles = completeLifecycles(receipts, inputs);
+const reopenProofs = governor.getReopenProofs(fixtureId);
 const strongestLifecycle = [...lifecycles].sort(
   (left, right) =>
     (right.maximumProbabilityMove ?? -1) - (left.maximumProbabilityMove ?? -1),
@@ -50,8 +51,10 @@ const replayResult = {
   normalizedHighImpactEvents: events.length,
   normalizedEventResolutions: resolutions.length,
   receiptCount: receipts.length,
+  reopenProofCount: reopenProofs.length,
   lifecycles,
   receipts,
+  reopenProofs,
 };
 const output = await writePrivateCapture(
   `replay-${fixtureId}-${new Date().toISOString().replace(/[:.]/g, "-")}.json`,
@@ -70,6 +73,7 @@ console.log(
       normalizedHighImpactEvents: events.length,
       normalizedEventResolutions: resolutions.length,
       receiptCount: receipts.length,
+      reopenProofCount: reopenProofs.length,
       actionCounts: countBy(receipts, (receipt) => receipt.body.action),
       triggerCounts: countBy(receipts, (receipt) => receipt.body.trigger),
       completeLifecycles: lifecycles.length,

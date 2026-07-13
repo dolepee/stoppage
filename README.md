@@ -2,32 +2,61 @@
 
 ![Stoppage operator console social card](app/public/og-stoppage.png)
 
-**An autonomous in-play quote governor driven by TxLINE on Solana.**
+**Stops the market, then proves when it is safe to reopen.**
 
 Live judge console: <https://stoppage-txline.vercel.app>
 
-Stoppage freezes, reprices, and reopens a simulated operator book when the
-match-event stream and the StablePrice market stream disagree. It is operator
-risk tooling, not a wagering product: there is no custody, bet placement, or
-claim of executable bookmaker fills.
+Stoppage is an autonomous in-play quote governor driven by TxLINE on Solana. It
+freezes and reprices a simulated operator book when the match-event stream and
+the StablePrice market stream disagree, then emits a machine-verifiable
+certificate only when every reopen condition passes. It is operator risk
+tooling, not a wagering product: there is no custody, bet placement, or claim of
+executable bookmaker fills.
 
 ## Product loop
 
 ```text
 TxLINE scores ─┐
-               ├─> deterministic policy ─> SUSPEND ─> REPRICE ─> REOPEN
+               ├─> deterministic policy ─> SUSPEND ─> REPRICE ─> CERTIFIED REOPEN
 TxLINE odds ───┘                └─────────> FAILSAFE on stream degradation
 ```
 
 The MVP controls one market deeply: in-running soccer `1X2`. Every transition
 emits a canonical JSON receipt bound to the policy configuration by SHA-256.
-The sponsor-specific proof path is live: a confirmed score stat was checked
-through TxODDS's official Solana mainnet `validateStat` instruction.
+Every `REOPEN` also emits a sidecar proof binding the exact decision receipt to
+the feed-health, incident-resolution, quote-stability, and safety-delay checks
+that authorized release. The sponsor-specific proof path is live: a confirmed
+score stat was checked through TxODDS's official Solana mainnet `validateStat`
+instruction.
+
+## Certified Reopen
+
+Suspending a market is the easy control. Reopening it safely after a provisional
+event, VAR discard, quote instability, or feed recovery is the harder decision.
+Stoppage makes that decision inspectable.
+
+A `CERTIFIED_REOPEN` proof is emitted only when:
+
+- both required TxLINE streams are healthy;
+- no provisional incident remains unresolved;
+- the consensus quote has met the frozen stability count;
+- the configured post-reprice delay has elapsed; and
+- a replacement quote is present.
+
+The certificate binds those checks to the exact `REOPEN` receipt and frozen
+policy hash. It is additive: existing decision receipt bodies and hashes do not
+change. Run the public synthetic lifecycle and verify every certificate with:
+
+```bash
+pnpm reopen:verify
+```
 
 ## Current status
 
 - Deterministic quote governor: implemented and tested.
 - Event-first, odds-first, and stream-failure paths: implemented and tested.
+- Certified Reopen proofs: implemented, receipt-bound, policy-bound, and
+  independently reproducible from the normalized replay.
 - Zero-friction public judge replay: implemented with a **synthetic normalized
   fixture**, visibly labeled in the application.
 - TxLINE service-level-12 subscription and API activation: confirmed on Solana
@@ -108,9 +137,10 @@ Secrets are written only to ignored files with restrictive permissions.
 
 `worker:live` supervises both SSE streams, records raw payloads only under the
 ignored private capture directory, reconnects with bounded backoff, emits
-stream-health inputs into the same governor, and persists only derived decision
-receipts separately. It also refreshes the fixture catalog every five minutes so
-new knockout fixtures become eligible without a restart.
+stream-health inputs into the same governor, and persists derived decision
+receipts and Certified Reopen sidecars separately. It also refreshes the fixture
+catalog every five minutes so new knockout fixtures become eligible without a
+restart.
 
 For a container host, the compiled worker runs without development dependencies:
 
@@ -137,7 +167,8 @@ decisions.
 - `REPRICE`: the consensus vector remains inside the configured epsilon for the
   required number of consecutive updates.
 - `REOPEN`: all pending incidents are confirmed or discarded and the
-  post-reprice delay passes without renewed instability.
+  post-reprice delay passes without renewed instability. The release emits a
+  proof binding every satisfied gate to that exact decision receipt.
 
 The thresholds shown in the repository were frozen after chronological
 calibration and approved before holdout evaluation. Public aggregates are
@@ -179,10 +210,13 @@ See [architecture](docs/ARCHITECTURE.md), [rulebook](docs/RULEBOOK.md),
 
 ```bash
 pnpm check
+pnpm reopen:verify
 ```
 
-This runs formatting checks, TypeScript checks, domain and integration tests,
-and a production build.
+`pnpm check` runs formatting checks, TypeScript checks, domain and integration
+tests, and a production build. `pnpm reopen:verify` independently reruns the
+public normalized lifecycle and rejects a modified proof, receipt, or policy
+binding.
 
 ## License
 
