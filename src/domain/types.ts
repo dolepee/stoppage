@@ -9,11 +9,18 @@ export type TriggerCode =
   | "EVENT_BEFORE_REPRICE"
   | "UNBACKED_MOVE"
   | "EVENT_CONFIRMED_MOVE"
+  | "RESOLUTION_CONFIRMED"
+  | "RESOLUTION_DISCARDED"
   | "VOLATILITY_SPIKE"
   | "STREAM_UNHEALTHY";
 
 export type DecisionAction =
-  "SUSPEND" | "REPRICE" | "REOPEN" | "ENTER_FAILSAFE" | "RECOVER_TO_SUSPENDED";
+  | "SUSPEND"
+  | "REPRICE"
+  | "INVALIDATE_REPRICE"
+  | "REOPEN"
+  | "ENTER_FAILSAFE"
+  | "RECOVER_TO_SUSPENDED";
 
 export type MatchEventType = "GOAL" | "RED_CARD" | "PENALTY" | "VAR";
 export type StreamName = "odds" | "scores";
@@ -72,6 +79,8 @@ export interface GovernorConfig {
   reopenDelayMs: number;
   eventConfirmationWindowMs: number;
   recoveryStableMs: number;
+  /** Absent means the frozen revision-1 behavior. */
+  postResolutionFreshQuotesRequired?: boolean;
 }
 
 export interface DecisionReceiptBody {
@@ -93,25 +102,57 @@ export interface DecisionReceipt {
   hash: string;
 }
 
-export interface ReopenProofBody {
-  version: 1;
+interface ReopenProofChecksV1 {
+  oddsStreamHealthy: true;
+  scoresStreamHealthy: true;
+  unresolvedIncidentCount: 0;
+  stableUpdatesObserved: number;
+  stableUpdatesRequired: number;
+  repriceAgeMs: number;
+  reopenDelayMs: number;
+  quotePresent: true;
+}
+
+interface ReopenProofBodyBase {
   kind: "CERTIFIED_REOPEN";
   fixtureId: FixtureId;
   market: Market;
   reopenReceiptHash: string;
   configHash: string;
   observedTs: number;
-  checks: {
-    oddsStreamHealthy: true;
-    scoresStreamHealthy: true;
-    unresolvedIncidentCount: 0;
-    stableUpdatesObserved: number;
-    stableUpdatesRequired: number;
-    repriceAgeMs: number;
-    reopenDelayMs: number;
-    quotePresent: true;
+}
+
+export interface ReopenProofBodyV1 extends ReopenProofBodyBase {
+  version: 1;
+  checks: ReopenProofChecksV1;
+}
+
+export type IncidentResolutionOutcome = "CONFIRMED" | "DISCARDED";
+
+export interface IncidentResolutionState {
+  incidentId: string;
+  outcome: IncidentResolutionOutcome;
+  resolutionId: string;
+  sourceTs: number;
+  observedTs: number;
+}
+
+export interface ReopenProofBodyV2 extends ReopenProofBodyBase {
+  version: 2;
+  checks: ReopenProofChecksV1 & {
+    policyRevision: 2;
+    resolutionOutcome: IncidentResolutionOutcome | "NOT_REQUIRED";
+    resolutionSourceTs: number | null;
+    resolutionObservedTs: number | null;
+    firstPostResolutionQuoteSourceTs: number | null;
+    firstPostResolutionQuoteTs: number | null;
+    postResolutionQuoteCount: number;
+    freshQuoteRequired: boolean;
+    freshQuoteObserved: boolean;
   };
 }
+
+export type ReopenProofBody = ReopenProofBodyV1 | ReopenProofBodyV2;
 
 export interface ReopenProof {
   body: ReopenProofBody;
@@ -131,6 +172,10 @@ export interface FixtureGovernorState {
   lastHighImpactEvent: MatchEvent | null;
   seenEventIncidentIds: string[];
   pendingUnconfirmedIncidentIds: string[];
+  lastIncidentResolution: IncidentResolutionState | null;
+  firstPostResolutionQuoteSourceTs: number | null;
+  firstPostResolutionQuoteTs: number | null;
+  postResolutionQuoteCount: number;
   pendingTrigger: TriggerCode | null;
   pendingSourceIds: string[];
   streamHealth: Record<StreamName, boolean>;

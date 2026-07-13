@@ -30,10 +30,10 @@ export function verifyReopenProof(
 }
 
 function assertSatisfiedChecks(body: ReopenProofBody) {
-  const { checks } = body;
-  if (body.version !== 1) {
+  if (body.version !== 1 && body.version !== 2) {
     throw new Error("Reopen proof version is invalid");
   }
+  const checks = body.checks;
   if (body.kind !== "CERTIFIED_REOPEN") {
     throw new Error("Reopen proof kind is invalid");
   }
@@ -75,6 +75,49 @@ function assertSatisfiedChecks(body: ReopenProofBody) {
   }
   if (!checks.quotePresent) {
     throw new Error("A repriced quote is required before reopening");
+  }
+  if (body.version === 2) {
+    const resolutionChecks = body.checks;
+    if (resolutionChecks.policyRevision !== 2) {
+      throw new Error("Resolution-aware policy revision is invalid");
+    }
+    if (
+      resolutionChecks.resolutionOutcome !== "NOT_REQUIRED" &&
+      resolutionChecks.resolutionOutcome !== "CONFIRMED" &&
+      resolutionChecks.resolutionOutcome !== "DISCARDED"
+    ) {
+      throw new Error("Incident resolution outcome is invalid");
+    }
+    if (
+      !Number.isInteger(resolutionChecks.postResolutionQuoteCount) ||
+      resolutionChecks.postResolutionQuoteCount < 0
+    ) {
+      throw new Error("Post-resolution quote count is invalid");
+    }
+    if (resolutionChecks.freshQuoteRequired) {
+      if (
+        resolutionChecks.resolutionOutcome === "NOT_REQUIRED" ||
+        resolutionChecks.resolutionSourceTs === null ||
+        resolutionChecks.resolutionObservedTs === null ||
+        resolutionChecks.firstPostResolutionQuoteSourceTs === null ||
+        resolutionChecks.firstPostResolutionQuoteTs === null ||
+        !Number.isInteger(resolutionChecks.resolutionSourceTs) ||
+        !Number.isInteger(resolutionChecks.resolutionObservedTs) ||
+        !Number.isInteger(resolutionChecks.firstPostResolutionQuoteSourceTs) ||
+        !Number.isInteger(resolutionChecks.firstPostResolutionQuoteTs) ||
+        resolutionChecks.firstPostResolutionQuoteSourceTs <=
+          resolutionChecks.resolutionSourceTs ||
+        resolutionChecks.firstPostResolutionQuoteTs <=
+          resolutionChecks.resolutionObservedTs ||
+        resolutionChecks.postResolutionQuoteCount <
+          resolutionChecks.stableUpdatesRequired ||
+        !resolutionChecks.freshQuoteObserved
+      ) {
+        throw new Error("Fresh post-resolution consensus is not satisfied");
+      }
+    } else if (!resolutionChecks.freshQuoteObserved) {
+      throw new Error("Fresh quote check must pass when no resolution applies");
+    }
   }
 }
 

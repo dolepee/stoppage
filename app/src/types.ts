@@ -17,7 +17,7 @@ export interface DecisionReceipt {
 
 export interface ReopenProof {
   body: {
-    version: 1;
+    version: 1 | 2;
     kind: "CERTIFIED_REOPEN";
     fixtureId: number;
     market: "1X2";
@@ -33,6 +33,15 @@ export interface ReopenProof {
       repriceAgeMs: number;
       reopenDelayMs: number;
       quotePresent: true;
+      policyRevision?: 2;
+      resolutionOutcome?: "CONFIRMED" | "DISCARDED" | "NOT_REQUIRED";
+      resolutionSourceTs?: number | null;
+      resolutionObservedTs?: number | null;
+      firstPostResolutionQuoteSourceTs?: number | null;
+      firstPostResolutionQuoteTs?: number | null;
+      postResolutionQuoteCount?: number;
+      freshQuoteRequired?: boolean;
+      freshQuoteObserved?: boolean;
     };
   };
   hash: string;
@@ -77,6 +86,7 @@ export interface RuntimeSnapshot {
     staleQuoteSeconds: number | null;
     mispricingIntegral: number | null;
     maximumProbabilityDivergence: number | null;
+    invalidatedReprices: number;
     failoverCount: number;
   };
   updatedAt: string;

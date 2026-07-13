@@ -9,6 +9,7 @@ export interface PublicLifecycleEvidence {
   action:
     | "SUSPEND"
     | "REPRICE"
+    | "INVALIDATE_REPRICE"
     | "REOPEN"
     | "ENTER_FAILSAFE"
     | "RECOVER_TO_SUSPENDED";
@@ -16,6 +17,8 @@ export interface PublicLifecycleEvidence {
     | "EVENT_BEFORE_REPRICE"
     | "UNBACKED_MOVE"
     | "EVENT_CONFIRMED_MOVE"
+    | "RESOLUTION_CONFIRMED"
+    | "RESOLUTION_DISCARDED"
     | "VOLATILITY_SPIKE"
     | "STREAM_UNHEALTHY";
   fromMode: "OPEN" | "SUSPENDED" | "REPRICED" | "FAILSAFE";
@@ -26,12 +29,15 @@ export interface PublicLifecycleEvidence {
 }
 
 export interface PublicLifecycleCandidate {
+  version: 2;
   status: "AWAITING_HUMAN_APPROVAL";
   evidenceType: "DERIVED_LIFECYCLE_EVIDENCE";
   network: "solana-mainnet";
+  policyRevision: 2;
   dataBoundary: string;
   lifecycleDurationMs: number;
   maximumProbabilityMove: number;
+  preResolutionRepricesInvalidated: number;
   configHash: string;
   decisions: PublicLifecycleEvidence[];
   txlineValidation: {
@@ -52,6 +58,10 @@ export interface PrivateHoldoutAggregate {
   unconfirmedOddsLedSuspensionRate: number | null;
   failsafeProtectedWindows: number;
   provisionalEventProtectedWindows: number;
+  preResolutionRepricesInvalidated: number;
+  postResolutionCertifiedReopens: number;
+  confirmedResolutionCertifiedReopens: number;
+  discardedResolutionCertifiedReopens: number;
 }
 
 export interface PrivateHoldoutReport {
@@ -65,11 +75,11 @@ export interface PrivateHoldoutReport {
 }
 
 export interface PublicClaimResponse {
-  version: 2;
+  version: 3;
   status: "AVAILABLE";
   network: "solana-mainnet";
   approvedConfigHash: string;
-  candidateHash?: string;
+  candidateHash: string;
   evaluatedAt: string;
   approvedAt: string;
   approval: {
@@ -80,12 +90,16 @@ export interface PublicClaimResponse {
     definitions: {
       unconfirmedOddsLedSuspensionRate: string;
       provisionalEventProtectedWindows: string;
+      preResolutionRepricesInvalidated: string;
+      postResolutionCertifiedReopens: string;
     };
   };
   lifecycleEvidence: {
     evidenceType: "DERIVED_LIFECYCLE_EVIDENCE";
+    policyRevision: 2;
     lifecycleDurationMs: number;
     maximumProbabilityMove: number;
+    preResolutionRepricesInvalidated: number;
     txlineValidation: {
       transactionSignature: string;
       explorer: string;
@@ -183,7 +197,7 @@ export function buildPublicClaimCandidate({
   assertLifecycleCandidate(lifecycle);
 
   const payload: PublicClaimCandidate["payload"] = {
-    version: 2,
+    version: 3,
     status: "AVAILABLE",
     network: holdout.network,
     approvedConfigHash: holdout.approvedConfigHash,
@@ -196,12 +210,19 @@ export function buildPublicClaimCandidate({
           "Odds-led protected windows that remained UNBACKED_MOVE through repricing divided by all odds-led protected windows; null when no odds-led window was observed.",
         provisionalEventProtectedWindows:
           "Event-led windows entered from a provisional TxLINE event. Reopening still required later confirmation or explicit discard.",
+        preResolutionRepricesInvalidated:
+          "Candidate reprices formed before incident confirmation or discard and explicitly invalidated at that resolution boundary.",
+        postResolutionCertifiedReopens:
+          "Reopens certified only after a full stable quote sequence observed after the latest incident resolution.",
       },
     },
     lifecycleEvidence: {
       evidenceType: lifecycle.evidenceType,
+      policyRevision: lifecycle.policyRevision,
       lifecycleDurationMs: lifecycle.lifecycleDurationMs,
       maximumProbabilityMove: lifecycle.maximumProbabilityMove,
+      preResolutionRepricesInvalidated:
+        lifecycle.preResolutionRepricesInvalidated,
       txlineValidation: lifecycle.txlineValidation,
       decisions: lifecycle.decisions.map((decision) => ({
         action: decision.action,
@@ -223,7 +244,7 @@ export function buildPublicClaimCandidate({
 
 function isApprovedPublicClaim(value: PublicClaimResponse) {
   if (
-    value.version !== 2 ||
+    value.version !== 3 ||
     value.status !== "AVAILABLE" ||
     value.network !== "solana-mainnet" ||
     !/^0x[0-9a-f]{64}$/.test(value.approvedConfigHash) ||
@@ -232,25 +253,35 @@ function isApprovedPublicClaim(value: PublicClaimResponse) {
   ) {
     return false;
   }
-  const expectedApproval = value.candidateHash
-    ? `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${value.approvedConfigHash} ${value.candidateHash}`
-    : `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${value.approvedConfigHash}`;
+  const expectedApproval = `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${value.approvedConfigHash} ${value.candidateHash}`;
   if (value.approval?.statement !== expectedApproval) return false;
-  if (
-    value.candidateHash &&
-    value.candidateHash !== sha256(publicClaimPayload(value))
-  ) {
+  if (value.candidateHash !== sha256(publicClaimPayload(value))) {
     return false;
   }
   try {
     assertAggregate(value.holdout);
+    assertLifecycleCandidate({
+      version: 2,
+      status: "AWAITING_HUMAN_APPROVAL",
+      evidenceType: value.lifecycleEvidence.evidenceType,
+      network: value.network,
+      policyRevision: value.lifecycleEvidence.policyRevision,
+      dataBoundary: value.dataBoundary,
+      lifecycleDurationMs: value.lifecycleEvidence.lifecycleDurationMs,
+      maximumProbabilityMove: value.lifecycleEvidence.maximumProbabilityMove,
+      preResolutionRepricesInvalidated:
+        value.lifecycleEvidence.preResolutionRepricesInvalidated,
+      configHash: value.approvedConfigHash,
+      decisions: value.lifecycleEvidence.decisions.map((decision) => ({
+        ...decision,
+        configHash: value.approvedConfigHash,
+      })),
+      txlineValidation: value.lifecycleEvidence.txlineValidation,
+    });
   } catch {
     return false;
   }
-  return Boolean(
-    value.lifecycleEvidence?.decisions?.length &&
-    value.lifecycleEvidence.txlineValidation?.transactionSignature,
-  );
+  return true;
 }
 
 async function findLatestHoldout(
@@ -347,6 +378,10 @@ function assertAggregate(value: PrivateHoldoutAggregate) {
     "unconfirmedOddsLedProtectedWindows",
     "failsafeProtectedWindows",
     "provisionalEventProtectedWindows",
+    "preResolutionRepricesInvalidated",
+    "postResolutionCertifiedReopens",
+    "confirmedResolutionCertifiedReopens",
+    "discardedResolutionCertifiedReopens",
   ] as const) {
     if (!Number.isFinite(value?.[field]) || value[field] < 0) {
       throw new Error(`Invalid holdout aggregate field: ${field}`);
@@ -360,19 +395,33 @@ function assertAggregate(value: PrivateHoldoutAggregate) {
 
 function assertLifecycleCandidate(value: PublicLifecycleCandidate) {
   if (
+    value.version !== 2 ||
     value.network !== "solana-mainnet" ||
     value.evidenceType !== "DERIVED_LIFECYCLE_EVIDENCE" ||
+    value.policyRevision !== 2 ||
     !Number.isFinite(value.lifecycleDurationMs) ||
     value.lifecycleDurationMs <= 0 ||
     !Number.isFinite(value.maximumProbabilityMove) ||
     value.maximumProbabilityMove < 0 ||
     value.maximumProbabilityMove > 1 ||
+    !Number.isInteger(value.preResolutionRepricesInvalidated) ||
+    value.preResolutionRepricesInvalidated < 1 ||
     !/^0x[0-9a-f]{64}$/.test(value.configHash)
   ) {
     throw new Error("Invalid lifecycle evidence metadata");
   }
   const actions = value.decisions.map((decision) => decision.action);
-  if (actions.join(",") !== "SUSPEND,REPRICE,REOPEN") {
+  const invalidationIndex = actions.indexOf("INVALIDATE_REPRICE");
+  const finalRepriceIndex = actions.lastIndexOf("REPRICE");
+  if (
+    actions[0] !== "SUSPEND" ||
+    actions.at(-1) !== "REOPEN" ||
+    invalidationIndex <= 0 ||
+    !actions.slice(0, invalidationIndex).includes("REPRICE") ||
+    finalRepriceIndex <= invalidationIndex ||
+    actions.filter((action) => action === "INVALIDATE_REPRICE").length !==
+      value.preResolutionRepricesInvalidated
+  ) {
     throw new Error("Lifecycle evidence must contain a complete decision path");
   }
   if (
@@ -385,6 +434,15 @@ function assertLifecycleCandidate(value: PublicLifecycleCandidate) {
     )
   ) {
     throw new Error("Invalid lifecycle decision evidence");
+  }
+  if (
+    value.decisions.some(
+      (decision, index) =>
+        index > 0 && decision.elapsedMs < value.decisions[index - 1]!.elapsedMs,
+    ) ||
+    value.decisions.at(-1)?.elapsedMs !== value.lifecycleDurationMs
+  ) {
+    throw new Error("Lifecycle decision timing is inconsistent");
   }
   const signature = value.txlineValidation?.transactionSignature;
   if (

@@ -6,11 +6,12 @@
    fixtures/history, and maintains the odds and scores SSE streams.
 2. **Normalizer** accepts only an unambiguous in-running `1X2` shape and maps
    relevant soccer actions into a small event vocabulary.
-3. **Governor** executes deterministic state transitions and emits config-bound
-   receipts.
+3. **Resolution-aware governor** executes deterministic state transitions,
+   invalidates a candidate price branch when a provisional incident resolves,
+   and emits config-bound receipts.
 4. **Reopen certifier** emits a sidecar proof only after feed health, incident
-   resolution, quote stability, and release delay all pass. It binds those facts
-   to the exact `REOPEN` receipt and policy hash.
+   resolution, fresh post-resolution quote stability, and release delay all
+   pass. It binds those facts to the exact `REOPEN` receipt and policy hash.
 5. **Evaluation runtime** maintains the always-open baseline separately from
    the governed book and computes non-financial risk metrics after a stable
    reference exists.
@@ -27,9 +28,12 @@
        │                                      v
 OPEN ──┴─ event / sharp move ─> SUSPENDED ─> FAILSAFE
  ^                                │              │
- │                                │ stable N     │ streams healthy
+ │                                │ fresh stable N│ streams healthy
  │                                v              v
  └── certified release ────── REPRICED <── SUSPENDED
+                                  │
+                  confirm/discard │ invalidate stale branch
+                                  └──────────────> SUSPENDED
 ```
 
 `REPRICED` is a visible lifecycle state: the replacement quote has been chosen,
@@ -44,11 +48,11 @@ optional quote vector, and configuration hash. Equivalent inputs and
 configuration produce byte-identical receipt hashes. Public evidence projects
 only approved derived fields and the receipt hash.
 
-The reopen certificate is a separate canonical JSON object. It includes the
-reopen receipt hash, configuration hash, and the exact values used by each
-release gate. Keeping it separate preserves all previously approved receipt
-hashes while making a safe release reproducible from the same normalized input
-sequence.
+The revision-2 reopen certificate is a separate canonical JSON object. It
+includes the reopen receipt hash, configuration hash, resolution outcome,
+resolution time, first post-resolution quote time, quote count, and the exact
+values used by the remaining release gates. Revision 1 remains available for
+reproducing the approved holdout; revision 2 has a distinct config hash.
 
 ## Hosted shape
 

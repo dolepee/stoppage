@@ -1,8 +1,8 @@
 import type {
   ConsensusQuote,
+  EventResolution,
   MatchEvent,
   ProbabilityVector,
-  StreamHealth,
 } from "../domain/types.js";
 import type { ReplayScenario } from "./types.js";
 
@@ -10,8 +10,8 @@ const baseTs = Date.UTC(2026, 6, 10, 18, 0, 0);
 const fixtureId = 9_000_001;
 
 export const publicJudgeScenario: ReplayScenario = {
-  id: "synthetic-event-first-v1",
-  label: "Event-first quote protection",
+  id: "synthetic-var-overturn-v2",
+  label: "VAR branch invalidation",
   dataMode: "SYNTHETIC",
   description:
     "A deterministic normalized fixture for judge-mode testing. It contains no TxLINE raw data.",
@@ -31,8 +31,8 @@ export const publicJudgeScenario: ReplayScenario = {
     },
     {
       atMs: 4_000,
-      label: "Home goal confirmed",
-      input: matchEvent("synthetic-goal-1", 4_000, 4_240),
+      label: "Provisional home goal",
+      input: matchEvent("synthetic-goal-1", 4_000, 4_240, false),
     },
     {
       atMs: 7_800,
@@ -51,43 +51,43 @@ export const publicJudgeScenario: ReplayScenario = {
     },
     {
       atMs: 14_800,
-      label: "Reopen delay passed",
+      label: "Reopen vetoed · incident unresolved",
       input: { kind: "tick", observedTs: baseTs + 14_800 },
     },
     {
+      atMs: 16_000,
+      label: "VAR overturns the goal",
+      input: discarded("synthetic-goal-1", 15_800, 16_000),
+    },
+    {
+      atMs: 16_800,
+      label: "Late provisional quote rejected",
+      input: quote(
+        "synthetic-stale-goal-branch",
+        15_700,
+        16_800,
+        vector(0.577, 0.234, 0.189),
+      ),
+    },
+    {
       atMs: 17_800,
-      label: "Scores heartbeat timeout drill",
-      input: health("scores", false, 17_800, "heartbeat-timeout"),
+      label: "Reverted branch consensus 1/3",
+      input: quote("synthetic-q4", 17_600, 17_800, vector(0.46, 0.28, 0.26)),
+    },
+    {
+      atMs: 18_800,
+      label: "Reverted branch consensus 2/3",
+      input: quote("synthetic-q5", 18_600, 18_800, vector(0.457, 0.282, 0.261)),
     },
     {
       atMs: 19_800,
-      label: "Scores stream restored",
-      input: health("scores", true, 19_800),
+      label: "Fresh post-VAR consensus 3/3",
+      input: quote("synthetic-q6", 19_600, 19_800, vector(0.456, 0.282, 0.262)),
     },
     {
       atMs: 24_800,
-      label: "Recovery window passed",
+      label: "Resolution-aware reopen certified",
       input: { kind: "tick", observedTs: baseTs + 24_800 },
-    },
-    {
-      atMs: 25_800,
-      label: "Recovery consensus 1/3",
-      input: quote("synthetic-q4", 25_600, 25_800, vector(0.576, 0.235, 0.189)),
-    },
-    {
-      atMs: 26_800,
-      label: "Recovery consensus 2/3",
-      input: quote("synthetic-q5", 26_600, 26_800, vector(0.578, 0.234, 0.188)),
-    },
-    {
-      atMs: 27_800,
-      label: "Recovery consensus stable",
-      input: quote("synthetic-q6", 27_600, 27_800, vector(0.577, 0.234, 0.189)),
-    },
-    {
-      atMs: 32_800,
-      label: "Fail-safe recovery complete",
-      input: { kind: "tick", observedTs: baseTs + 32_800 },
     },
   ],
 };
@@ -113,6 +113,7 @@ function matchEvent(
   eventId: string,
   sourceOffset: number,
   receivedOffset: number,
+  confirmed = true,
 ): MatchEvent {
   return {
     kind: "match-event",
@@ -122,22 +123,23 @@ function matchEvent(
     eventType: "GOAL",
     sourceTs: baseTs + sourceOffset,
     receivedTs: baseTs + receivedOffset,
-    confirmed: true,
+    confirmed,
   };
 }
 
-function health(
-  stream: "odds" | "scores",
-  healthy: boolean,
-  offset: number,
-  reason?: string,
-): StreamHealth {
+function discarded(
+  incidentId: string,
+  sourceOffset: number,
+  receivedOffset: number,
+): EventResolution {
   return {
-    kind: "stream-health",
-    stream,
-    healthy,
-    observedTs: baseTs + offset,
-    ...(reason ? { reason } : {}),
+    kind: "event-resolution",
+    fixtureId,
+    resolutionId: `discard-${incidentId}`,
+    incidentId,
+    resolution: "DISCARDED",
+    sourceTs: baseTs + sourceOffset,
+    receivedTs: baseTs + receivedOffset,
   };
 }
 

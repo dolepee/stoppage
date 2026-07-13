@@ -6,6 +6,12 @@ import { join } from "node:path";
 
 import { createApplication } from "./app.js";
 import { loadConfig } from "./config.js";
+import {
+  buildApprovedPublicClaim,
+  buildPublicClaimCandidate,
+  type PrivateHoldoutReport,
+  type PublicLifecycleCandidate,
+} from "./evidence/public-claim.js";
 
 const applications: Awaited<ReturnType<typeof createApplication>>[] = [];
 const CONFIG_HASH = [
@@ -61,63 +67,7 @@ describe("operator API", () => {
     try {
       await writeFile(
         join(dataRoot, "public-claim.json"),
-        JSON.stringify({
-          version: 2,
-          status: "AVAILABLE",
-          network: "solana-mainnet",
-          approvedConfigHash: CONFIG_HASH,
-          evaluatedAt: "2026-07-10T12:00:00.000Z",
-          approvedAt: "2026-07-10T12:30:00.000Z",
-          approval: {
-            statement: `APPROVE STOPPAGE PUBLIC CLAIM ${CONFIG_HASH}`,
-          },
-          dataBoundary:
-            "No TxLINE records, vectors, identifiers, or absolute source timestamps.",
-          holdout: {
-            fixtures: 2,
-            completeProtectedWindows: 11,
-            staleQuoteSeconds: 1230.071,
-            mispricingIntegral: 180.9,
-            eventLedProtectedWindows: 11,
-            oddsLedProtectedWindows: 0,
-            confirmedOddsLedProtectedWindows: 0,
-            unconfirmedOddsLedProtectedWindows: 0,
-            unconfirmedOddsLedSuspensionRate: null,
-            failsafeProtectedWindows: 0,
-            provisionalEventProtectedWindows: 11,
-            definitions: {
-              unconfirmedOddsLedSuspensionRate: "test definition",
-              provisionalEventProtectedWindows: "test definition",
-            },
-          },
-          lifecycleEvidence: {
-            evidenceType: "DERIVED_LIFECYCLE_EVIDENCE",
-            lifecycleDurationMs: 169636,
-            maximumProbabilityMove: 0.7620899775,
-            decisions: [
-              {
-                action: "SUSPEND",
-                trigger: "EVENT_BEFORE_REPRICE",
-                fromMode: "OPEN",
-                toMode: "SUSPENDED",
-                elapsedMs: 0,
-                receiptHash: SUSPEND_RECEIPT,
-              },
-              {
-                action: "REPRICE",
-                trigger: "EVENT_BEFORE_REPRICE",
-                fromMode: "SUSPENDED",
-                toMode: "REPRICED",
-                elapsedMs: 162640,
-                receiptHash: REPRICE_RECEIPT,
-              },
-            ],
-            txlineValidation: {
-              transactionSignature: TXLINE_SIGNATURE,
-              explorer: `https://solscan.io/tx/${TXLINE_SIGNATURE}`,
-            },
-          },
-        }),
+        JSON.stringify(approvedClaimFixture()),
       );
 
       const application = await createApplication({
@@ -143,20 +93,23 @@ describe("operator API", () => {
         },
         lifecycleEvidence: {
           evidenceType: "DERIVED_LIFECYCLE_EVIDENCE",
-          decisions: [
-            {
-              action: "SUSPEND",
-              fromMode: "OPEN",
-              toMode: "SUSPENDED",
-            },
-            {
-              action: "REPRICE",
-              fromMode: "SUSPENDED",
-              toMode: "REPRICED",
-            },
-          ],
+          policyRevision: 2,
+          preResolutionRepricesInvalidated: 1,
         },
       });
+      expect(
+        response
+          .json()
+          .lifecycleEvidence.decisions.map(
+            (decision: { action: string }) => decision.action,
+          ),
+      ).toEqual([
+        "SUSPEND",
+        "REPRICE",
+        "INVALIDATE_REPRICE",
+        "REPRICE",
+        "REOPEN",
+      ]);
       expect(response.json().approvedAt).toBe("2026-07-10T12:30:00.000Z");
       expect(response.body).not.toContain("fixtureId");
     } finally {
@@ -326,3 +279,98 @@ describe("operator API", () => {
     expect(response.body).not.toContain("api-token");
   });
 });
+
+function approvedClaimFixture() {
+  const holdout: PrivateHoldoutReport = {
+    version: 2,
+    status: "AWAITING_PUBLIC_CLAIM_APPROVAL",
+    network: "solana-mainnet",
+    approvedConfigHash: CONFIG_HASH,
+    evaluatedAt: "2026-07-10T12:00:00.000Z",
+    fixtures: [],
+    aggregate: {
+      fixtures: 2,
+      completeProtectedWindows: 11,
+      staleQuoteSeconds: 1230.071,
+      mispricingIntegral: 180.9,
+      eventLedProtectedWindows: 11,
+      oddsLedProtectedWindows: 0,
+      confirmedOddsLedProtectedWindows: 0,
+      unconfirmedOddsLedProtectedWindows: 0,
+      unconfirmedOddsLedSuspensionRate: null,
+      failsafeProtectedWindows: 0,
+      provisionalEventProtectedWindows: 11,
+      preResolutionRepricesInvalidated: 7,
+      postResolutionCertifiedReopens: 11,
+      confirmedResolutionCertifiedReopens: 8,
+      discardedResolutionCertifiedReopens: 3,
+    },
+  };
+  const lifecycle: PublicLifecycleCandidate = {
+    version: 2,
+    status: "AWAITING_HUMAN_APPROVAL",
+    evidenceType: "DERIVED_LIFECYCLE_EVIDENCE",
+    network: "solana-mainnet",
+    policyRevision: 2,
+    dataBoundary:
+      "No TxLINE records, vectors, identifiers, or absolute source timestamps.",
+    lifecycleDurationMs: 169_636,
+    maximumProbabilityMove: 0.7620899775,
+    preResolutionRepricesInvalidated: 1,
+    configHash: CONFIG_HASH,
+    decisions: [
+      decision("SUSPEND", "EVENT_BEFORE_REPRICE", "OPEN", "SUSPENDED", 0),
+      decision(
+        "REPRICE",
+        "EVENT_BEFORE_REPRICE",
+        "SUSPENDED",
+        "REPRICED",
+        80_000,
+      ),
+      decision(
+        "INVALIDATE_REPRICE",
+        "RESOLUTION_DISCARDED",
+        "REPRICED",
+        "SUSPENDED",
+        90_000,
+      ),
+      decision(
+        "REPRICE",
+        "EVENT_BEFORE_REPRICE",
+        "SUSPENDED",
+        "REPRICED",
+        160_000,
+      ),
+      decision("REOPEN", "EVENT_BEFORE_REPRICE", "REPRICED", "OPEN", 169_636),
+    ],
+    txlineValidation: {
+      transactionSignature: TXLINE_SIGNATURE,
+      explorer: `https://solscan.io/tx/${TXLINE_SIGNATURE}`,
+    },
+  };
+  const candidate = buildPublicClaimCandidate({ holdout, lifecycle });
+  return buildApprovedPublicClaim({
+    holdout,
+    lifecycle,
+    approvalStatement: candidate.requiredApproval,
+    approvedAt: "2026-07-10T12:30:00.000Z",
+  });
+}
+
+function decision(
+  action: PublicLifecycleCandidate["decisions"][number]["action"],
+  trigger: PublicLifecycleCandidate["decisions"][number]["trigger"],
+  fromMode: PublicLifecycleCandidate["decisions"][number]["fromMode"],
+  toMode: PublicLifecycleCandidate["decisions"][number]["toMode"],
+  elapsedMs: number,
+) {
+  return {
+    action,
+    trigger,
+    fromMode,
+    toMode,
+    elapsedMs,
+    receiptHash: action === "SUSPEND" ? SUSPEND_RECEIPT : REPRICE_RECEIPT,
+    configHash: CONFIG_HASH,
+  };
+}

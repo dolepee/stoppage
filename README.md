@@ -2,50 +2,56 @@
 
 ![Stoppage operator console social card](app/public/og-stoppage.png)
 
-**Stops the market, then certifies every condition required to reopen.**
+**The VAR firewall for in-play markets.**
 
 Live judge console: <https://stoppage-txline.vercel.app>
 
-Stoppage is an autonomous in-play quote governor driven by TxLINE on Solana. It
-freezes and reprices a simulated operator book when the match-event stream and
-the StablePrice market stream disagree, then emits a machine-verifiable
-certificate only when every reopen condition passes. It is operator risk
-tooling, not a wagering product: there is no custody, bet placement, or claim of
+Stoppage is an autonomous, resolution-aware quote governor driven by TxLINE on
+Solana. When a provisional goal or VAR incident moves the market, it keeps a
+simulated operator book closed, invalidates any price branch formed before the
+incident resolves, and requires fresh post-resolution consensus before a
+machine-verifiable reopen certificate can exist. It is operator risk tooling,
+not a wagering product: there is no custody, bet placement, or claim of
 executable bookmaker fills.
 
 ## Product loop
 
 ```text
-TxLINE scores ─┐
-               ├─> deterministic policy ─> SUSPEND ─> REPRICE ─> CERTIFIED REOPEN
-TxLINE odds ───┘                └─────────> FAILSAFE on stream degradation
+TxLINE provisional event ─> HOLD ─> candidate reprice
+                                      │
+TxLINE confirm / discard ─────────────┴─> INVALIDATE PRE-RESOLUTION BRANCH
+TxLINE fresh odds ─> stable 3/3 ─> REPRICE ─> CERTIFIED REOPEN
 ```
 
 The MVP controls one market deeply: in-running soccer `1X2`. Every transition
 emits a canonical JSON receipt bound to the policy configuration by SHA-256.
 Every `REOPEN` also emits a sidecar proof binding the exact decision receipt to
-the feed-health, incident-resolution, quote-stability, and safety-delay checks
-that authorized release. The sponsor-specific proof path is live: a confirmed
-score stat was checked through TxODDS's official Solana mainnet `validateStat`
-instruction.
+the feed-health, incident-resolution, post-resolution quote-freshness,
+quote-stability, and safety-delay checks that authorized release. The
+sponsor-specific proof path is live: a confirmed score stat was checked through
+TxODDS's official Solana mainnet `validateStat` instruction.
 
 ## Certified Reopen
 
-Suspending a market is the easy control. Reopening it safely after a provisional
-event, VAR discard, quote instability, or feed recovery is the harder decision.
-Stoppage makes that decision inspectable.
+Suspending a market is standard feed behavior. The harder failure is reopening
+on a quote that belongs to the provisional branch after VAR confirms or
+overturns the incident. Stoppage revision 2 makes that stale-branch reopen
+impossible and inspectable.
 
 A `CERTIFIED_REOPEN` proof is emitted only when:
 
 - both required TxLINE streams are healthy;
 - no provisional incident remains unresolved;
+- any pre-resolution reprice has been invalidated;
+- the replacement quote sequence was observed after the latest resolution;
 - the consensus quote has met the frozen stability count;
 - the configured post-reprice delay has elapsed; and
 - a replacement quote is present.
 
-The certificate binds those checks to the exact `REOPEN` receipt and frozen
-policy hash. It is additive: existing decision receipt bodies and hashes do not
-change. Run the public synthetic lifecycle and verify every certificate with:
+The V2 certificate records the resolution branch (`CONFIRMED` or `DISCARDED`),
+resolution timestamp, first fresh quote timestamp, and post-resolution quote
+count. It binds those checks to the exact `REOPEN` receipt and policy hash. Run
+the public synthetic VAR-overturn lifecycle and verify every certificate with:
 
 ```bash
 pnpm reopen:verify
@@ -53,7 +59,9 @@ pnpm reopen:verify
 
 ## Current status
 
-- Deterministic quote governor: implemented and tested.
+- Resolution-aware quote governor: implemented and adversarially tested.
+- Provisional reprice invalidation and post-resolution freshness gate:
+  implemented in policy revision 2.
 - Event-first, odds-first, and stream-failure paths: implemented and tested.
 - Certified Reopen proofs: implemented, receipt-bound, policy-bound, and
   independently reproducible from the normalized replay.
@@ -69,19 +77,20 @@ pnpm reopen:verify
   real-match vectors remain private under the event data licence.
 - TxLINE on-chain score validation: confirmed on Solana mainnet with a true
   predicate result.
-- Public real-match metrics: four held-out fixtures and 18 complete protected
-  windows, human-approved and displayed in the judge console from
-  `/api/public-claim`. The endpoint exposes only derived holdout aggregates,
-  lifecycle decisions, and public Solana evidence; raw fixture IDs and source
-  vectors remain private.
+- Public real-match metrics: four held-out fixtures, 18 complete protected
+  windows, 11 pre-resolution reprices invalidated, and 18 fresh
+  post-resolution Certified Reopens (14 confirmed, 4 discarded), human-approved
+  under revision 2 in `/api/public-claim`. The endpoint exposes only derived
+  aggregates, lifecycle decisions, hashes, and public Solana evidence; raw
+  fixture IDs, records, source timestamps, and vectors remain private.
 
 ## Mainnet evidence
 
-| Proof                         | Public evidence                                                                                                                 |
-| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| TxLINE program                | [`9Exb...cKaA`](https://solscan.io/account/9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA)                                        |
-| Free-tier subscription        | [`27b1...KP3T`](https://solscan.io/tx/27b1KoYCrWD9MkZY86rkUpJmWzqyRjHmi5hC8CNMwA81jr8QBVmR7diYy6tWE3LLfXA3KfLCzZsStGkG7YZWKP3T) |
-| TxLINE `validateStat` success | [`3ZEu...XwPd`](https://solscan.io/tx/3ZEuF4zPtGiwT5iMwHQnPMWpX9U8BsMz1aHybwyzmkjaoMKmCNVQ4eADQtAB11rNwyb1EtDLadn9qQeGZzuXXwPd) |
+| Proof                         | Public evidence                                                                                                                  |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| TxLINE program                | [`9Exb...cKaA`](https://solscan.io/account/9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA)                                         |
+| Free-tier subscription        | [`27b1...KP3T`](https://solscan.io/tx/27b1KoYCrWD9MkZY86rkUpJmWzqyRjHmi5hC8CNMwA81jr8QBVmR7diYy6tWE3LLfXA3KfLCzZsStGkG7YZWKP3T)  |
+| TxLINE `validateStat` success | [`61Uy...XDs8E`](https://solscan.io/tx/61UyrsHoqMeAAjJHPvnoo4L6F91oiFH4aFe2WQg6LHuLA5sZvQ7wdEoFPndhnPjaWHzkB1bfzZ3r8PSeRJQXDs8E) |
 
 The validation transaction is the sponsor-specific proof. Stoppage decision
 hashes remain supporting evidence rather than the product's main action.
@@ -166,15 +175,21 @@ decisions.
 - `STREAM_UNHEALTHY`: either required feed misses its health policy.
 - `REPRICE`: the consensus vector remains inside the configured epsilon for the
   required number of consecutive updates.
+- `INVALIDATE_REPRICE`: confirmation or discard resolves a provisional incident
+  after a candidate reprice. That branch is rejected, its stability count is
+  cleared, and late quotes whose source or receipt time predates the resolution
+  cannot count toward release.
 - `REOPEN`: all pending incidents are confirmed or discarded and the
-  post-reprice delay passes without renewed instability. The release emits a
-  proof binding every satisfied gate to that exact decision receipt.
+  full post-resolution stability sequence plus post-reprice delay pass without
+  renewed instability. The release emits a proof binding every satisfied gate
+  to that exact decision receipt.
 
-The thresholds shown in the repository were frozen after chronological
-calibration and approved before holdout evaluation. Public aggregates are
-exposed only via `/api/public-claim` after a separate human publication approval
-that binds both the approved config hash and the exact candidate digest. The
-holdout and lifecycle evidence must share that approved config hash.
+Revision 1 is exported unchanged as `APPROVED_GOVERNOR_CONFIG_V1` so its earlier
+receipts remain reproducible. Revision 2 keeps the measured numeric thresholds
+and adds `postResolutionFreshQuotesRequired: true`. Its human-approved policy
+hash is
+`0x1d773f...fcf2` (published in full by `/api/public-claim`);
+the separately approved public claim binds that exact hash and candidate digest.
 
 ## Metrics
 
@@ -184,6 +199,8 @@ Stoppage does not report hypothetical betting profit or in-play CLV.
   is unavailable.
 - `mispricing_integral`: probability divergence multiplied by time, evaluated
   against the first post-trigger quote satisfying the frozen stability rule.
+- pre-resolution candidate reprices invalidated at confirmation or discard.
+- post-resolution Certified Reopens, split by confirmed and discarded outcomes.
 - suspension and reopen latency.
 - unconfirmed odds-led suspension rate: odds-led windows that remained
   `UNBACKED_MOVE` through repricing divided by all odds-led windows; `null` means

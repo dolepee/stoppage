@@ -29,6 +29,49 @@ describe("completeLifecycles", () => {
     const [lifecycle] = completeLifecycles(receipts, inputs);
 
     expect(lifecycle?.maximumProbabilityMove).toBeCloseTo(0.11);
+    expect(lifecycle?.decisionHashes).toEqual(["suspend", "reprice", "reopen"]);
+    expect(lifecycle?.preResolutionRepricesInvalidated).toBe(0);
+  });
+
+  it("retains an invalidated branch in the completed decision path", () => {
+    const inputs = [
+      quote("before", 1_000, probabilities(0.4, 0.3, 0.3)),
+      quote("provisional", 2_500, probabilities(0.52, 0.26, 0.22)),
+      quote("fresh", 4_000, probabilities(0.41, 0.3, 0.29)),
+    ];
+    const receipts = [
+      receipt("SUSPEND", 2_000, ["goal"], "suspend"),
+      receipt(
+        "REPRICE",
+        2_500,
+        ["provisional"],
+        "provisional-reprice",
+        probabilities(0.52, 0.26, 0.22),
+      ),
+      receipt("INVALIDATE_REPRICE", 3_000, ["var-overturn"], "invalidate"),
+      receipt(
+        "REPRICE",
+        4_000,
+        ["fresh"],
+        "fresh-reprice",
+        probabilities(0.41, 0.3, 0.29),
+      ),
+      receipt("REOPEN", 5_000, ["fresh"], "reopen"),
+    ];
+
+    const [lifecycle] = completeLifecycles(receipts, inputs);
+
+    expect(lifecycle).toMatchObject({
+      decisionHashes: [
+        "suspend",
+        "provisional-reprice",
+        "invalidate",
+        "fresh-reprice",
+        "reopen",
+      ],
+      preResolutionRepricesInvalidated: 1,
+      repriceHash: "fresh-reprice",
+    });
   });
 });
 
@@ -60,20 +103,27 @@ function receipt(
       ? "OPEN"
       : action === "REPRICE"
         ? "SUSPENDED"
-        : "REPRICED";
+        : action === "INVALIDATE_REPRICE"
+          ? "REPRICED"
+          : "REPRICED";
   const toMode =
     action === "SUSPEND"
       ? "SUSPENDED"
       : action === "REPRICE"
         ? "REPRICED"
-        : "OPEN";
+        : action === "INVALIDATE_REPRICE"
+          ? "SUSPENDED"
+          : "OPEN";
   return {
     body: {
       version: 1,
       fixtureId: 42,
       market: "1X2",
       action,
-      trigger: "UNBACKED_MOVE",
+      trigger:
+        action === "INVALIDATE_REPRICE"
+          ? "RESOLUTION_DISCARDED"
+          : "UNBACKED_MOVE",
       fromMode,
       toMode,
       observedTs,

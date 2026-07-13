@@ -7,6 +7,7 @@ import { writePrivateCapture } from "../src/private/capture-store.js";
 
 const fixtureId = readIntegerArgument("--fixture");
 const validationTransaction = readStringArgument("--validation-tx");
+const suspendReceiptHash = readHashArgument("--suspend-receipt-hash");
 const replayPath = await findLatestReplay(fixtureId);
 const replay = JSON.parse(await readFile(replayPath, "utf8")) as {
   configHash: string;
@@ -17,37 +18,43 @@ const replay = JSON.parse(await readFile(replayPath, "utf8")) as {
     suspendHash: string;
     repriceHash: string;
     reopenHash: string;
+    decisionHashes: string[];
+    preResolutionRepricesInvalidated: number;
   }>;
   receipts: DecisionReceipt[];
 };
-const strongest = [...replay.lifecycles].sort(
-  (left, right) =>
-    (right.maximumProbabilityMove ?? -1) - (left.maximumProbabilityMove ?? -1),
-)[0];
-if (!strongest) throw new Error("Replay has no complete lifecycle");
+const selected = replay.lifecycles.find(
+  (lifecycle) => lifecycle.suspendHash === suspendReceiptHash,
+);
+if (!selected || selected.preResolutionRepricesInvalidated < 1) {
+  throw new Error(
+    "Selected receipt does not anchor a complete resolution-aware lifecycle",
+  );
+}
+if (selected.maximumProbabilityMove === null) {
+  throw new Error("Resolution-aware lifecycle lacks a probability move");
+}
 
 const receiptByHash = new Map(
   replay.receipts.map((receipt) => [receipt.hash, receipt]),
 );
-const decisions = [
-  strongest.suspendHash,
-  strongest.repriceHash,
-  strongest.reopenHash,
-].map((hash) => {
+const decisions = selected.decisionHashes.map((hash) => {
   const receipt = receiptByHash.get(hash);
   if (!receipt) throw new Error(`Replay receipt ${hash} is missing`);
-  return projectDecisionReceipt(receipt, strongest.suspendTs);
+  return projectDecisionReceipt(receipt, selected.suspendTs);
 });
 
 const candidate = {
-  version: 1,
+  version: 2,
   status: "AWAITING_HUMAN_APPROVAL",
   evidenceType: "DERIVED_LIFECYCLE_EVIDENCE",
   network: "solana-mainnet",
+  policyRevision: 2,
   dataBoundary:
     "No TxLINE records, vectors, identifiers, or absolute source timestamps.",
-  lifecycleDurationMs: strongest.reopenTs - strongest.suspendTs,
-  maximumProbabilityMove: strongest.maximumProbabilityMove,
+  lifecycleDurationMs: selected.reopenTs - selected.suspendTs,
+  maximumProbabilityMove: selected.maximumProbabilityMove,
+  preResolutionRepricesInvalidated: selected.preResolutionRepricesInvalidated,
   configHash: replay.configHash,
   decisions,
   txlineValidation: {
@@ -119,6 +126,15 @@ function readStringArgument(name: string): string {
   const value = index >= 0 ? process.argv[index + 1] : undefined;
   if (!value || !/^[1-9A-HJ-NP-Za-km-z]{80,90}$/.test(value)) {
     throw new Error(`${name} requires a Solana transaction signature`);
+  }
+  return value;
+}
+
+function readHashArgument(name: string): string {
+  const index = process.argv.indexOf(name);
+  const value = index >= 0 ? process.argv[index + 1] : undefined;
+  if (!value || !/^0x[0-9a-f]{64}$/.test(value)) {
+    throw new Error(`${name} requires a lowercase 32-byte hash`);
   }
   return value;
 }

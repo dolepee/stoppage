@@ -153,6 +153,19 @@ export function evaluateHoldout(
     });
   }
 
+  const reopenProofs = [...fixtureIds(orderedInputs)].flatMap((fixtureId) =>
+    governor.getReopenProofs(fixtureId),
+  );
+  const postResolutionChecks = reopenProofs.flatMap((proof) => {
+    if (proof.body.version !== 2) return [];
+    const checks = proof.body.checks;
+    return checks.freshQuoteRequired &&
+      checks.freshQuoteObserved &&
+      checks.resolutionOutcome !== "NOT_REQUIRED"
+      ? [checks]
+      : [];
+  });
+
   const horizonMetrics = Object.fromEntries(
     horizonsMs.map((horizon) => {
       const values = windows
@@ -221,10 +234,32 @@ export function evaluateHoldout(
           : unconfirmedOddsLedProtectedWindows / oddsLedProtectedWindows.length,
       failsafeProtectedWindows,
       provisionalEventProtectedWindows,
+      preResolutionRepricesInvalidated: receipts.filter(
+        (receipt) => receipt.body.action === "INVALIDATE_REPRICE",
+      ).length,
+      postResolutionCertifiedReopens: postResolutionChecks.length,
+      confirmedResolutionCertifiedReopens: postResolutionChecks.filter(
+        (checks) => checks.resolutionOutcome === "CONFIRMED",
+      ).length,
+      discardedResolutionCertifiedReopens: postResolutionChecks.filter(
+        (checks) => checks.resolutionOutcome === "DISCARDED",
+      ).length,
       repricingError: horizonMetrics,
     },
     windows,
   };
+}
+
+function fixtureIds(inputs: GovernorInput[]) {
+  return new Set(
+    inputs.flatMap((input) =>
+      input.kind === "quote" ||
+      input.kind === "match-event" ||
+      input.kind === "event-resolution"
+        ? [input.fixtureId]
+        : [],
+    ),
+  );
 }
 
 function errorAtHorizon(

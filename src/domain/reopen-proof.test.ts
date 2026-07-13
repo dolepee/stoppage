@@ -18,6 +18,7 @@ const config: GovernorConfig = {
   reopenDelayMs: 1_000,
   eventConfirmationWindowMs: 30_000,
   recoveryStableMs: 1_000,
+  postResolutionFreshQuotesRequired: true,
 };
 
 describe("Certified Reopen", () => {
@@ -41,6 +42,13 @@ describe("Certified Reopen", () => {
         repriceAgeMs: 1_000,
         reopenDelayMs: 1_000,
         quotePresent: true,
+        policyRevision: 2,
+        resolutionOutcome: "CONFIRMED",
+        resolutionSourceTs: 2_000,
+        firstPostResolutionQuoteSourceTs: 2_500,
+        postResolutionQuoteCount: 3,
+        freshQuoteRequired: true,
+        freshQuoteObserved: true,
       },
     });
     expect(verifyReopenProof(proof, receipt)).toBe(true);
@@ -74,6 +82,35 @@ describe("Certified Reopen", () => {
     expect(verifyReopenProof(proof, differentReceipt)).toBe(false);
   });
 
+  it("rejects a V2 certificate that claims pre-resolution odds were fresh", () => {
+    const governor = completedLifecycle();
+    const receipt = governor.getState(42).receipts.at(-1)!;
+    const proof = governor.getReopenProofs(42).at(-1)!;
+    const tampered = structuredClone(proof) as ReopenProof;
+
+    expect(tampered.body.version).toBe(2);
+    if (tampered.body.version !== 2) throw new Error("Expected V2 proof");
+    tampered.body.checks.firstPostResolutionQuoteTs =
+      tampered.body.checks.resolutionObservedTs;
+    tampered.hash = sha256(tampered.body);
+
+    expect(verifyReopenProof(tampered, receipt)).toBe(false);
+  });
+
+  it("rejects a V2 certificate whose source quote predates resolution", () => {
+    const governor = completedLifecycle();
+    const receipt = governor.getState(42).receipts.at(-1)!;
+    const proof = governor.getReopenProofs(42).at(-1)!;
+    const tampered = structuredClone(proof) as ReopenProof;
+
+    if (tampered.body.version !== 2) throw new Error("Expected V2 proof");
+    tampered.body.checks.firstPostResolutionQuoteSourceTs =
+      tampered.body.checks.resolutionSourceTs;
+    tampered.hash = sha256(tampered.body);
+
+    expect(verifyReopenProof(tampered, receipt)).toBe(false);
+  });
+
   it("waits for an unresolved incident instead of issuing a certificate", () => {
     const governor = new QuoteGovernor(config);
     governor.process(quote("q0", 1_000, probabilities(0.4, 0.3, 0.3)));
@@ -85,7 +122,14 @@ describe("Certified Reopen", () => {
     expect(governor.process({ kind: "tick", observedTs: 3_900 })).toEqual([]);
     expect(governor.getReopenProofs(42)).toEqual([]);
 
-    const reopened = governor.process(event(4_000, true));
+    const invalidated = governor.process(event(4_000, true));
+    expect(invalidated.at(-1)?.body.action).toBe("INVALIDATE_REPRICE");
+    expect(governor.getReopenProofs(42)).toHaveLength(0);
+
+    governor.process(quote("q4", 4_200, probabilities(0.55, 0.244, 0.206)));
+    governor.process(quote("q5", 4_400, probabilities(0.551, 0.243, 0.206)));
+    governor.process(quote("q6", 4_600, probabilities(0.552, 0.242, 0.206)));
+    const reopened = governor.process({ kind: "tick", observedTs: 5_600 });
     expect(reopened.at(-1)?.body.action).toBe("REOPEN");
     expect(governor.getReopenProofs(42)).toHaveLength(1);
   });
@@ -98,7 +142,7 @@ describe("Certified Reopen", () => {
     governor.process(quote("q2", 2_700, probabilities(0.401, 0.299, 0.3)));
     governor.process(quote("q3", 2_900, probabilities(0.402, 0.298, 0.3)));
 
-    const reopened = governor.process({
+    const invalidated = governor.process({
       kind: "event-resolution",
       fixtureId: 42,
       resolutionId: "discard-goal-1",
@@ -107,10 +151,26 @@ describe("Certified Reopen", () => {
       sourceTs: 4_000,
       receivedTs: 4_000,
     });
+    expect(invalidated.at(-1)?.body.action).toBe("INVALIDATE_REPRICE");
+    expect(governor.getReopenProofs(42)).toHaveLength(0);
+
+    governor.process(quote("q4", 4_200, probabilities(0.4, 0.3, 0.3)));
+    governor.process(quote("q5", 4_400, probabilities(0.401, 0.299, 0.3)));
+    governor.process(quote("q6", 4_600, probabilities(0.402, 0.298, 0.3)));
+    const reopened = governor.process({ kind: "tick", observedTs: 5_600 });
     const proof = governor.getReopenProofs(42).at(-1)!;
 
     expect(reopened.at(-1)?.body.action).toBe("REOPEN");
-    expect(proof.body.checks.unresolvedIncidentCount).toBe(0);
+    expect(proof.body).toMatchObject({
+      version: 2,
+      checks: {
+        unresolvedIncidentCount: 0,
+        resolutionOutcome: "DISCARDED",
+        postResolutionQuoteCount: 3,
+        freshQuoteRequired: true,
+        freshQuoteObserved: true,
+      },
+    });
     expect(verifyReopenProof(proof, reopened.at(-1)!)).toBe(true);
   });
 });

@@ -192,13 +192,14 @@ function App() {
           <div className="command-inner">
             <div className="product-copy">
               <div className="eyebrow-row">
-                <span className="eyebrow">Certified in-play control</span>
+                <span className="eyebrow">Resolution-aware market control</span>
                 <DataMode mode={snapshot.dataMode} />
               </div>
               <h1 id="product-title">Stoppage</h1>
               <p className="product-lede">
-                Stops an in-play market when the match and odds disagree, then
-                certifies every release condition before reopening.
+                The VAR firewall for in-play markets. It invalidates a
+                provisional price branch, requires fresh post-resolution
+                consensus, then certifies the reopen.
               </p>
               <div className="command-actions">
                 <button
@@ -266,6 +267,8 @@ function App() {
               ),
             )}
           </section>
+
+          <ResolutionGate snapshot={snapshot} />
 
           <section
             className="market-grid"
@@ -351,10 +354,10 @@ function ApprovedEvidenceBand({
     <section className="evidence-band" aria-label="Approved mainnet evidence">
       <div className="evidence-band-inner">
         <div className="evidence-band-lead">
-          <span>Approved mainnet holdout</span>
+          <span>Approved mainnet holdout · revision 2</span>
           <strong>
             {status === "available"
-              ? "Real TxLINE evidence, frozen policy"
+              ? "Resolution-aware TxLINE evidence"
               : status === "loading"
                 ? "Reading approved evidence"
                 : "Evidence endpoint unavailable"}
@@ -367,12 +370,12 @@ function ApprovedEvidenceBand({
               value={String(claim.holdout.fixtures)}
             />
             <EvidenceStat
-              label="Protected windows"
-              value={String(claim.holdout.completeProtectedWindows)}
+              label="Branches invalidated"
+              value={String(claim.holdout.preResolutionRepricesInvalidated)}
             />
             <EvidenceStat
-              label="Baseline-open time"
-              value={formatDuration(claim.holdout.staleQuoteSeconds)}
+              label="Certified reopens"
+              value={String(claim.holdout.postResolutionCertifiedReopens)}
             />
             <a className="evidence-jump" href="#mainnet-evidence">
               Inspect evidence <FileCheck2 size={15} />
@@ -428,11 +431,11 @@ function ApprovedEvidencePanel({
       <div className="evidence-heading">
         <div>
           <span>Approved public evidence</span>
-          <h2>Frozen policy, held-out match windows</h2>
+          <h2>Resolution-aware holdout</h2>
           <p>
-            The replay above demonstrates the product. These aggregates come
-            from {claim.holdout.fixtures} held-out TxLINE mainnet fixtures and
-            are bound to the approved candidate digest below.
+            The replay above demonstrates the product. These separately approved
+            aggregates come from {claim.holdout.fixtures} held-out TxLINE
+            mainnet fixtures under the same revision-2 policy hash.
           </p>
         </div>
         <span className="approval-state">
@@ -443,30 +446,31 @@ function ApprovedEvidencePanel({
       <div className="evidence-grid">
         <div className="evidence-aggregate">
           <EvidenceStat
-            label="Complete protected windows"
-            value={String(claim.holdout.completeProtectedWindows)}
+            label="Pre-resolution reprices invalidated"
+            value={String(claim.holdout.preResolutionRepricesInvalidated)}
           />
           <EvidenceStat
-            label="Baseline-open time"
+            label="Post-resolution certified reopens"
+            value={String(claim.holdout.postResolutionCertifiedReopens)}
+          />
+          <EvidenceStat
+            label="Confirmed / discarded"
+            value={`${claim.holdout.confirmedResolutionCertifiedReopens} / ${claim.holdout.discardedResolutionCertifiedReopens}`}
+          />
+          <EvidenceStat
+            label="Protected-window time"
             value={formatDuration(claim.holdout.staleQuoteSeconds)}
-          />
-          <EvidenceStat
-            label="Mispricing integral"
-            value={`${claim.holdout.mispricingIntegral.toFixed(3)} p·s`}
-          />
-          <EvidenceStat
-            label="Strongest lifecycle move"
-            value={formatPercent(
-              claim.lifecycleEvidence.maximumProbabilityMove,
-            )}
           />
         </div>
 
         <div className="verified-lifecycle">
-          <span>Verified lifecycle</span>
+          <span>Verified resolution lifecycle</span>
           <div className="lifecycle-path">
             {claim.lifecycleEvidence.decisions.map((decision, index) => (
-              <div className="lifecycle-step" key={decision.receiptHash}>
+              <div
+                className={`lifecycle-step ${decision.action === "INVALIDATE_REPRICE" ? "invalidated" : ""}`}
+                key={decision.receiptHash}
+              >
                 <small>{String(index + 1).padStart(2, "0")}</small>
                 <strong>{decision.action}</strong>
                 <span>{formatElapsed(decision.elapsedMs)}</span>
@@ -509,7 +513,7 @@ function Header({ connection }: { connection: ConnectionMode }) {
           <ShieldCheck size={17} />
         </span>
         <strong>Stoppage</strong>
-        <span className="brand-version">v0.1</span>
+        <span className="brand-version">R2</span>
       </div>
       <nav aria-label="Primary navigation">
         <a href="#product-title">Console</a>
@@ -566,10 +570,81 @@ function StateCommand({ snapshot }: { snapshot: RuntimeSnapshot }) {
       <strong className="state-name">{snapshot.mode}</strong>
       <div className="decision-readout">
         <span>Last policy action</span>
-        <strong>{latestDecision?.label ?? "Awaiting replay"}</strong>
+        <strong>
+          {latestDecision
+            ? formatDecisionLabel(latestDecision.label)
+            : "Awaiting replay"}
+        </strong>
         <small>{latestDecision?.detail ?? "No transition emitted"}</small>
       </div>
     </div>
+  );
+}
+
+function ResolutionGate({ snapshot }: { snapshot: RuntimeSnapshot }) {
+  const provisionalSeen = snapshot.timeline.some(
+    (item) => item.kind === "INPUT" && item.detail.includes("unconfirmed"),
+  );
+  const invalidated = snapshot.receipts.some(
+    (receipt) => receipt.body.action === "INVALIDATE_REPRICE",
+  );
+  const freshQuotes = Math.min(
+    3,
+    snapshot.timeline.filter(
+      (item) =>
+        item.kind === "INPUT" &&
+        (item.label.includes("Reverted branch consensus") ||
+          item.label.includes("Fresh post-VAR consensus")),
+    ).length,
+  );
+  const certified = snapshot.reopenProofs.some(
+    (proof) =>
+      proof.body.version === 2 &&
+      proof.body.checks.resolutionOutcome === "DISCARDED",
+  );
+
+  const stages = [
+    {
+      label: "Incident",
+      value: provisionalSeen ? "PROVISIONAL GOAL" : "AWAITING SIGNAL",
+      detail: provisionalSeen ? "MARKET HELD" : "OPEN",
+      complete: provisionalSeen,
+    },
+    {
+      label: "VAR resolution",
+      value: invalidated ? "GOAL OVERTURNED" : "PENDING",
+      detail: invalidated ? "PRICE BRANCH VOID" : "REOPEN BLOCKED",
+      complete: invalidated,
+    },
+    {
+      label: "Fresh consensus",
+      value: `${freshQuotes}/3 UPDATES`,
+      detail: freshQuotes === 3 ? "POST-RESOLUTION" : "COLLECTING",
+      complete: freshQuotes === 3,
+    },
+    {
+      label: "Release",
+      value: certified ? "CERTIFIED" : "LOCKED",
+      detail: certified ? "REOPEN AUTHORIZED" : "GATES ACTIVE",
+      complete: certified,
+    },
+  ];
+
+  return (
+    <section className="resolution-gate" aria-label="VAR resolution gate">
+      {stages.map((stage, index) => (
+        <div
+          className={`resolution-stage ${stage.complete ? "complete" : "pending"}`}
+          key={stage.label}
+        >
+          <span>
+            {String(index + 1).padStart(2, "0")} · {stage.label}
+          </span>
+          <strong>{stage.value}</strong>
+          <small>{stage.detail}</small>
+        </div>
+      ))}
+    </section>
   );
 }
 
@@ -632,6 +707,9 @@ function MarketBook({
 }
 
 function MetricBand({ snapshot }: { snapshot: RuntimeSnapshot }) {
+  const resolutionCertificate = snapshot.reopenProofs.find(
+    (proof) => proof.body.version === 2 && proof.body.checks.freshQuoteRequired,
+  );
   const metrics = [
     {
       label: "Suspend reaction",
@@ -639,22 +717,21 @@ function MetricBand({ snapshot }: { snapshot: RuntimeSnapshot }) {
       detail: "trigger receipt latency",
     },
     {
-      label: "Stale quote window",
+      label: "Wrong branches vetoed",
+      value: String(snapshot.metrics.invalidatedReprices ?? 0),
+      detail: "reprices invalidated by resolution",
+    },
+    {
+      label: "Fresh consensus",
+      value: resolutionCertificate
+        ? `${resolutionCertificate.body.checks.postResolutionQuoteCount}/3`
+        : "0/3",
+      detail: "post-resolution quote updates",
+    },
+    {
+      label: "Protected window",
       value: formatMetric(snapshot.metrics.staleQuoteSeconds, "s", 1),
       detail: "baseline open · governed closed",
-    },
-    {
-      label: "Mispricing integral",
-      value: formatMetric(snapshot.metrics.mispricingIntegral, "p·s", 3),
-      detail: "probability divergence × time",
-    },
-    {
-      label: "Max divergence",
-      value:
-        snapshot.metrics.maximumProbabilityDivergence === null
-          ? "—"
-          : formatPercent(snapshot.metrics.maximumProbabilityDivergence),
-      detail: "largest selection move",
     },
     {
       label: "Fail-safe drills",
@@ -725,6 +802,9 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
           .find((proof) => proof.body.reopenReceiptHash === latest.hash) ??
         null)
       : null;
+  const resolutionAware =
+    certificate?.body.version === 2 &&
+    certificate.body.checks.freshQuoteRequired;
   const copyValue = certificate?.hash ?? latest?.hash;
 
   async function copyHash() {
@@ -739,11 +819,19 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
       <div className="section-heading">
         <div>
           <span>
-            {certificate
-              ? "Machine-verifiable release gate"
-              : "Deterministic evidence"}
+            {resolutionAware
+              ? "Resolution-aware release gate"
+              : certificate
+                ? "Machine-verifiable release gate"
+                : "Deterministic evidence"}
           </span>
-          <h2>{certificate ? "Reopen certified" : "Decision receipt"}</h2>
+          <h2>
+            {resolutionAware
+              ? "VAR reopen certified"
+              : certificate
+                ? "Reopen certified"
+                : "Decision receipt"}
+          </h2>
         </div>
         <ShieldCheck size={19} />
       </div>
@@ -755,7 +843,11 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
                 <Check size={17} />
               </span>
               <div>
-                <span>Every release condition passed</span>
+                <span>
+                  {resolutionAware
+                    ? "Provisional branch invalidated"
+                    : "Every release condition passed"}
+                </span>
                 <strong>Reopen authorized</strong>
               </div>
               <code>{shortHash(certificate.hash)}</code>
@@ -769,6 +861,23 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
           <dl className="proof-fields">
             {certificate ? (
               <>
+                {resolutionAware ? (
+                  <>
+                    <div>
+                      <dt>Incident outcome</dt>
+                      <dd className="proof-pass">
+                        {certificate.body.checks.resolutionOutcome}
+                      </dd>
+                    </div>
+                    <div>
+                      <dt>Fresh quotes</dt>
+                      <dd className="proof-pass">
+                        {certificate.body.checks.postResolutionQuoteCount}/
+                        {certificate.body.checks.stableUpdatesRequired}
+                      </dd>
+                    </div>
+                  </>
+                ) : null}
                 <div>
                   <dt>TxLINE feeds</dt>
                   <dd className="proof-pass">Healthy · 2/2</dd>
@@ -779,13 +888,15 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
                     {certificate.body.checks.unresolvedIncidentCount}
                   </dd>
                 </div>
-                <div>
-                  <dt>Stable updates</dt>
-                  <dd className="proof-pass">
-                    {certificate.body.checks.stableUpdatesObserved}/
-                    {certificate.body.checks.stableUpdatesRequired}
-                  </dd>
-                </div>
+                {!resolutionAware ? (
+                  <div>
+                    <dt>Stable updates</dt>
+                    <dd className="proof-pass">
+                      {certificate.body.checks.stableUpdatesObserved}/
+                      {certificate.body.checks.stableUpdatesRequired}
+                    </dd>
+                  </div>
+                ) : null}
                 <div>
                   <dt>Safety delay</dt>
                   <dd className="proof-pass">
@@ -845,7 +956,9 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
         <Database size={15} />
         <span>
           {certificate
-            ? "Receipt-bound · policy-bound · independently verifiable"
+            ? resolutionAware
+              ? "Receipt-bound · resolution-aware · independently verifiable"
+              : "Receipt-bound · policy-bound · independently verifiable"
             : "Canonical JSON · SHA-256 · config-bound"}
         </span>
       </div>
@@ -882,7 +995,7 @@ function Footer({ snapshot }: { snapshot: RuntimeSnapshot }) {
     <footer>
       <div>
         <strong>Stoppage</strong>
-        <span>In-play quote control driven by TxLINE</span>
+        <span>VAR-aware market control driven by TxLINE</span>
       </div>
       <div>
         <span>{snapshot.dataDescription}</span>
@@ -930,6 +1043,9 @@ function stateNodeClass(
 
 function formatPercent(value: number) {
   return `${(value * 100).toFixed(1)}%`;
+}
+function formatDecisionLabel(value: string) {
+  return value.replaceAll("_", " ");
 }
 function formatMetric(value: number | null, suffix: string, precision = 0) {
   return value === null ? "—" : `${value.toFixed(precision)} ${suffix}`;

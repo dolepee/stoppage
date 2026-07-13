@@ -22,6 +22,7 @@ export interface RuntimeMetrics {
   staleQuoteSeconds: number | null;
   mispricingIntegral: number | null;
   maximumProbabilityDivergence: number | null;
+  invalidatedReprices: number;
   failoverCount: number;
 }
 

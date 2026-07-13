@@ -13,18 +13,24 @@ import type {
   GovernorConfig,
   GovernorInput,
   GovernorMode,
+  IncidentResolutionOutcome,
   MatchEvent,
   ReopenProof,
   TriggerCode,
 } from "./types.js";
 
-export const DEFAULT_GOVERNOR_CONFIG: GovernorConfig = {
+export const APPROVED_GOVERNOR_CONFIG_V1: GovernorConfig = {
   sharpMoveThreshold: 0.04,
   stabilityEpsilon: 0.006,
   stableUpdatesRequired: 3,
   reopenDelayMs: 5_000,
   eventConfirmationWindowMs: 30_000,
   recoveryStableMs: 5_000,
+};
+
+export const DEFAULT_GOVERNOR_CONFIG: GovernorConfig = {
+  ...APPROVED_GOVERNOR_CONFIG_V1,
+  postResolutionFreshQuotesRequired: true,
 };
 
 export class QuoteGovernor {
@@ -121,6 +127,14 @@ export class QuoteGovernor {
       return [];
     }
 
+    if (
+      this.#requiresResolutionFreshness() &&
+      state.lastIncidentResolution &&
+      !quoteFollowsResolution(quote, state.lastIncidentResolution)
+    ) {
+      return [];
+    }
+
     const previousCandidate = state.candidateQuote;
     state.quote = quote;
     state.candidateQuote = quote;
@@ -128,6 +142,11 @@ export class QuoteGovernor {
       ...state.pendingSourceIds,
       quote.messageId,
     ]);
+    if (state.lastIncidentResolution) {
+      state.firstPostResolutionQuoteSourceTs ??= quote.sourceTs;
+      state.firstPostResolutionQuoteTs ??= quote.receivedTs;
+      state.postResolutionQuoteCount += 1;
+    }
 
     if (
       previousCandidate &&
@@ -174,6 +193,9 @@ export class QuoteGovernor {
     const firstObservation = !state.seenEventIncidentIds.includes(
       event.incidentId,
     );
+    const wasPending = state.pendingUnconfirmedIncidentIds.includes(
+      event.incidentId,
+    );
     if (firstObservation) state.seenEventIncidentIds.push(event.incidentId);
     if (event.confirmed) {
       state.pendingUnconfirmedIncidentIds =
@@ -196,7 +218,21 @@ export class QuoteGovernor {
     ) {
       state.pendingUnconfirmedIncidentIds.push(event.incidentId);
     }
-    if (state.mode === "FAILSAFE") return [];
+
+    const resolutionReceipts =
+      event.confirmed &&
+      incidentAffectsCurrentState &&
+      (firstObservation || wasPending)
+        ? this.#recordIncidentResolution(
+            state,
+            event.incidentId,
+            "CONFIRMED",
+            event.eventId,
+            event.sourceTs,
+            event.receivedTs,
+          )
+        : [];
+    if (state.mode === "FAILSAFE") return resolutionReceipts;
 
     if (state.mode === "SUSPENDED" || state.mode === "REPRICED") {
       state.pendingSourceIds = unique([
@@ -206,6 +242,7 @@ export class QuoteGovernor {
       if (state.pendingTrigger === "UNBACKED_MOVE" && event.confirmed) {
         state.pendingTrigger = "EVENT_CONFIRMED_MOVE";
       }
+      if (resolutionReceipts.length) return resolutionReceipts;
       if (firstObservation) {
         state.stableUpdateCount = 0;
         state.candidateQuote = null;
@@ -262,12 +299,62 @@ export class QuoteGovernor {
       state.pendingUnconfirmedIncidentIds.filter(
         (incidentId) => incidentId !== resolution.incidentId,
       );
-    if (state.mode !== "SUSPENDED" && state.mode !== "REPRICED") return [];
     state.pendingSourceIds = unique([
       ...state.pendingSourceIds,
       resolution.resolutionId,
     ]);
+    if (this.#requiresResolutionFreshness()) {
+      return this.#recordIncidentResolution(
+        state,
+        resolution.incidentId,
+        "DISCARDED",
+        resolution.resolutionId,
+        resolution.sourceTs,
+        resolution.receivedTs,
+      );
+    }
+    if (state.mode !== "SUSPENDED" && state.mode !== "REPRICED") return [];
     return this.#maybeReopen(state, resolution.receivedTs);
+  }
+
+  #recordIncidentResolution(
+    state: FixtureGovernorState,
+    incidentId: string,
+    outcome: IncidentResolutionOutcome,
+    resolutionId: string,
+    sourceTs: number,
+    observedTs: number,
+  ): DecisionReceipt[] {
+    if (!this.#requiresResolutionFreshness()) return [];
+
+    state.lastIncidentResolution = {
+      incidentId,
+      outcome,
+      resolutionId,
+      sourceTs,
+      observedTs,
+    };
+    state.firstPostResolutionQuoteSourceTs = null;
+    state.firstPostResolutionQuoteTs = null;
+    state.postResolutionQuoteCount = 0;
+    state.stableUpdateCount = 0;
+    state.candidateQuote = null;
+    state.repricedAt = null;
+    state.pendingSourceIds = unique([...state.pendingSourceIds, resolutionId]);
+
+    if (state.mode !== "REPRICED") return [];
+    return [
+      this.#transition(
+        state,
+        "SUSPENDED",
+        "INVALIDATE_REPRICE",
+        outcome === "CONFIRMED"
+          ? "RESOLUTION_CONFIRMED"
+          : "RESOLUTION_DISCARDED",
+        observedTs,
+        state.pendingSourceIds,
+      ),
+    ];
   }
 
   #processHealth(input: Extract<GovernorInput, { kind: "stream-health" }>) {
@@ -338,6 +425,13 @@ export class QuoteGovernor {
     const unresolvedIncidentCount = state.pendingUnconfirmedIncidentIds.length;
     const stableUpdatesObserved = state.stableUpdateCount;
     const quotePresent = state.quote !== null;
+    const resolutionFreshnessRequired =
+      this.#requiresResolutionFreshness() &&
+      state.lastIncidentResolution !== null;
+    const freshQuoteObserved =
+      !resolutionFreshnessRequired ||
+      (state.firstPostResolutionQuoteTs !== null &&
+        state.postResolutionQuoteCount >= this.#config.stableUpdatesRequired);
     if (
       state.mode !== "REPRICED" ||
       state.repricedAt === null ||
@@ -346,6 +440,7 @@ export class QuoteGovernor {
       unresolvedIncidentCount !== 0 ||
       stableUpdatesObserved < this.#config.stableUpdatesRequired ||
       !quotePresent ||
+      !freshQuoteObserved ||
       observedTs - state.repricedAt < this.#config.reopenDelayMs
     ) {
       return [];
@@ -360,8 +455,7 @@ export class QuoteGovernor {
       state.pendingSourceIds,
       state.quote ?? undefined,
     );
-    const proof = createReopenProof({
-      version: 1,
+    const commonProof = {
       kind: "CERTIFIED_REOPEN",
       fixtureId: state.fixtureId,
       market: state.market,
@@ -378,7 +472,28 @@ export class QuoteGovernor {
         reopenDelayMs: this.#config.reopenDelayMs,
         quotePresent,
       },
-    });
+    } as const;
+    const proof = this.#requiresResolutionFreshness()
+      ? createReopenProof({
+          ...commonProof,
+          version: 2,
+          checks: {
+            ...commonProof.checks,
+            policyRevision: 2,
+            resolutionOutcome:
+              state.lastIncidentResolution?.outcome ?? "NOT_REQUIRED",
+            resolutionSourceTs: state.lastIncidentResolution?.sourceTs ?? null,
+            resolutionObservedTs:
+              state.lastIncidentResolution?.observedTs ?? null,
+            firstPostResolutionQuoteSourceTs:
+              state.firstPostResolutionQuoteSourceTs,
+            firstPostResolutionQuoteTs: state.firstPostResolutionQuoteTs,
+            postResolutionQuoteCount: state.postResolutionQuoteCount,
+            freshQuoteRequired: resolutionFreshnessRequired,
+            freshQuoteObserved,
+          },
+        })
+      : createReopenProof({ ...commonProof, version: 1 });
     const proofs = this.#reopenProofs.get(state.fixtureId) ?? [];
     proofs.push(proof);
     this.#reopenProofs.set(state.fixtureId, proofs);
@@ -390,7 +505,15 @@ export class QuoteGovernor {
     state.candidateQuote = null;
     state.preTriggerQuote = null;
     state.pendingUnconfirmedIncidentIds = [];
+    state.lastIncidentResolution = null;
+    state.firstPostResolutionQuoteSourceTs = null;
+    state.firstPostResolutionQuoteTs = null;
+    state.postResolutionQuoteCount = 0;
     return [receipt];
+  }
+
+  #requiresResolutionFreshness() {
+    return this.#config.postResolutionFreshQuotesRequired === true;
   }
 
   #transition(
@@ -440,6 +563,10 @@ export class QuoteGovernor {
       lastHighImpactEvent: null,
       seenEventIncidentIds: [],
       pendingUnconfirmedIncidentIds: [],
+      lastIncidentResolution: null,
+      firstPostResolutionQuoteSourceTs: null,
+      firstPostResolutionQuoteTs: null,
+      postResolutionQuoteCount: 0,
       pendingTrigger: streamsHealthy ? null : "STREAM_UNHEALTHY",
       pendingSourceIds: [],
       streamHealth: structuredClone(this.#streamHealth),
@@ -487,4 +614,21 @@ function validateConfig(config: GovernorConfig) {
       throw new Error(`${name} must be a non-negative integer`);
     }
   }
+  if (
+    config.postResolutionFreshQuotesRequired !== undefined &&
+    typeof config.postResolutionFreshQuotesRequired !== "boolean"
+  ) {
+    throw new Error("postResolutionFreshQuotesRequired must be boolean");
+  }
+}
+
+function quoteFollowsResolution(
+  quote: ConsensusQuote,
+  resolution: FixtureGovernorState["lastIncidentResolution"],
+) {
+  if (!resolution) return true;
+  return (
+    quote.sourceTs > resolution.sourceTs &&
+    quote.receivedTs > resolution.observedTs
+  );
 }

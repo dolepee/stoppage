@@ -1,7 +1,7 @@
 {
   "name": "Stoppage",
   "short_name": "Stoppage",
-  "description": "Stops an in-play market, then certifies every release condition before reopening.",
+  "description": "The VAR firewall for in-play markets: invalidate the wrong price branch, require fresh consensus, and certify the reopen.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#090b0c",

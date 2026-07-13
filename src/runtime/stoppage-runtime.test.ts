@@ -14,13 +14,11 @@ describe("StoppageRuntime", () => {
     expect(snapshot.receipts.map((receipt) => receipt.body.action)).toEqual([
       "SUSPEND",
       "REPRICE",
-      "REOPEN",
-      "ENTER_FAILSAFE",
-      "RECOVER_TO_SUSPENDED",
+      "INVALIDATE_REPRICE",
       "REPRICE",
       "REOPEN",
     ]);
-    expect(snapshot.reopenProofs).toHaveLength(2);
+    expect(snapshot.reopenProofs).toHaveLength(1);
     expect(
       snapshot.reopenProofs.map((proof) => proof.body.reopenReceiptHash),
     ).toEqual(
@@ -38,7 +36,9 @@ describe("StoppageRuntime", () => {
     ).toBe(true);
     expect(snapshot.mode).toBe("OPEN");
     expect(snapshot.metrics.suspensionReactionMs).toBe(240);
-    expect(snapshot.metrics.staleQuoteSeconds).toBeCloseTo(10.56);
-    expect(snapshot.metrics.mispricingIntegral).toBeCloseTo(0.45656);
+    expect(snapshot.metrics.staleQuoteSeconds).toBeCloseTo(20.56);
+    expect(snapshot.metrics.mispricingIntegral).toBeCloseTo(1.22648);
+    expect(snapshot.metrics.invalidatedReprices).toBe(1);
+    expect(snapshot.metrics.failoverCount).toBe(0);
   }, 5_000);
 });

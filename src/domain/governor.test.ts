@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { QuoteGovernor } from "./governor.js";
+import { APPROVED_GOVERNOR_CONFIG_V1, QuoteGovernor } from "./governor.js";
+import { sha256 } from "./canonical.js";
 import type {
   ConsensusQuote,
   GovernorConfig,
@@ -15,6 +16,7 @@ const config: GovernorConfig = {
   reopenDelayMs: 1_000,
   eventConfirmationWindowMs: 30_000,
   recoveryStableMs: 1_000,
+  postResolutionFreshQuotesRequired: true,
 };
 
 describe("QuoteGovernor", () => {
@@ -108,7 +110,7 @@ describe("QuoteGovernor", () => {
     expect(first).toEqual(second);
   });
 
-  it("waits for event confirmation after repricing before reopening", () => {
+  it("invalidates a provisional reprice when the event is confirmed", () => {
     const governor = new QuoteGovernor(config);
     governor.process(quote("q0", 1_000, probabilities(0.4, 0.3, 0.3)));
     governor.process(event("goal-1", 2_000, false));
@@ -117,12 +119,22 @@ describe("QuoteGovernor", () => {
     governor.process(quote("q3", 2_900, probabilities(0.548, 0.245, 0.207)));
 
     expect(governor.process({ kind: "tick", observedTs: 4_000 })).toEqual([]);
-    const reopened = governor.process(event("goal-1", 4_100, true));
+    const invalidated = governor.process(event("goal-1", 4_100, true));
+    expect(invalidated.map((receipt) => receipt.body.action)).toEqual([
+      "INVALIDATE_REPRICE",
+    ]);
+    expect(invalidated[0]?.body.trigger).toBe("RESOLUTION_CONFIRMED");
+    expect(governor.getState(42).mode).toBe("SUSPENDED");
+
+    governor.process(quote("q4", 4_200, probabilities(0.55, 0.244, 0.206)));
+    governor.process(quote("q5", 4_400, probabilities(0.551, 0.243, 0.206)));
+    governor.process(quote("q6", 4_600, probabilities(0.552, 0.242, 0.206)));
+    const reopened = governor.process({ kind: "tick", observedTs: 5_600 });
     expect(reopened.map((receipt) => receipt.body.action)).toEqual(["REOPEN"]);
     expect(governor.process(event("goal-1", 4_200, true))).toEqual([]);
   });
 
-  it("allows a discarded incident to resolve the confirmation hold", () => {
+  it("invalidates the provisional branch and requires fresh quotes after discard", () => {
     const governor = new QuoteGovernor(config);
     governor.process(quote("q0", 1_000, probabilities(0.4, 0.3, 0.3)));
     governor.process(event("goal-1", 2_000, false));
@@ -130,7 +142,7 @@ describe("QuoteGovernor", () => {
     governor.process(quote("q2", 2_700, probabilities(0.401, 0.299, 0.3)));
     governor.process(quote("q3", 2_900, probabilities(0.402, 0.298, 0.3)));
 
-    const reopened = governor.process({
+    const invalidated = governor.process({
       kind: "event-resolution",
       fixtureId: 42,
       resolutionId: "discard-goal-1",
@@ -139,7 +151,40 @@ describe("QuoteGovernor", () => {
       sourceTs: 4_000,
       receivedTs: 4_000,
     });
+    expect(invalidated.map((receipt) => receipt.body.action)).toEqual([
+      "INVALIDATE_REPRICE",
+    ]);
+    expect(invalidated[0]?.body.trigger).toBe("RESOLUTION_DISCARDED");
+    expect(governor.process({ kind: "tick", observedTs: 5_000 })).toEqual([]);
+
+    governor.process({
+      ...quote("late-provisional", 4_100, probabilities(0.4, 0.3, 0.3)),
+      sourceTs: 3_900,
+    });
+    expect(governor.getState(42)).toMatchObject({
+      quote: { messageId: "q3" },
+      candidateQuote: null,
+      postResolutionQuoteCount: 0,
+    });
+
+    governor.process(quote("q4", 4_200, probabilities(0.4, 0.3, 0.3)));
+    governor.process(quote("q5", 4_400, probabilities(0.401, 0.299, 0.3)));
+    governor.process(quote("q6", 4_600, probabilities(0.402, 0.298, 0.3)));
+    expect(governor.getState(42)).toMatchObject({
+      mode: "REPRICED",
+      firstPostResolutionQuoteSourceTs: 4_200,
+      postResolutionQuoteCount: 3,
+      lastIncidentResolution: { outcome: "DISCARDED" },
+    });
+    const reopened = governor.process({ kind: "tick", observedTs: 5_600 });
     expect(reopened.map((receipt) => receipt.body.action)).toEqual(["REOPEN"]);
+  });
+
+  it("preserves the exact approved revision-1 policy hash", () => {
+    const approvedHash =
+      "0xe2ad4818c05817f6d5d483b27a7c3670" + "c7aae205fd1eed32cbbe74d00b491461";
+    expect(sha256(APPROVED_GOVERNOR_CONFIG_V1)).toBe(approvedHash);
+    expect(new QuoteGovernor(config).configHash).not.toBe(approvedHash);
   });
 
   it("ignores a discard record unrelated to an active incident", () => {

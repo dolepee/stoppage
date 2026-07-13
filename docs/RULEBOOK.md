@@ -11,6 +11,7 @@ They are not calibrated claims.
 | Reopen delay              |    `5s` | Confirmation window after repricing              |
 | Event confirmation window |   `30s` | Associates an odds-first move with a later event |
 | Recovery stability        |    `5s` | Both streams must remain healthy before recovery |
+| Post-resolution freshness |    `on` | Rebuild stability after confirmation or discard  |
 
 ## Calibration discipline
 
@@ -52,6 +53,15 @@ denominator. It is `null` when a holdout contains no odds-led suspension. An
 event-led window may begin from a provisional event and still complete normally
 after that incident is confirmed or explicitly discarded.
 
+### Resolution branch invalidation
+
+Policy revision 2 treats confirmation and discard as a branch boundary. If the
+book already reached `REPRICED`, the governor emits `INVALIDATE_REPRICE`, returns
+to `SUSPENDED`, and clears the candidate and stability count. Odds whose source
+or receipt time does not follow that resolution are ignored for release. The
+normal three-update stability rule then runs again using only fresh
+post-resolution quotes.
+
 ### Fail-safe
 
 If either required stream is unhealthy, the book enters `FAILSAFE`. Restoring
@@ -61,11 +71,13 @@ the normal stability and reopen rules must pass.
 ## Certified Reopen
 
 `REOPEN` is not only a state transition. The governor emits a separate
-`CERTIFIED_REOPEN` proof containing the exact release checks, frozen config hash,
-and matching decision receipt hash. Proof construction fails closed if either
-stream is unhealthy, an incident is unresolved, stable updates are below the
-policy minimum, the safety delay has not elapsed, or no replacement quote is
-present.
+`CERTIFIED_REOPEN` proof containing the exact release checks, config hash, and
+matching decision receipt hash. Revision 2 additionally records the incident
+outcome and proves that the complete stable sequence followed the latest
+resolution. Proof construction fails closed if either stream is unhealthy, an
+incident is unresolved, a stale branch remains, fresh stable updates are below
+the policy minimum, the safety delay has not elapsed, or no replacement quote
+is present.
 
 The proof is deterministic and additive. It can be recomputed from the same
 normalized inputs without changing the original decision receipt:

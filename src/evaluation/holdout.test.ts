@@ -17,18 +17,24 @@ describe("evaluateHoldout", () => {
       DEFAULT_GOVERNOR_CONFIG,
     );
 
-    expect(evaluation.sample.completeProtectedWindows).toBe(2);
+    expect(evaluation.sample.completeProtectedWindows).toBe(1);
     expect(evaluation.sample.incompleteProtectedWindow).toBe(false);
-    expect(evaluation.metrics.staleQuoteSeconds).toBeCloseTo(25.56);
+    expect(evaluation.metrics.staleQuoteSeconds).toBeCloseTo(20.56);
     expect(evaluation.metrics.eventLedProtectedWindows).toBe(1);
     expect(evaluation.metrics.oddsLedProtectedWindows).toBe(0);
     expect(evaluation.metrics.unconfirmedOddsLedSuspensionRate).toBeNull();
+    expect(evaluation.metrics).toMatchObject({
+      preResolutionRepricesInvalidated: 1,
+      postResolutionCertifiedReopens: 1,
+      confirmedResolutionCertifiedReopens: 0,
+      discardedResolutionCertifiedReopens: 1,
+    });
     expect(evaluation.windows[0]).toMatchObject({
       initialTrigger: "EVENT_BEFORE_REPRICE",
       finalTrigger: "EVENT_BEFORE_REPRICE",
-      staleQuoteSeconds: 10.56,
-      reopenLatencyMs: 10_560,
+      reopenLatencyMs: 20_560,
     });
+    expect(evaluation.windows[0]?.staleQuoteSeconds).toBeCloseTo(20.56);
   });
 
   it("labels an odds-led window unconfirmed when no event supports it", () => {
@@ -43,6 +49,8 @@ describe("evaluateHoldout", () => {
       confirmedOddsLedProtectedWindows: 0,
       unconfirmedOddsLedProtectedWindows: 1,
       unconfirmedOddsLedSuspensionRate: 1,
+      preResolutionRepricesInvalidated: 0,
+      postResolutionCertifiedReopens: 0,
     });
     expect(evaluation.windows[0]).toMatchObject({
       initialTrigger: "UNBACKED_MOVE",
@@ -62,6 +70,10 @@ describe("evaluateHoldout", () => {
       confirmedOddsLedProtectedWindows: 1,
       unconfirmedOddsLedProtectedWindows: 0,
       unconfirmedOddsLedSuspensionRate: 0,
+      preResolutionRepricesInvalidated: 0,
+      postResolutionCertifiedReopens: 1,
+      confirmedResolutionCertifiedReopens: 1,
+      discardedResolutionCertifiedReopens: 0,
     });
     expect(evaluation.windows[0]).toMatchObject({
       initialTrigger: "UNBACKED_MOVE",

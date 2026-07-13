@@ -8,25 +8,25 @@
   <text x="140" y="104" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="24" font-weight="700">Stoppage</text>
   <text x="1018" y="102" fill="#74df8f" font-family="Arial, sans-serif" font-size="14" font-weight="700">TxLINE × SOLANA</text>
 
-  <text x="82" y="222" fill="#42ddb7" font-family="Arial, sans-serif" font-size="16" font-weight="700">CERTIFIED IN-PLAY CONTROL</text>
-  <text x="82" y="292" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="50" font-weight="700">Stop the market.</text>
-  <text x="82" y="350" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="50" font-weight="700">Prove the reopen.</text>
-  <text x="82" y="414" fill="#929da0" font-family="Arial, sans-serif" font-size="21">Every release condition, receipt-bound.</text>
+  <text x="82" y="222" fill="#42ddb7" font-family="Arial, sans-serif" font-size="16" font-weight="700">THE VAR FIREWALL FOR IN-PLAY MARKETS</text>
+  <text x="82" y="292" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="50" font-weight="700">Invalidate the branch.</text>
+  <text x="82" y="350" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="50" font-weight="700">Certify the reopen.</text>
+  <text x="82" y="414" fill="#929da0" font-family="Arial, sans-serif" font-size="21">Fresh consensus after every resolution.</text>
 
   <rect x="682" y="164" width="418" height="346" rx="7" fill="#111617" stroke="#39454a"/>
-  <text x="714" y="202" fill="#929da0" font-family="Arial, sans-serif" font-size="13">MACHINE-VERIFIABLE RELEASE GATE</text>
-  <text x="714" y="250" fill="#42ddb7" font-family="Arial, sans-serif" font-size="20" font-weight="700">REOPEN CERTIFIED</text>
+  <text x="714" y="202" fill="#929da0" font-family="Arial, sans-serif" font-size="13">RESOLUTION-AWARE RELEASE GATE</text>
+  <text x="714" y="250" fill="#42ddb7" font-family="Arial, sans-serif" font-size="20" font-weight="700">VAR REOPEN CERTIFIED</text>
   <line x1="714" y1="274" x2="1068" y2="274" stroke="#273034"/>
-  <text x="714" y="312" fill="#929da0" font-family="Arial, sans-serif" font-size="14">TXLINE FEEDS</text>
-  <text x="1068" y="312" text-anchor="end" fill="#42ddb7" font-family="monospace" font-size="15">HEALTHY 2/2</text>
-  <text x="714" y="354" fill="#929da0" font-family="Arial, sans-serif" font-size="14">PENDING INCIDENTS</text>
-  <text x="1068" y="354" text-anchor="end" fill="#42ddb7" font-family="monospace" font-size="15">0</text>
-  <text x="714" y="396" fill="#929da0" font-family="Arial, sans-serif" font-size="14">STABLE UPDATES</text>
+  <text x="714" y="312" fill="#929da0" font-family="Arial, sans-serif" font-size="14">INCIDENT OUTCOME</text>
+  <text x="1068" y="312" text-anchor="end" fill="#42ddb7" font-family="monospace" font-size="15">DISCARDED</text>
+  <text x="714" y="354" fill="#929da0" font-family="Arial, sans-serif" font-size="14">PRICE BRANCH</text>
+  <text x="1068" y="354" text-anchor="end" fill="#42ddb7" font-family="monospace" font-size="15">INVALIDATED</text>
+  <text x="714" y="396" fill="#929da0" font-family="Arial, sans-serif" font-size="14">FRESH QUOTES</text>
   <text x="1068" y="396" text-anchor="end" fill="#42ddb7" font-family="monospace" font-size="15">3/3</text>
   <text x="714" y="438" fill="#929da0" font-family="Arial, sans-serif" font-size="14">SAFETY DELAY</text>
   <text x="1068" y="438" text-anchor="end" fill="#42ddb7" font-family="monospace" font-size="15">5.0s / 5.0s</text>
   <rect x="714" y="458" width="354" height="34" rx="5" fill="#10201c" stroke="#42ddb7"/>
-  <text x="734" y="480" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="13">Receipt + frozen policy bound</text>
+  <text x="734" y="480" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="13">Receipt + resolution + policy bound</text>
 
   <line x1="82" y1="548" x2="1100" y2="548" stroke="#273034"/>
   <text x="82" y="587" fill="#929da0" font-family="Arial, sans-serif" font-size="16">Driven by TxLINE scores + StablePrice odds</text>

@@ -39,7 +39,7 @@ describe("public claim approval", () => {
     });
 
     expect(claim).toMatchObject({
-      version: 2,
+      version: 3,
       status: "AVAILABLE",
       candidateHash: candidate.candidateHash,
       approval: { statement: candidate.requiredApproval },
@@ -50,6 +50,8 @@ describe("public claim approval", () => {
         unconfirmedOddsLedProtectedWindows: 0,
         unconfirmedOddsLedSuspensionRate: null,
         provisionalEventProtectedWindows: 11,
+        preResolutionRepricesInvalidated: 7,
+        postResolutionCertifiedReopens: 11,
       },
     });
     expect(JSON.stringify(claim)).not.toContain("fixtureId");
@@ -115,7 +117,7 @@ describe("public claim approval", () => {
 
 function holdout(): PrivateHoldoutReport {
   return {
-    version: 1,
+    version: 2,
     status: "AWAITING_PUBLIC_CLAIM_APPROVAL",
     network: "solana-mainnet",
     approvedConfigHash: configHash,
@@ -133,19 +135,26 @@ function holdout(): PrivateHoldoutReport {
       unconfirmedOddsLedSuspensionRate: null,
       failsafeProtectedWindows: 0,
       provisionalEventProtectedWindows: 11,
+      preResolutionRepricesInvalidated: 7,
+      postResolutionCertifiedReopens: 11,
+      confirmedResolutionCertifiedReopens: 8,
+      discardedResolutionCertifiedReopens: 3,
     },
   };
 }
 
 function lifecycle(): PublicLifecycleCandidate {
   return {
+    version: 2,
     status: "AWAITING_HUMAN_APPROVAL",
     evidenceType: "DERIVED_LIFECYCLE_EVIDENCE",
     network: "solana-mainnet",
+    policyRevision: 2,
     dataBoundary:
       "No TxLINE records, vectors, identifiers, or absolute source timestamps.",
     lifecycleDurationMs: 169636,
     maximumProbabilityMove: 0.762,
+    preResolutionRepricesInvalidated: 1,
     configHash,
     decisions: [
       {
@@ -162,8 +171,26 @@ function lifecycle(): PublicLifecycleCandidate {
         trigger: "EVENT_BEFORE_REPRICE",
         fromMode: "SUSPENDED",
         toMode: "REPRICED",
-        elapsedMs: 160_000,
+        elapsedMs: 80_000,
         receiptHash: `0x${"de".repeat(32)}`,
+        configHash,
+      },
+      {
+        action: "INVALIDATE_REPRICE",
+        trigger: "RESOLUTION_DISCARDED",
+        fromMode: "REPRICED",
+        toMode: "SUSPENDED",
+        elapsedMs: 90_000,
+        receiptHash: `0x${"bc".repeat(32)}`,
+        configHash,
+      },
+      {
+        action: "REPRICE",
+        trigger: "EVENT_BEFORE_REPRICE",
+        fromMode: "SUSPENDED",
+        toMode: "REPRICED",
+        elapsedMs: 160_000,
+        receiptHash: `0x${"bd".repeat(32)}`,
         configHash,
       },
       {

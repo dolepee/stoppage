@@ -19,6 +19,8 @@ export interface CompleteLifecycle {
   suspendHash: string;
   repriceHash: string;
   reopenHash: string;
+  decisionHashes: string[];
+  preResolutionRepricesInvalidated: number;
 }
 
 export function completeLifecycles(
@@ -36,18 +38,31 @@ export function completeLifecycles(
   const completed: CompleteLifecycle[] = [];
   let suspended: DecisionReceipt | null = null;
   let repriced: DecisionReceipt | null = null;
+  let lifecycleReceipts: DecisionReceipt[] = [];
 
   for (const receipt of receipts) {
     if (receipt.body.action === "SUSPEND") {
-      suspended = receipt;
+      if (!suspended) {
+        suspended = receipt;
+        lifecycleReceipts = [receipt];
+      } else {
+        lifecycleReceipts.push(receipt);
+      }
       repriced = null;
       continue;
     }
     if (receipt.body.action === "REPRICE" && suspended) {
       repriced = receipt;
+      lifecycleReceipts.push(receipt);
+      continue;
+    }
+    if (receipt.body.action === "INVALIDATE_REPRICE" && suspended) {
+      repriced = null;
+      lifecycleReceipts.push(receipt);
       continue;
     }
     if (receipt.body.action !== "REOPEN" || !suspended || !repriced) continue;
+    lifecycleReceipts.push(receipt);
 
     const sourceEventId =
       suspended.body.sourceIds.find((sourceId) => eventInputs.has(sourceId)) ??
@@ -76,9 +91,14 @@ export function completeLifecycles(
       suspendHash: suspended.hash,
       repriceHash: repriced.hash,
       reopenHash: receipt.hash,
+      decisionHashes: lifecycleReceipts.map((decision) => decision.hash),
+      preResolutionRepricesInvalidated: lifecycleReceipts.filter(
+        (decision) => decision.body.action === "INVALIDATE_REPRICE",
+      ).length,
     });
     suspended = null;
     repriced = null;
+    lifecycleReceipts = [];
   }
 
   return completed;

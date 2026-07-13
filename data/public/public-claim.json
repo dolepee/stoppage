@@ -1,15 +1,15 @@
 {
-  "version": 2,
+  "version": 3,
   "status": "AVAILABLE",
   "network": "solana-mainnet",
-  "approvedConfigHash": "0xe2ad4818c05817f6d5d483b27a7c3670c7aae205fd1eed32cbbe74d00b491461",
-  "evaluatedAt": "2026-07-12T21:42:11.859Z",
+  "approvedConfigHash": "0x1d773fb526081fb15a4643c0767f692144ecbec28cf4fc75a96b43aa17b5fcf2",
+  "evaluatedAt": "2026-07-13T12:23:04.667Z",
   "dataBoundary": "No TxLINE records, vectors, identifiers, or absolute source timestamps.",
   "holdout": {
     "fixtures": 4,
     "completeProtectedWindows": 18,
-    "staleQuoteSeconds": 1853.7229999999997,
-    "mispricingIntegral": 302.49957467513565,
+    "staleQuoteSeconds": 2007.973,
+    "mispricingIntegral": 315.3208445093693,
     "eventLedProtectedWindows": 18,
     "oddsLedProtectedWindows": 0,
     "confirmedOddsLedProtectedWindows": 0,
@@ -17,18 +17,26 @@
     "unconfirmedOddsLedSuspensionRate": null,
     "failsafeProtectedWindows": 0,
     "provisionalEventProtectedWindows": 18,
+    "preResolutionRepricesInvalidated": 11,
+    "postResolutionCertifiedReopens": 18,
+    "confirmedResolutionCertifiedReopens": 14,
+    "discardedResolutionCertifiedReopens": 4,
     "definitions": {
       "unconfirmedOddsLedSuspensionRate": "Odds-led protected windows that remained UNBACKED_MOVE through repricing divided by all odds-led protected windows; null when no odds-led window was observed.",
-      "provisionalEventProtectedWindows": "Event-led windows entered from a provisional TxLINE event. Reopening still required later confirmation or explicit discard."
+      "provisionalEventProtectedWindows": "Event-led windows entered from a provisional TxLINE event. Reopening still required later confirmation or explicit discard.",
+      "preResolutionRepricesInvalidated": "Candidate reprices formed before incident confirmation or discard and explicitly invalidated at that resolution boundary.",
+      "postResolutionCertifiedReopens": "Reopens certified only after a full stable quote sequence observed after the latest incident resolution."
     }
   },
   "lifecycleEvidence": {
     "evidenceType": "DERIVED_LIFECYCLE_EVIDENCE",
-    "lifecycleDurationMs": 169636,
-    "maximumProbabilityMove": 0.7620899775363666,
+    "policyRevision": 2,
+    "lifecycleDurationMs": 192651,
+    "maximumProbabilityMove": 0.022429656659732622,
+    "preResolutionRepricesInvalidated": 1,
     "txlineValidation": {
-      "transactionSignature": "3ZEuF4zPtGiwT5iMwHQnPMWpX9U8BsMz1aHybwyzmkjaoMKmCNVQ4eADQtAB11rNwyb1EtDLadn9qQeGZzuXXwPd",
-      "explorer": "https://solscan.io/tx/3ZEuF4zPtGiwT5iMwHQnPMWpX9U8BsMz1aHybwyzmkjaoMKmCNVQ4eADQtAB11rNwyb1EtDLadn9qQeGZzuXXwPd"
+      "transactionSignature": "61UyrsHoqMeAAjJHPvnoo4L6F91oiFH4aFe2WQg6LHuLA5sZvQ7wdEoFPndhnPjaWHzkB1bfzZ3r8PSeRJQXDs8E",
+      "explorer": "https://solscan.io/tx/61UyrsHoqMeAAjJHPvnoo4L6F91oiFH4aFe2WQg6LHuLA5sZvQ7wdEoFPndhnPjaWHzkB1bfzZ3r8PSeRJQXDs8E"
     },
     "decisions": [
       {
@@ -37,29 +45,45 @@
         "fromMode": "OPEN",
         "toMode": "SUSPENDED",
         "elapsedMs": 0,
-        "receiptHash": "0x3f71d8aa397601d71d22c36e56201ecc02644e4266a6b4bfd21d672e6a8c8f2b"
+        "receiptHash": "0x7e4879c723ee62ea2b92bb82a56e6f74750ea52995bafc91a7f97bc77ba6c880"
       },
       {
         "action": "REPRICE",
         "trigger": "EVENT_BEFORE_REPRICE",
         "fromMode": "SUSPENDED",
         "toMode": "REPRICED",
-        "elapsedMs": 162640,
-        "receiptHash": "0x371850678690469d066f908fc79bd89a08d0cc1d698faef52c2fbbda4dad48e6"
+        "elapsedMs": 128716,
+        "receiptHash": "0x3705bec09cee041542609e2259a1374831abf557c75f91ace002585b6c03bad4"
+      },
+      {
+        "action": "INVALIDATE_REPRICE",
+        "trigger": "RESOLUTION_DISCARDED",
+        "fromMode": "REPRICED",
+        "toMode": "SUSPENDED",
+        "elapsedMs": 147698,
+        "receiptHash": "0xcf362a895488aa444135b0d159d18d10358de6131a98d0152060e7005fb3fb2f"
+      },
+      {
+        "action": "REPRICE",
+        "trigger": "EVENT_BEFORE_REPRICE",
+        "fromMode": "SUSPENDED",
+        "toMode": "REPRICED",
+        "elapsedMs": 186237,
+        "receiptHash": "0x4cec99606bad05c9f4b2656137765020421d4aba63cfd4861108993126a7c794"
       },
       {
         "action": "REOPEN",
         "trigger": "EVENT_BEFORE_REPRICE",
         "fromMode": "REPRICED",
         "toMode": "OPEN",
-        "elapsedMs": 169636,
-        "receiptHash": "0x386c3355d356fdebf5f7d44bb2d177b2a27324cac30e3d1ddd6e5946e8d003ce"
+        "elapsedMs": 192651,
+        "receiptHash": "0xc97f597b37cf6c48d68ffe8d0f59c503f3359876af9c2af74b16a27820011c34"
       }
     ]
   },
-  "candidateHash": "0x49db3786a711ec20993ad1899f010432f966ac57f86b4036cbf1a52f6f0e0656",
-  "approvedAt": "2026-07-12T21:52:56.944Z",
+  "candidateHash": "0x05ba120565890638d9ee7305e06df20d2b30427d7c949c2e952d681e40465d9d",
+  "approvedAt": "2026-07-13T12:37:59.879Z",
   "approval": {
-    "statement": "APPROVE STOPPAGE PUBLIC CLAIM 0xe2ad4818c05817f6d5d483b27a7c3670c7aae205fd1eed32cbbe74d00b491461 0x49db3786a711ec20993ad1899f010432f966ac57f86b4036cbf1a52f6f0e0656"
+    "statement": "APPROVE STOPPAGE PUBLIC CLAIM 0x1d773fb526081fb15a4643c0767f692144ecbec28cf4fc75a96b43aa17b5fcf2 0x05ba120565890638d9ee7305e06df20d2b30427d7c949c2e952d681e40465d9d"
   }
 }

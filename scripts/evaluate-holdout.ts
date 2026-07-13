@@ -47,7 +47,7 @@ const unconfirmedOddsLedProtectedWindows = sum(
 );
 
 const report = {
-  version: 1,
+  version: 2,
   status: "AWAITING_PUBLIC_CLAIM_APPROVAL",
   network: "solana-mainnet",
   approvedConfigHash,
@@ -84,6 +84,24 @@ const report = {
     provisionalEventProtectedWindows: sum(
       fixtures.map(
         (fixture) => fixture.metrics.provisionalEventProtectedWindows,
+      ),
+    ),
+    preResolutionRepricesInvalidated: sum(
+      fixtures.map(
+        (fixture) => fixture.metrics.preResolutionRepricesInvalidated,
+      ),
+    ),
+    postResolutionCertifiedReopens: sum(
+      fixtures.map((fixture) => fixture.metrics.postResolutionCertifiedReopens),
+    ),
+    confirmedResolutionCertifiedReopens: sum(
+      fixtures.map(
+        (fixture) => fixture.metrics.confirmedResolutionCertifiedReopens,
+      ),
+    ),
+    discardedResolutionCertifiedReopens: sum(
+      fixtures.map(
+        (fixture) => fixture.metrics.discardedResolutionCertifiedReopens,
       ),
     ),
   },

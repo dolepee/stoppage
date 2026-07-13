@@ -5,6 +5,7 @@ const hash = `0x${"a".repeat(64)}`;
 
 function claim() {
   return {
+    version: 3,
     status: "AVAILABLE",
     network: "solana-mainnet",
     approvedConfigHash: hash,
@@ -17,10 +18,16 @@ function claim() {
       completeProtectedWindows: 18,
       staleQuoteSeconds: 1853.723,
       mispricingIntegral: 302.499,
+      preResolutionRepricesInvalidated: 11,
+      postResolutionCertifiedReopens: 18,
+      confirmedResolutionCertifiedReopens: 14,
+      discardedResolutionCertifiedReopens: 4,
     },
     lifecycleEvidence: {
+      policyRevision: 2,
       lifecycleDurationMs: 169636,
       maximumProbabilityMove: 0.762,
+      preResolutionRepricesInvalidated: 1,
       txlineValidation: {
         transactionSignature: "3".repeat(64),
         explorer: `https://solscan.io/tx/${"3".repeat(64)}`,
@@ -32,6 +39,22 @@ function claim() {
           fromMode: "OPEN",
           toMode: "SUSPENDED",
           elapsedMs: 0,
+          receiptHash: hash,
+        },
+        {
+          action: "REPRICE",
+          trigger: "EVENT_BEFORE_REPRICE",
+          fromMode: "SUSPENDED",
+          toMode: "REPRICED",
+          elapsedMs: 80_000,
+          receiptHash: hash,
+        },
+        {
+          action: "INVALIDATE_REPRICE",
+          trigger: "RESOLUTION_DISCARDED",
+          fromMode: "REPRICED",
+          toMode: "SUSPENDED",
+          elapsedMs: 90_000,
           receiptHash: hash,
         },
         {
@@ -64,7 +87,7 @@ describe("parsePublicClaim", () => {
     const value = claim();
     value.lifecycleEvidence.decisions.reverse();
     expect(() => parsePublicClaim(value)).toThrow(
-      "Lifecycle must be SUSPEND, REPRICE, REOPEN",
+      "Lifecycle must invalidate a provisional reprice",
     );
   });
 

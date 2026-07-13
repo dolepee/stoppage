@@ -143,6 +143,9 @@ export class StoppageRuntime {
       if (receipt.body.action === "ENTER_FAILSAFE") {
         this.#metrics.failoverCount += 1;
       }
+      if (receipt.body.action === "INVALIDATE_REPRICE") {
+        this.#metrics.invalidatedReprices += 1;
+      }
     }
   }
 
@@ -209,6 +212,7 @@ function emptyMetrics(): RuntimeMetrics {
     staleQuoteSeconds: null,
     mispricingIntegral: null,
     maximumProbabilityDivergence: null,
+    invalidatedReprices: 0,
     failoverCount: 0,
   };
 }
