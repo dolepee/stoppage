@@ -34,6 +34,7 @@ import type {
   Selection,
 } from "./types";
 import { parsePublicClaim, type PublicClaim } from "./public-claim";
+import { resolveRuntimeMode } from "./runtime-mode";
 import "./styles.css";
 
 const selections: Array<{ key: Selection; label: string }> = [
@@ -44,6 +45,7 @@ const selections: Array<{ key: Selection; label: string }> = [
 
 type ConnectionMode = "connecting" | "live" | "local" | "offline";
 type ClaimStatus = "loading" | "available" | "unavailable";
+const runtimeMode = resolveRuntimeMode(import.meta.env.VITE_RUNTIME_MODE);
 
 function App() {
   const [snapshot, setSnapshot] = useState<RuntimeSnapshot | null>(null);
@@ -70,6 +72,19 @@ function App() {
       source?.close();
     };
 
+    const cleanup = () => {
+      active = false;
+      source?.close();
+      unsubscribeLocal?.();
+      localRuntime.current?.stop();
+      localRuntime.current = null;
+    };
+
+    if (runtimeMode === "local") {
+      enableLocalJudgeMode();
+      return cleanup;
+    }
+
     void fetch("/api/status")
       .then((response) => {
         if (!response.ok) throw new Error(`Status failed: ${response.status}`);
@@ -95,13 +110,7 @@ function App() {
       else enableLocalJudgeMode();
     };
 
-    return () => {
-      active = false;
-      source?.close();
-      unsubscribeLocal?.();
-      localRuntime.current?.stop();
-      localRuntime.current = null;
-    };
+    return cleanup;
   }, []);
 
   useEffect(() => {

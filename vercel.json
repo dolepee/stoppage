@@ -1,7 +1,7 @@
 {
   "framework": null,
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm build:web",
+  "buildCommand": "VITE_RUNTIME_MODE=local pnpm build:web",
   "outputDirectory": "dist/public",
   "headers": [
     {
