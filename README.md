@@ -78,10 +78,10 @@ expiry.
 
 The reference agent verifies the permit immediately before its simulated
 publish. A new quote, event, resolution, receipt, stream failure, sequence,
-policy, or expiry revokes the previous permit. The candidate permit TTL is five
+policy, or expiry revokes the previous permit. The approved permit TTL is five
 seconds, approximately five measured median quote intervals; quote and sequence
-changes still revoke immediately. This parameter remains subject to the final
-human publication checkpoint.
+changes still revoke immediately. This exact parameter shipped in the
+human-approved release manifest.
 
 ```bash
 pnpm gate:verify
@@ -228,8 +228,8 @@ disk, injects `TXLINE_API_TOKEN` only through the host secret environment, and
 fails `/api/host-health` with HTTP 503 when the worker state is stale or either
 required feed is unhealthy. The console displays live-worker status only when
 the same application runtime can read real state; the static judge build does
-not substitute demo uptime. A hosted URL and uptime claim remain pending until
-the service has been created and observed live.
+not substitute demo uptime. No persistent cloud-worker URL or cloud-uptime
+claim is made; the blueprint is deployability evidence only.
 
 ## Policy
 
