@@ -6,7 +6,7 @@ import {
   TOKEN_2022_PROGRAM_ID,
   createAssociatedTokenAccountInstruction,
   getAssociatedTokenAddressSync,
-} from "@solana/spl-token";
+} from "../src/solana/associated-token.js";
 import {
   Connection,
   Keypair,
