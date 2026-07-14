@@ -124,15 +124,13 @@ time,
 
 .brand,
 .topbar-nav,
-.connection-pill,
 .eyebrow-row,
 .command-actions,
 .selection-label,
 .section-heading,
 .proof-action,
 .proof-note,
-.system-status,
-footer > div {
+.system-status {
   display: flex;
   align-items: center;
 }
@@ -169,17 +167,9 @@ footer > div {
   font-size: 9px;
 }
 
-.topbar-actions {
-  min-width: 0;
-  margin-left: auto;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 22px;
-}
-
 .topbar-nav {
   min-width: 0;
+  margin-left: auto;
   justify-content: flex-end;
   gap: 22px;
   flex-wrap: nowrap;
@@ -201,38 +191,6 @@ footer > div {
 .topbar-nav a[aria-current="page"] {
   color: #ffffff;
   border-bottom-color: var(--mint-bright);
-}
-
-.connection-pill {
-  min-width: 0;
-  flex: 0 0 auto;
-  gap: 8px;
-  padding-left: 20px;
-  border-left: 1px solid #263632;
-  color: #a9b5b0;
-  font-size: 10px;
-}
-
-.connection-pill > span {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 auto;
-  border-radius: 50%;
-  background: #78847f;
-}
-
-.connection-pill.live > span {
-  background: #66dc92;
-  box-shadow: 0 0 0 4px rgba(102, 220, 146, 0.12);
-}
-
-.connection-pill.local > span {
-  background: var(--mint-bright);
-  box-shadow: 0 0 0 4px rgba(66, 221, 183, 0.12);
-}
-
-.connection-pill.offline > span {
-  background: #ff756f;
 }
 
 .command-band {
@@ -1930,28 +1888,140 @@ footer > div {
 
 footer {
   width: 100%;
-  min-height: 86px;
-  padding: 0 max(32px, calc((100% - 1416px) / 2));
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 30px;
   border-top: 1px solid #1d2c28;
   color: #71807b;
   background: var(--night);
   font-size: 9px;
 }
 
-footer > div {
+.footer-inner {
+  width: min(1480px, 100%);
+  margin: 0 auto;
+  padding: 24px 32px 26px;
+  display: grid;
+  gap: 18px;
+}
+
+.footer-topline,
+.footer-meta,
+.footer-brand,
+.footer-links,
+.footer-runtime,
+.footer-config {
+  display: flex;
+  align-items: center;
+}
+
+.footer-topline,
+.footer-meta {
+  justify-content: space-between;
+  gap: 30px;
+}
+
+.footer-topline {
+  padding-bottom: 18px;
+  border-bottom: 1px solid #1d2c28;
+}
+
+.footer-brand {
   min-width: 0;
-  gap: 12px;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
 }
 
-footer strong {
+.footer-brand strong {
   color: #dbe5e0;
+  font-size: 12px;
 }
 
-footer code {
+.footer-brand span {
+  color: #71807b;
+  font-size: 9px;
+}
+
+.footer-links {
+  min-width: 0;
+  justify-content: flex-end;
+  gap: 18px;
+}
+
+.footer-links > span {
+  color: #61716b;
+  font-size: 8px;
+  font-weight: 740;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.footer-links a {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #aebbb6;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+.footer-links a:hover,
+.footer-links a:focus-visible {
+  color: var(--mint-bright);
+}
+
+.footer-runtime {
+  min-width: 0;
+  gap: 10px;
+}
+
+.footer-runtime-dot {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #78847f;
+}
+
+.footer-runtime.live .footer-runtime-dot {
+  background: #66dc92;
+  box-shadow: 0 0 0 4px rgba(102, 220, 146, 0.12);
+}
+
+.footer-runtime.local .footer-runtime-dot {
+  background: var(--mint-bright);
+  box-shadow: 0 0 0 4px rgba(66, 221, 183, 0.12);
+}
+
+.footer-runtime.offline .footer-runtime-dot {
+  background: #ff756f;
+}
+
+.footer-runtime > div {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.footer-runtime strong {
+  color: #dbe5e0;
+  font-size: 10px;
+}
+
+.footer-runtime > div span {
+  color: #71807b;
+  font-size: 9px;
+}
+
+.footer-config {
+  min-width: 0;
+  margin-left: auto;
+  justify-content: flex-end;
+  gap: 12px;
+  text-align: right;
+}
+
+.footer-config code {
+  color: #8a9993;
   overflow-wrap: anywhere;
 }
 
@@ -1993,10 +2063,6 @@ main h1:focus {
     gap: 16px;
   }
 
-  .topbar-nav a:nth-child(6) {
-    display: none;
-  }
-
   .command-inner {
     grid-template-columns: minmax(350px, 0.75fr) minmax(0, 1.25fr);
   }
@@ -2022,10 +2088,6 @@ main h1:focus {
 @media (max-width: 920px) {
   .topbar-inner {
     padding: 0 20px;
-  }
-
-  .topbar-nav a:nth-child(5) {
-    display: none;
   }
 
   .command-inner {
@@ -2143,13 +2205,8 @@ main h1:focus {
   }
 
   .brand-version,
-  .topbar-nav a:nth-child(1),
-  .topbar-nav a:nth-child(4) {
+  .topbar-nav a:nth-child(1) {
     display: none;
-  }
-
-  .topbar-actions {
-    gap: 10px;
   }
 
   .topbar-nav {
@@ -2159,11 +2216,6 @@ main h1:focus {
   .topbar-nav a {
     min-height: 32px;
     font-size: 9px;
-  }
-
-  .connection-pill {
-    padding-left: 10px;
-    font-size: 0;
   }
 
   .product-copy {
@@ -2497,14 +2549,37 @@ main h1:focus {
 
   footer {
     min-height: 0;
-    padding: 22px 16px 28px;
-    align-items: flex-start;
-    flex-direction: column;
   }
 
-  footer > div {
+  .footer-inner {
+    padding: 24px 16px 28px;
+  }
+
+  .footer-topline,
+  .footer-meta {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .footer-links {
+    justify-content: flex-start;
     align-items: flex-start;
     flex-wrap: wrap;
+    gap: 8px 18px;
+  }
+
+  .footer-links > span {
+    width: 100%;
+  }
+
+  .footer-config {
+    margin-left: 0;
+    align-items: flex-start;
+    justify-content: flex-start;
+    flex-direction: column;
+    gap: 5px;
+    text-align: left;
   }
 }
 

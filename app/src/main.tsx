@@ -246,21 +246,16 @@ function App() {
 
   const isRunning = snapshot.replayStatus === "RUNNING";
   const hasRun = snapshot.timeline.length > 0;
-  const liveConnectionLabel =
-    connection === "live"
-      ? "Live stream"
-      : connection === "local"
-        ? "Judge mode"
-        : connection;
+  const runtimeBadgeLabel = getRuntimeTitle(connection);
 
   return (
     <div className="shell">
-      <Header connection={connection} route={route} />
+      <Header route={route} />
       <main>
         {route === "/" ? (
           <ControlPage
             snapshot={snapshot}
-            connectionLabel={liveConnectionLabel}
+            connectionLabel={runtimeBadgeLabel}
             claim={publicClaim}
             claimStatus={claimStatus}
             workerHealth={workerHealth}
@@ -284,7 +279,7 @@ function App() {
           />
         )}
       </main>
-      <Footer snapshot={snapshot} />
+      <Footer snapshot={snapshot} connection={connection} />
     </div>
   );
 }
@@ -369,7 +364,7 @@ function ControlPage({
                   ? "Stop replay"
                   : hasRun
                     ? "Run again"
-                    : "Run judge replay"}
+                    : "Run demo replay"}
               </button>
               <AppLink className="secondary-action" to="/evidence">
                 Inspect evidence <FileCheck2 size={16} aria-hidden="true" />
@@ -517,9 +512,7 @@ function SystemPage({
         <div className="page-status-block">
           <span>Current gate</span>
           <strong>{snapshot.mode}</strong>
-          <small>
-            {connection === "live" ? "Live runtime" : "Judge runtime"}
-          </small>
+          <small>{getRuntimeDescription(connection)}</small>
         </div>
       </PageIntro>
 
@@ -1041,19 +1034,7 @@ function ApprovedEvidencePanel({
   );
 }
 
-function Header({
-  connection,
-  route,
-}: {
-  connection: ConnectionMode;
-  route: AppRoute;
-}) {
-  const modeLabel =
-    connection === "live"
-      ? "Live"
-      : connection === "local"
-        ? "Judge mode"
-        : "Offline";
+function Header({ route }: { route: AppRoute }) {
   return (
     <header className="topbar">
       <div className="topbar-inner">
@@ -1066,50 +1047,23 @@ function Header({
             <span className="brand-version">R2</span>
           </AppLink>
         </div>
-        <div className="topbar-actions">
-          <nav aria-label="Primary navigation" className="topbar-nav">
-            <AppLink to="/" aria-current={route === "/" ? "page" : undefined}>
-              Control
-            </AppLink>
-            <AppLink
-              to="/evidence"
-              aria-current={route === "/evidence" ? "page" : undefined}
-            >
-              Evidence
-            </AppLink>
-            <AppLink
-              to="/system"
-              aria-current={route === "/system" ? "page" : undefined}
-            >
-              System
-            </AppLink>
-            <a
-              href="https://github.com/dolepee/stoppage"
-              target="_blank"
-              rel="noreferrer"
-            >
-              GitHub <ExternalLink size={13} aria-hidden="true" />
-            </a>
-            <a
-              href="https://txline.txodds.com/documentation/worldcup"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Docs <ExternalLink size={13} aria-hidden="true" />
-            </a>
-            <a
-              href="https://solscan.io/account/9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA"
-              target="_blank"
-              rel="noreferrer"
-            >
-              Mainnet program <ExternalLink size={13} aria-hidden="true" />
-            </a>
-          </nav>
-          <div className={`connection-pill ${connection}`} role="status">
-            <span />
-            {modeLabel}
-          </div>
-        </div>
+        <nav aria-label="Primary navigation" className="topbar-nav">
+          <AppLink to="/" aria-current={route === "/" ? "page" : undefined}>
+            Control
+          </AppLink>
+          <AppLink
+            to="/evidence"
+            aria-current={route === "/evidence" ? "page" : undefined}
+          >
+            Evidence
+          </AppLink>
+          <AppLink
+            to="/system"
+            aria-current={route === "/system" ? "page" : undefined}
+          >
+            System
+          </AppLink>
+        </nav>
       </div>
     </header>
   );
@@ -1700,16 +1654,79 @@ function formatAge(ageMs: number) {
   return `${Math.floor(ageMs / 60_000)}m ago`;
 }
 
-function Footer({ snapshot }: { snapshot: RuntimeSnapshot }) {
+function getRuntimeTitle(connection: ConnectionMode) {
+  if (connection === "live") return "Live TxLINE runtime";
+  if (connection === "local") return "Synthetic demo";
+  if (connection === "offline") return "Runtime offline";
+  return "Connecting";
+}
+
+function getRuntimeDescription(connection: ConnectionMode) {
+  if (connection === "live") {
+    return "Connected to live scores and consensus odds streams.";
+  }
+  if (connection === "local") {
+    return "Deterministic replay · no live market feed.";
+  }
+  if (connection === "offline") {
+    return "Showing the last available state; execution stays fail-closed.";
+  }
+  return "Checking for a live runtime.";
+}
+
+function Footer({
+  snapshot,
+  connection,
+}: {
+  snapshot: RuntimeSnapshot;
+  connection: ConnectionMode;
+}) {
   return (
     <footer>
-      <div>
-        <strong>Stoppage</strong>
-        <span>VAR-aware market control driven by TxLINE</span>
-      </div>
-      <div>
-        <span>{snapshot.dataDescription}</span>
-        <code>{shortHash(snapshot.configHash)}</code>
+      <div className="footer-inner">
+        <div className="footer-topline">
+          <div className="footer-brand">
+            <strong>Stoppage</strong>
+            <span>VAR-aware market control driven by TxLINE</span>
+          </div>
+          <nav className="footer-links" aria-label="Proof and resources">
+            <span>Proof &amp; resources</span>
+            <a
+              href="https://github.com/dolepee/stoppage"
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub <ExternalLink size={12} aria-hidden="true" />
+            </a>
+            <a
+              href="https://txline.txodds.com/documentation/worldcup"
+              target="_blank"
+              rel="noreferrer"
+            >
+              TxLINE docs <ExternalLink size={12} aria-hidden="true" />
+            </a>
+            <a
+              href="https://solscan.io/account/9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Solana program <ExternalLink size={12} aria-hidden="true" />
+            </a>
+          </nav>
+        </div>
+        <div className="footer-meta">
+          <div className={`footer-runtime ${connection}`} role="status">
+            <span className="footer-runtime-dot" aria-hidden="true" />
+            <div>
+              <strong>{getRuntimeTitle(connection)}</strong>
+              <span>{getRuntimeDescription(connection)}</span>
+            </div>
+          </div>
+          <div className="footer-config">
+            <span>{snapshot.dataDescription}</span>
+            <code>{shortHash(snapshot.configHash)}</code>
+          </div>
+        </div>
       </div>
     </footer>
   );

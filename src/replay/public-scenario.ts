@@ -14,7 +14,7 @@ export const publicJudgeScenario: ReplayScenario = {
   label: "VAR branch invalidation",
   dataMode: "SYNTHETIC",
   description:
-    "A deterministic normalized fixture for judge-mode testing. It contains no TxLINE raw data.",
+    "A deterministic normalized fixture for interactive demo testing. It contains no TxLINE raw data.",
   match: {
     fixtureId,
     home: "Northbridge",
