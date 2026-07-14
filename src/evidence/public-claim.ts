@@ -415,7 +415,7 @@ function assertLifecycleCandidate(value: PublicLifecycleCandidate) {
   const finalRepriceIndex = actions.lastIndexOf("REPRICE");
   if (
     actions[0] !== "SUSPEND" ||
-    actions.at(-1) !== "REOPEN" ||
+    actions[actions.length - 1] !== "REOPEN" ||
     invalidationIndex <= 0 ||
     !actions.slice(0, invalidationIndex).includes("REPRICE") ||
     finalRepriceIndex <= invalidationIndex ||
@@ -440,7 +440,8 @@ function assertLifecycleCandidate(value: PublicLifecycleCandidate) {
       (decision, index) =>
         index > 0 && decision.elapsedMs < value.decisions[index - 1]!.elapsedMs,
     ) ||
-    value.decisions.at(-1)?.elapsedMs !== value.lifecycleDurationMs
+    value.decisions[value.decisions.length - 1]?.elapsedMs !==
+      value.lifecycleDurationMs
   ) {
     throw new Error("Lifecycle decision timing is inconsistent");
   }
