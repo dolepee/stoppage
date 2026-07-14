@@ -77,7 +77,7 @@ function App() {
     let unsubscribeLocal: (() => boolean) | null = null;
     let source: EventSource | null = null;
 
-    const enableLocalJudgeMode = () => {
+    const enableLocalSimulation = () => {
       if (!active || backendReady || localRuntime.current) return;
       const runtime = new StoppageRuntime(publicJudgeScenario);
       localRuntime.current = runtime;
@@ -96,7 +96,7 @@ function App() {
     };
 
     if (runtimeMode === "local") {
-      enableLocalJudgeMode();
+      enableLocalSimulation();
       return cleanup;
     }
 
@@ -110,7 +110,7 @@ function App() {
         backendReady = true;
         setSnapshot(next);
       })
-      .catch(enableLocalJudgeMode);
+      .catch(enableLocalSimulation);
 
     source = new EventSource("/api/events");
     source.addEventListener("snapshot", (event) => {
@@ -122,7 +122,7 @@ function App() {
     });
     source.onerror = () => {
       if (backendReady) setConnection("offline");
-      else enableLocalJudgeMode();
+      else enableLocalSimulation();
     };
 
     return cleanup;
@@ -492,22 +492,27 @@ function ControlPage({
         <div className="command-inner">
           <div className="product-copy">
             <div className="eyebrow-row">
-              <span className="eyebrow">Interactive execution replay</span>
+              <span className="eyebrow">Interactive execution simulation</span>
               <DataMode mode={snapshot.dataMode} />
             </div>
             <h1 id="product-title" tabIndex={-1}>
               Execution demo
             </h1>
             <p className="product-lede">
-              Run a normalized goal-and-VAR scenario. Watch the baseline keep
-              publishing while the governed agent blocks the dead branch and
-              waits for a receipt-bound reopen.
+              Run a synthetic World Cup goal-and-VAR what-if. France and Spain
+              provide recognizable match context; every incident and probability
+              is simulated, not live. Watch the governed agent block the dead
+              branch and wait for a receipt-bound reopen.
             </p>
             <div className="hero-meta">
               <span>
                 {snapshot.match.home} vs {snapshot.match.away}
               </span>
-              <span>Fixture {snapshot.match.fixtureId}</span>
+              <span>
+                {snapshot.dataMode === "SYNTHETIC"
+                  ? "What-if scenario"
+                  : `Fixture ${snapshot.match.fixtureId}`}
+              </span>
               <span>{connectionLabel}</span>
             </div>
             <div className="failure-case">
@@ -536,10 +541,10 @@ function ControlPage({
                   <Play size={17} aria-hidden="true" />
                 )}
                 {isRunning
-                  ? "Stop replay"
+                  ? "Stop simulation"
                   : hasRun
                     ? "Run again"
-                    : "Run demo replay"}
+                    : "Run simulation"}
               </button>
               <AppLink className="secondary-action" to="/evidence">
                 Inspect evidence <FileCheck2 size={16} aria-hidden="true" />
@@ -560,10 +565,21 @@ function ControlPage({
       <ApprovedEvidenceBand claim={claim} status={claimStatus} />
 
       <div className="workspace" id="operations">
-        <section className="match-strip" aria-label="Current fixture">
+        <section
+          className="match-strip"
+          aria-label={
+            snapshot.dataMode === "SYNTHETIC"
+              ? "Simulated match scenario"
+              : "Recorded fixture"
+          }
+        >
           <div className="match-meta">
             <span>{snapshot.match.competition}</span>
-            <strong>Fixture {snapshot.match.fixtureId}</strong>
+            <strong>
+              {snapshot.dataMode === "SYNTHETIC"
+                ? "Not actual match data"
+                : `Fixture ${snapshot.match.fixtureId}`}
+            </strong>
           </div>
           <div className="versus">
             <strong>{snapshot.match.home}</strong>
@@ -571,7 +587,7 @@ function ControlPage({
             <strong>{snapshot.match.away}</strong>
           </div>
           <div className="replay-clock">
-            <span>Replay clock</span>
+            <span>Simulation clock</span>
             <strong>{formatReplayClock(snapshot.replayElapsedMs)}</strong>
           </div>
         </section>
@@ -929,7 +945,7 @@ function SystemHealthStrip({
         label="Scores input"
         value={
           snapshot.dataMode === "SYNTHETIC"
-            ? "Synthetic replay"
+            ? "Simulated input"
             : snapshot.streamHealth.scores
               ? "TxLINE healthy"
               : "TxLINE degraded"
@@ -941,7 +957,7 @@ function SystemHealthStrip({
         label="Odds input"
         value={
           snapshot.dataMode === "SYNTHETIC"
-            ? "Synthetic replay"
+            ? "Simulated input"
             : snapshot.streamHealth.odds
               ? "TxLINE healthy"
               : "TxLINE degraded"
@@ -1121,8 +1137,8 @@ function ApprovedEvidencePanel({
           <span>Approved public evidence</span>
           <h2>Resolution-aware holdout</h2>
           <p>
-            The replay above is publicly reproducible. These separately approved
-            aggregates come from private licensed captures across{" "}
+            The simulation above is publicly reproducible. These separately
+            approved aggregates come from private licensed captures across{" "}
             {claim.holdout.fixtures} held-out TxLINE mainnet fixtures under the
             same revision-2 policy hash.
           </p>
@@ -1312,7 +1328,7 @@ function resolveAppRoute(): AppRoute {
 function DataMode({ mode }: { mode: RuntimeSnapshot["dataMode"] }) {
   return (
     <span className={`data-mode ${mode.toLowerCase()}`}>
-      {mode === "SYNTHETIC" ? "Synthetic fixture" : "TxLINE replay"}
+      {mode === "SYNTHETIC" ? "Simulated · not live" : "Recorded TxLINE replay"}
     </span>
   );
 }
@@ -1611,7 +1627,7 @@ function Timeline({ snapshot }: { snapshot: RuntimeSnapshot }) {
             </div>
           ))
         ) : (
-          <EmptyRows label="Replay has not started" />
+          <EmptyRows label="Simulation has not started" />
         )}
       </div>
     </section>
@@ -1838,7 +1854,7 @@ function formatAge(ageMs: number) {
 
 function getRuntimeTitle(connection: ConnectionMode) {
   if (connection === "live") return "Live TxLINE runtime";
-  if (connection === "local") return "Synthetic demo";
+  if (connection === "local") return "Simulation mode";
   if (connection === "offline") return "Runtime offline";
   return "Connecting";
 }
@@ -1848,7 +1864,7 @@ function getRuntimeDescription(connection: ConnectionMode) {
     return "Connected to live scores and consensus odds streams.";
   }
   if (connection === "local") {
-    return "Deterministic replay · no live market feed.";
+    return "World Cup what-if · no live scores or odds.";
   }
   if (connection === "offline") {
     return "Showing the last available state; execution stays fail-closed.";

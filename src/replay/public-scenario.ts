@@ -6,20 +6,20 @@ import type {
 } from "../domain/types.js";
 import type { ReplayScenario } from "./types.js";
 
-const baseTs = Date.UTC(2026, 6, 10, 18, 0, 0);
+const baseTs = Date.UTC(2026, 6, 14, 20, 8, 0);
 const fixtureId = 9_000_001;
 
 export const publicJudgeScenario: ReplayScenario = {
-  id: "synthetic-var-overturn-v2",
-  label: "VAR branch invalidation",
+  id: "synthetic-world-cup-var-what-if-v3",
+  label: "World Cup VAR what-if · simulated",
   dataMode: "SYNTHETIC",
   description:
-    "A deterministic normalized fixture for interactive demo testing. It contains no TxLINE raw data.",
+    "A deterministic World Cup 2026 what-if using France and Spain as recognizable context. Every incident and probability is simulated; this is not live data or a replay of the real match.",
   match: {
     fixtureId,
-    home: "Northbridge",
-    away: "Eastport",
-    competition: "Stoppage systems test",
+    home: "France",
+    away: "Spain",
+    competition: "World Cup 2026 · what-if simulation",
     kickoffTs: baseTs - 68 * 60_000,
   },
   initialProbability: vector(0.45, 0.28, 0.27),
