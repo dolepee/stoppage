@@ -54,7 +54,7 @@ const selections: Array<{ key: Selection; label: string }> = [
 
 type ConnectionMode = "connecting" | "live" | "local" | "offline";
 type ClaimStatus = "loading" | "available" | "unavailable";
-type AppRoute = "/" | "/evidence" | "/system";
+type AppRoute = "/" | "/demo" | "/evidence" | "/system";
 const runtimeMode = resolveRuntimeMode(import.meta.env.VITE_RUNTIME_MODE);
 const navigationEvent = "stoppage:navigate";
 
@@ -229,7 +229,8 @@ function App() {
 
   useEffect(() => {
     const labels: Record<AppRoute, string> = {
-      "/": "Control",
+      "/": "Home",
+      "/demo": "Demo",
       "/evidence": "Evidence",
       "/system": "System",
     };
@@ -253,6 +254,12 @@ function App() {
       <Header route={route} />
       <main>
         {route === "/" ? (
+          <HomePage
+            snapshot={snapshot}
+            claim={publicClaim}
+            claimStatus={claimStatus}
+          />
+        ) : route === "/demo" ? (
           <ControlPage
             snapshot={snapshot}
             connectionLabel={runtimeBadgeLabel}
@@ -281,6 +288,174 @@ function App() {
       </main>
       <Footer snapshot={snapshot} connection={connection} />
     </div>
+  );
+}
+
+function HomePage({
+  snapshot,
+  claim,
+  claimStatus,
+}: {
+  snapshot: RuntimeSnapshot;
+  claim: PublicClaim | null;
+  claimStatus: ClaimStatus;
+}) {
+  return (
+    <>
+      <section className="home-hero" aria-labelledby="home-title">
+        <div className="home-hero-inner">
+          <div className="home-copy">
+            <div className="eyebrow-row">
+              <span className="eyebrow">
+                Execution firewall for trading agents
+              </span>
+              <DataMode mode={snapshot.dataMode} />
+            </div>
+            <h1 id="home-title" tabIndex={-1}>
+              Block the wrong branch. <span>Permit the fresh quote.</span>
+            </h1>
+            <p className="home-lede">
+              Stoppage sits between TxLINE consensus and an automated
+              market-maker. It suspends execution through reversible in-play
+              events, then reopens only when post-resolution consensus is fresh.
+            </p>
+            <div className="home-actions">
+              <AppLink className="primary-action" to="/demo">
+                Launch demo <ArrowRight size={16} aria-hidden="true" />
+              </AppLink>
+              <AppLink className="secondary-action" to="/evidence">
+                Inspect evidence <FileCheck2 size={16} aria-hidden="true" />
+              </AppLink>
+            </div>
+            <ul className="home-trust-list" aria-label="Core guarantees">
+              <li>
+                <LockKeyhole size={15} aria-hidden="true" />
+                Fail-closed
+              </li>
+              <li>
+                <Cpu size={15} aria-hidden="true" />
+                Deterministic
+              </li>
+              <li>
+                <ShieldCheck size={15} aria-hidden="true" />
+                Solana-validated
+              </li>
+            </ul>
+          </div>
+
+          <section
+            className="home-incident-panel"
+            aria-labelledby="home-incident-title"
+          >
+            <div className="home-panel-heading">
+              <span>Failure window</span>
+              <h2 id="home-incident-title">One event. Two price branches.</h2>
+              <p>
+                The baseline keeps publishing. Stoppage closes the governed path
+                until the resolved branch is safe.
+              </p>
+            </div>
+            <ol className="home-incident-path">
+              <li>
+                <span>01</span>
+                <div>
+                  <small>Market event</small>
+                  <strong>Provisional goal</strong>
+                </div>
+                <code>PRICE MOVES</code>
+              </li>
+              <li className="invalidated">
+                <span>02</span>
+                <div>
+                  <small>VAR resolution</small>
+                  <strong>Goal overturned</strong>
+                </div>
+                <code>BRANCH DEAD</code>
+              </li>
+              <li className="blocked">
+                <span>03</span>
+                <div>
+                  <small>Agent request</small>
+                  <strong>Publish quote</strong>
+                </div>
+                <code>BLOCK</code>
+              </li>
+            </ol>
+            <div className="home-block-verdict">
+              <span aria-hidden="true">
+                <ShieldCheck size={20} />
+              </span>
+              <div>
+                <small>Execution decision</small>
+                <strong>Unsafe quote withheld</strong>
+                <span>No permit reaches the market-maker.</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <ApprovedEvidenceBand claim={claim} status={claimStatus} />
+
+      <section className="home-how" aria-labelledby="home-how-title">
+        <div className="home-how-inner">
+          <div className="home-section-heading">
+            <div>
+              <span>Resolution-aware control</span>
+              <h2 id="home-how-title">
+                Three gates between signal and execution.
+              </h2>
+            </div>
+            <p>
+              Every transition is deterministic, receipt-bound, and inspectable.
+              No LLM decides whether a quote can publish.
+            </p>
+          </div>
+          <ol className="home-steps">
+            <li>
+              <span>01</span>
+              <LockKeyhole size={19} aria-hidden="true" />
+              <h3>Suspend on incident</h3>
+              <p>
+                Goals, penalties, cards, VAR signals, and unhealthy streams
+                close execution before the next quote can escape.
+              </p>
+            </li>
+            <li>
+              <span>02</span>
+              <GitBranch size={19} aria-hidden="true" />
+              <h3>Invalidate the dead branch</h3>
+              <p>
+                A confirmation or overturn clears provisional consensus and
+                rejects late quotes tied to the old state.
+              </p>
+            </li>
+            <li>
+              <span>03</span>
+              <FileCheck2 size={19} aria-hidden="true" />
+              <h3>Certify the reopen</h3>
+              <p>
+                Fresh post-resolution updates and the safety delay must pass
+                before a config-bound permit is emitted.
+              </p>
+            </li>
+          </ol>
+          <div className="home-next-actions">
+            <span>
+              See the complete lifecycle or inspect every release gate.
+            </span>
+            <div>
+              <AppLink to="/demo">
+                Open demo <ArrowRight size={14} aria-hidden="true" />
+              </AppLink>
+              <AppLink to="/system">
+                View system <ArrowRight size={14} aria-hidden="true" />
+              </AppLink>
+            </div>
+          </div>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -317,16 +492,16 @@ function ControlPage({
         <div className="command-inner">
           <div className="product-copy">
             <div className="eyebrow-row">
-              <span className="eyebrow">Market execution control</span>
+              <span className="eyebrow">Interactive execution replay</span>
               <DataMode mode={snapshot.dataMode} />
             </div>
             <h1 id="product-title" tabIndex={-1}>
-              Stoppage
+              Execution demo
             </h1>
             <p className="product-lede">
-              A provisional goal moves the market. VAR reverses it. Stoppage
-              keeps trading agents off the dead price branch until fresh TxLINE
-              consensus authorizes the reopen.
+              Run a normalized goal-and-VAR scenario. Watch the baseline keep
+              publishing while the governed agent blocks the dead branch and
+              waits for a receipt-bound reopen.
             </p>
             <div className="hero-meta">
               <span>
@@ -461,7 +636,7 @@ function EvidencePage({
   return (
     <>
       <PageIntro
-        index="02"
+        index="03"
         eyebrow="Independent verification"
         title="Evidence"
         description="Approved holdout aggregates, receipt-bound lifecycle decisions, and TxLINE's own Solana validation path in one audit surface."
@@ -504,7 +679,7 @@ function SystemPage({
   return (
     <>
       <PageIntro
-        index="03"
+        index="04"
         eyebrow="Runtime and controls"
         title="System"
         description="The deterministic path from TxLINE market inputs to an agent permit, including the exact conditions that keep execution closed."
@@ -1039,7 +1214,7 @@ function Header({ route }: { route: AppRoute }) {
     <header className="topbar">
       <div className="topbar-inner">
         <div className="brand">
-          <AppLink className="brand-link" to="/" aria-label="Stoppage control">
+          <AppLink className="brand-link" to="/" aria-label="Stoppage home">
             <span className="brand-mark">
               <ShieldCheck size={17} aria-hidden="true" />
             </span>
@@ -1049,7 +1224,13 @@ function Header({ route }: { route: AppRoute }) {
         </div>
         <nav aria-label="Primary navigation" className="topbar-nav">
           <AppLink to="/" aria-current={route === "/" ? "page" : undefined}>
-            Control
+            Home
+          </AppLink>
+          <AppLink
+            to="/demo"
+            aria-current={route === "/demo" ? "page" : undefined}
+          >
+            Demo
           </AppLink>
           <AppLink
             to="/evidence"
@@ -1122,6 +1303,7 @@ function useAppRoute(): AppRoute {
 }
 
 function resolveAppRoute(): AppRoute {
+  if (window.location.pathname === "/demo") return "/demo";
   if (window.location.pathname === "/evidence") return "/evidence";
   if (window.location.pathname === "/system") return "/system";
   return "/";
