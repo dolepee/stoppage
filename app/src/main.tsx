@@ -1,17 +1,21 @@
 import {
   Activity,
   AlertTriangle,
+  ArrowRight,
   Bot,
   Check,
   CircleStop,
   Copy,
+  Cpu,
   Database,
   ExternalLink,
   FileCheck2,
+  GitBranch,
   LockKeyhole,
   Play,
   Radio,
   RotateCcw,
+  Server,
   ShieldCheck,
   TimerReset,
   Waves,
@@ -22,6 +26,8 @@ import {
   useMemo,
   useRef,
   useState,
+  type AnchorHTMLAttributes,
+  type MouseEventHandler,
   type ReactNode,
 } from "react";
 import { createRoot } from "react-dom/client";
@@ -48,7 +54,9 @@ const selections: Array<{ key: Selection; label: string }> = [
 
 type ConnectionMode = "connecting" | "live" | "local" | "offline";
 type ClaimStatus = "loading" | "available" | "unavailable";
+type AppRoute = "/" | "/evidence" | "/system";
 const runtimeMode = resolveRuntimeMode(import.meta.env.VITE_RUNTIME_MODE);
+const navigationEvent = "stoppage:navigate";
 
 function App() {
   const [snapshot, setSnapshot] = useState<RuntimeSnapshot | null>(null);
@@ -61,6 +69,7 @@ function App() {
   const [actionPending, setActionPending] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const localRuntime = useRef<StoppageRuntime | null>(null);
+  const route = useAppRoute();
 
   useEffect(() => {
     let active = true;
@@ -218,190 +227,639 @@ function App() {
     }
   }
 
+  useEffect(() => {
+    const labels: Record<AppRoute, string> = {
+      "/": "Control",
+      "/evidence": "Evidence",
+      "/system": "System",
+    };
+    document.title = `${labels[route]} · Stoppage`;
+    window.scrollTo({ top: 0, behavior: "auto" });
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>("main h1")?.focus({
+        preventScroll: true,
+      });
+    });
+  }, [route]);
+
   if (!snapshot) return <LoadingState connection={connection} />;
 
   const isRunning = snapshot.replayStatus === "RUNNING";
   const hasRun = snapshot.timeline.length > 0;
+  const liveConnectionLabel =
+    connection === "live"
+      ? "Live stream"
+      : connection === "local"
+        ? "Judge mode"
+        : connection;
 
   return (
     <div className="shell">
-      <Header connection={connection} />
+      <Header connection={connection} route={route} />
       <main>
-        <section className="command-band" aria-labelledby="product-title">
-          <div className="command-inner">
-            <div className="product-copy">
-              <div className="eyebrow-row">
-                <span className="eyebrow">Resolution-aware market control</span>
-                <DataMode mode={snapshot.dataMode} />
-              </div>
-              <h1 id="product-title">Stoppage</h1>
-              <p className="product-lede">
-                Stoppage blocks trading agents from acting on reversible in-play
-                prices, then issues a verifiable permit after fresh TxLINE
-                consensus.
-              </p>
-              <div className="failure-case">
-                <AlertTriangle size={17} aria-hidden="true" />
-                <div>
-                  <strong>Failure under test</strong>
-                  <span>
-                    A provisional goal reprices the book, then VAR overturns it.
-                    The old branch must not remain executable.
-                  </span>
-                </div>
-              </div>
-              <div className="command-actions">
-                <button
-                  className="primary-action"
-                  type="button"
-                  onClick={isRunning ? stopReplay : startReplay}
-                  disabled={actionPending}
-                  aria-busy={actionPending}
-                >
-                  {isRunning ? (
-                    <CircleStop size={17} />
-                  ) : hasRun ? (
-                    <RotateCcw size={17} />
-                  ) : (
-                    <Play size={17} />
-                  )}
-                  {isRunning
-                    ? "Stop replay"
-                    : hasRun
-                      ? "Run again"
-                      : "Run judge replay"}
-                </button>
-                <span className="scenario-name">{snapshot.scenarioLabel}</span>
-              </div>
-              {actionError ? (
-                <p className="action-error" role="alert">
-                  {actionError}
-                </p>
-              ) : null}
-            </div>
-
-            <ExecutionStage snapshot={snapshot} />
-          </div>
-        </section>
-
-        <ApprovedEvidenceBand claim={publicClaim} status={claimStatus} />
-
-        <div className="workspace">
-          <section className="match-strip" aria-label="Current fixture">
-            <div className="match-meta">
-              <span>{snapshot.match.competition}</span>
-              <strong>Fixture {snapshot.match.fixtureId}</strong>
-            </div>
-            <div className="versus">
-              <strong>{snapshot.match.home}</strong>
-              <span>vs</span>
-              <strong>{snapshot.match.away}</strong>
-            </div>
-            <div className="replay-clock">
-              <span>Replay clock</span>
-              <strong>{formatReplayClock(snapshot.replayElapsedMs)}</strong>
-            </div>
-          </section>
-
-          <section className="state-lane" aria-label="Quote lifecycle">
-            {(["OPEN", "SUSPENDED", "REPRICED", "OPEN"] as const).map(
-              (mode, index) => (
-                <div
-                  className={`state-node ${stateNodeClass(snapshot, mode, index)}`}
-                  key={`${mode}-${index}`}
-                >
-                  <span>{String(index + 1).padStart(2, "0")}</span>
-                  <strong>{index === 3 ? "REOPENED" : mode}</strong>
-                </div>
-              ),
-            )}
-          </section>
-
-          <ResolutionGate snapshot={snapshot} />
-
-          <section
-            className="market-grid"
-            aria-label="Protected and baseline books"
-          >
-            <MarketBook
-              title="Governed book"
-              subtitle="Stoppage policy applied"
-              mode={snapshot.mode}
-              probabilities={snapshot.currentProbability}
-              governed
-            />
-            <MarketBook
-              title="Unprotected baseline"
-              subtitle="Always open · follows consensus"
-              mode="OPEN"
-              probabilities={snapshot.baselineProbability}
-            />
-          </section>
-
-          <MetricBand snapshot={snapshot} />
-
-          <section className="operations-grid">
-            <Timeline snapshot={snapshot} />
-            <ProofPanel snapshot={snapshot} />
-          </section>
-
-          <section className="systems-strip" aria-label="System health">
-            <SystemStatus
-              icon={<Waves size={18} />}
-              label="Scores input"
-              value={
-                snapshot.dataMode === "SYNTHETIC"
-                  ? "Synthetic replay"
-                  : snapshot.streamHealth.scores
-                    ? "TxLINE healthy"
-                    : "TxLINE degraded"
-              }
-              healthy={snapshot.streamHealth.scores}
-            />
-            <SystemStatus
-              icon={<Radio size={18} />}
-              label="Odds input"
-              value={
-                snapshot.dataMode === "SYNTHETIC"
-                  ? "Synthetic replay"
-                  : snapshot.streamHealth.odds
-                    ? "TxLINE healthy"
-                    : "TxLINE degraded"
-              }
-              healthy={snapshot.streamHealth.odds}
-            />
-            <SystemStatus
-              icon={<Database size={18} />}
-              label="Policy engine"
-              value="Deterministic"
-              healthy
-            />
-            <SystemStatus
-              icon={<ShieldCheck size={18} />}
-              label="Network"
-              value="Solana mainnet"
-              healthy
-            />
-            {workerHealth ? (
-              <SystemStatus
-                icon={<Activity size={18} />}
-                label="Live worker"
-                value={formatWorkerHealth(workerHealth)}
-                healthy={Boolean(
-                  workerHealth.running &&
-                  workerHealth.statusFresh &&
-                  workerHealth.streamHealth?.scores &&
-                  workerHealth.streamHealth.odds,
-                )}
-              />
-            ) : null}
-          </section>
-
-          <ApprovedEvidencePanel claim={publicClaim} status={claimStatus} />
-        </div>
+        {route === "/" ? (
+          <ControlPage
+            snapshot={snapshot}
+            connectionLabel={liveConnectionLabel}
+            claim={publicClaim}
+            claimStatus={claimStatus}
+            workerHealth={workerHealth}
+            isRunning={isRunning}
+            hasRun={hasRun}
+            actionPending={actionPending}
+            actionError={actionError}
+            onReplay={isRunning ? stopReplay : startReplay}
+          />
+        ) : route === "/evidence" ? (
+          <EvidencePage
+            snapshot={snapshot}
+            claim={publicClaim}
+            claimStatus={claimStatus}
+          />
+        ) : (
+          <SystemPage
+            snapshot={snapshot}
+            connection={connection}
+            workerHealth={workerHealth}
+          />
+        )}
       </main>
       <Footer snapshot={snapshot} />
     </div>
+  );
+}
+
+function ControlPage({
+  snapshot,
+  connectionLabel,
+  claim,
+  claimStatus,
+  workerHealth,
+  isRunning,
+  hasRun,
+  actionPending,
+  actionError,
+  onReplay,
+}: {
+  snapshot: RuntimeSnapshot;
+  connectionLabel: string;
+  claim: PublicClaim | null;
+  claimStatus: ClaimStatus;
+  workerHealth: WorkerHealthSnapshot | null;
+  isRunning: boolean;
+  hasRun: boolean;
+  actionPending: boolean;
+  actionError: string | null;
+  onReplay: () => void;
+}) {
+  return (
+    <>
+      <section
+        className="command-band"
+        id="operator-console"
+        aria-labelledby="product-title"
+      >
+        <div className="command-inner">
+          <div className="product-copy">
+            <div className="eyebrow-row">
+              <span className="eyebrow">Market execution control</span>
+              <DataMode mode={snapshot.dataMode} />
+            </div>
+            <h1 id="product-title" tabIndex={-1}>
+              Stoppage
+            </h1>
+            <p className="product-lede">
+              A provisional goal moves the market. VAR reverses it. Stoppage
+              keeps trading agents off the dead price branch until fresh TxLINE
+              consensus authorizes the reopen.
+            </p>
+            <div className="hero-meta">
+              <span>
+                {snapshot.match.home} vs {snapshot.match.away}
+              </span>
+              <span>Fixture {snapshot.match.fixtureId}</span>
+              <span>{connectionLabel}</span>
+            </div>
+            <div className="failure-case">
+              <AlertTriangle size={17} aria-hidden="true" />
+              <div>
+                <strong>Risk under test</strong>
+                <span>
+                  The ungoverned agent remains executable after VAR voids the
+                  price branch. The governed agent must stay closed.
+                </span>
+              </div>
+            </div>
+            <div className="command-actions">
+              <button
+                className="primary-action"
+                type="button"
+                onClick={onReplay}
+                disabled={actionPending}
+                aria-busy={actionPending}
+              >
+                {isRunning ? (
+                  <CircleStop size={17} aria-hidden="true" />
+                ) : hasRun ? (
+                  <RotateCcw size={17} aria-hidden="true" />
+                ) : (
+                  <Play size={17} aria-hidden="true" />
+                )}
+                {isRunning
+                  ? "Stop replay"
+                  : hasRun
+                    ? "Run again"
+                    : "Run judge replay"}
+              </button>
+              <AppLink className="secondary-action" to="/evidence">
+                Inspect evidence <FileCheck2 size={16} aria-hidden="true" />
+              </AppLink>
+            </div>
+            <span className="scenario-name">{snapshot.scenarioLabel}</span>
+            {actionError ? (
+              <p className="action-error" role="alert">
+                {actionError}
+              </p>
+            ) : null}
+          </div>
+
+          <ExecutionStage snapshot={snapshot} />
+        </div>
+      </section>
+
+      <ApprovedEvidenceBand claim={claim} status={claimStatus} />
+
+      <div className="workspace" id="operations">
+        <section className="match-strip" aria-label="Current fixture">
+          <div className="match-meta">
+            <span>{snapshot.match.competition}</span>
+            <strong>Fixture {snapshot.match.fixtureId}</strong>
+          </div>
+          <div className="versus">
+            <strong>{snapshot.match.home}</strong>
+            <span>vs</span>
+            <strong>{snapshot.match.away}</strong>
+          </div>
+          <div className="replay-clock">
+            <span>Replay clock</span>
+            <strong>{formatReplayClock(snapshot.replayElapsedMs)}</strong>
+          </div>
+        </section>
+
+        <section className="state-lane" aria-label="Quote lifecycle">
+          {(["OPEN", "SUSPENDED", "REPRICED", "OPEN"] as const).map(
+            (mode, index) => (
+              <div
+                className={`state-node ${stateNodeClass(snapshot, mode, index)}`}
+                key={`${mode}-${index}`}
+              >
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <strong>{index === 3 ? "REOPENED" : mode}</strong>
+              </div>
+            ),
+          )}
+        </section>
+
+        <ResolutionGate snapshot={snapshot} />
+
+        <section
+          className="market-grid"
+          aria-label="Protected and baseline books"
+        >
+          <MarketBook
+            title="Governed book"
+            subtitle="Stoppage policy applied"
+            mode={snapshot.mode}
+            probabilities={snapshot.currentProbability}
+            governed
+          />
+          <MarketBook
+            title="Unprotected baseline"
+            subtitle="Always open · follows consensus"
+            mode="OPEN"
+            probabilities={snapshot.baselineProbability}
+          />
+        </section>
+
+        <MetricBand snapshot={snapshot} />
+
+        <section className="operations-grid">
+          <Timeline snapshot={snapshot} />
+          <ProofPanel snapshot={snapshot} />
+        </section>
+
+        <SystemHealthStrip snapshot={snapshot} workerHealth={workerHealth} />
+      </div>
+    </>
+  );
+}
+
+function EvidencePage({
+  snapshot,
+  claim,
+  claimStatus,
+}: {
+  snapshot: RuntimeSnapshot;
+  claim: PublicClaim | null;
+  claimStatus: ClaimStatus;
+}) {
+  return (
+    <>
+      <PageIntro
+        index="02"
+        eyebrow="Independent verification"
+        title="Evidence"
+        description="Approved holdout aggregates, receipt-bound lifecycle decisions, and TxLINE's own Solana validation path in one audit surface."
+      >
+        <div className="page-status-block">
+          <span>Public claim</span>
+          <strong>{claim ? "APPROVED · R2" : claimStatus.toUpperCase()}</strong>
+          <small>
+            {claim ? formatDate(claim.approvedAt) : "Awaiting claim"}
+          </small>
+        </div>
+      </PageIntro>
+
+      <div className="page-shell evidence-page">
+        <ApprovedEvidencePanel claim={claim} status={claimStatus} />
+
+        <section className="evidence-operations" aria-label="Evidence tools">
+          <ProofPanel snapshot={snapshot} />
+          <ClaimRegister claim={claim} status={claimStatus} />
+        </section>
+      </div>
+    </>
+  );
+}
+
+function SystemPage({
+  snapshot,
+  connection,
+  workerHealth,
+}: {
+  snapshot: RuntimeSnapshot;
+  connection: ConnectionMode;
+  workerHealth: WorkerHealthSnapshot | null;
+}) {
+  const latestCertificate = [...snapshot.reopenProofs]
+    .reverse()
+    .find((proof) => proof.body.version === 2);
+  const healthy = snapshot.streamHealth.odds && snapshot.streamHealth.scores;
+
+  return (
+    <>
+      <PageIntro
+        index="03"
+        eyebrow="Runtime and controls"
+        title="System"
+        description="The deterministic path from TxLINE market inputs to an agent permit, including the exact conditions that keep execution closed."
+      >
+        <div className="page-status-block">
+          <span>Current gate</span>
+          <strong>{snapshot.mode}</strong>
+          <small>
+            {connection === "live" ? "Live runtime" : "Judge runtime"}
+          </small>
+        </div>
+      </PageIntro>
+
+      <div className="page-shell system-page">
+        <SystemHealthStrip snapshot={snapshot} workerHealth={workerHealth} />
+
+        <section className="system-section" aria-labelledby="pipeline-title">
+          <div className="section-title-row">
+            <div>
+              <span>Execution path</span>
+              <h2 id="pipeline-title">From feed to permit</h2>
+            </div>
+            <GitBranch size={20} aria-hidden="true" />
+          </div>
+          <ol className="architecture-flow">
+            <ArchitectureStep
+              index="01"
+              icon={<Waves size={18} />}
+              title="TxLINE inputs"
+              detail="Scores and consensus odds enter as independent streams."
+              state={healthy ? "HEALTHY" : "DEGRADED"}
+            />
+            <ArchitectureStep
+              index="02"
+              icon={<Cpu size={18} />}
+              title="Policy engine"
+              detail="Incidents, branch state, and freshness checks resolve deterministically."
+              state={snapshot.mode}
+            />
+            <ArchitectureStep
+              index="03"
+              icon={<LockKeyhole size={18} />}
+              title="Execution Gate"
+              detail="Unsafe quote requests stop before the market-maker can publish."
+              state={snapshot.execution.agent.decision}
+            />
+            <ArchitectureStep
+              index="04"
+              icon={<ShieldCheck size={18} />}
+              title="Permit release"
+              detail="A config-bound permit is emitted only after certified consensus."
+              state={
+                snapshot.execution.agent.permitVerified ? "VERIFIED" : "LOCKED"
+              }
+            />
+          </ol>
+        </section>
+
+        <section className="system-section" aria-labelledby="controls-title">
+          <div className="section-title-row">
+            <div>
+              <span>Fail-closed policy</span>
+              <h2 id="controls-title">Release controls</h2>
+            </div>
+            <Server size={20} aria-hidden="true" />
+          </div>
+          <div className="control-table-wrap">
+            <table className="control-table">
+              <thead>
+                <tr>
+                  <th scope="col">Control</th>
+                  <th scope="col">Required state</th>
+                  <th scope="col">Current state</th>
+                </tr>
+              </thead>
+              <tbody>
+                <ControlRow
+                  label="Odds stream"
+                  required="Healthy"
+                  current={snapshot.streamHealth.odds ? "Healthy" : "Degraded"}
+                  pass={snapshot.streamHealth.odds}
+                />
+                <ControlRow
+                  label="Scores stream"
+                  required="Healthy"
+                  current={
+                    snapshot.streamHealth.scores ? "Healthy" : "Degraded"
+                  }
+                  pass={snapshot.streamHealth.scores}
+                />
+                <ControlRow
+                  label="Pending incidents"
+                  required="0 before release"
+                  current={String(
+                    latestCertificate?.body.checks.unresolvedIncidentCount ?? 0,
+                  )}
+                  pass={
+                    (latestCertificate?.body.checks.unresolvedIncidentCount ??
+                      0) === 0
+                  }
+                />
+                <ControlRow
+                  label="Fresh consensus"
+                  required="3 post-resolution updates"
+                  current={`${latestCertificate?.body.checks.postResolutionQuoteCount ?? 0}/3`}
+                  pass={
+                    (latestCertificate?.body.checks.postResolutionQuoteCount ??
+                      0) >= 3
+                  }
+                />
+                <ControlRow
+                  label="Permit lifetime"
+                  required="Short-lived authorization"
+                  current={`${snapshot.execution.permitTtlMs / 1_000}s TTL`}
+                  pass
+                />
+                <ControlRow
+                  label="Policy binding"
+                  required="Exact config hash"
+                  current={shortHash(snapshot.configHash, 12)}
+                  pass
+                />
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+    </>
+  );
+}
+
+function PageIntro({
+  index,
+  eyebrow,
+  title,
+  description,
+  children,
+}: {
+  index: string;
+  eyebrow: string;
+  title: string;
+  description: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="page-intro" aria-labelledby="page-title">
+      <div className="page-intro-inner">
+        <div className="page-intro-copy">
+          <span className="page-index">{index}</span>
+          <div>
+            <span className="page-eyebrow">{eyebrow}</span>
+            <h1 id="page-title" tabIndex={-1}>
+              {title}
+            </h1>
+            <p>{description}</p>
+          </div>
+        </div>
+        {children}
+      </div>
+    </section>
+  );
+}
+
+function ClaimRegister({
+  claim,
+  status,
+}: {
+  claim: PublicClaim | null;
+  status: ClaimStatus;
+}) {
+  return (
+    <section className="claim-register" aria-labelledby="claim-register-title">
+      <div className="section-title-row">
+        <div>
+          <span>Public record</span>
+          <h2 id="claim-register-title">Claim register</h2>
+        </div>
+        <FileCheck2 size={20} aria-hidden="true" />
+      </div>
+      {claim ? (
+        <>
+          <dl className="claim-fields">
+            <div>
+              <dt>Status</dt>
+              <dd className="status-pass">Approved</dd>
+            </div>
+            <div>
+              <dt>Network</dt>
+              <dd>Solana mainnet</dd>
+            </div>
+            <div>
+              <dt>Policy revision</dt>
+              <dd>{claim.lifecycleEvidence.policyRevision}</dd>
+            </div>
+            <div>
+              <dt>Approved</dt>
+              <dd>{formatDate(claim.approvedAt)}</dd>
+            </div>
+            <div>
+              <dt>Policy hash</dt>
+              <dd>{shortHash(claim.approvedConfigHash, 14)}</dd>
+            </div>
+            <div>
+              <dt>Candidate digest</dt>
+              <dd>{shortHash(claim.candidateHash, 14)}</dd>
+            </div>
+          </dl>
+          <div className="register-actions">
+            <a
+              href="https://github.com/dolepee/stoppage"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Source code <ExternalLink size={14} aria-hidden="true" />
+            </a>
+            <a href="/api/public-claim" target="_blank" rel="noreferrer">
+              Approved JSON <ExternalLink size={14} aria-hidden="true" />
+            </a>
+            <a
+              href={claim.lifecycleEvidence.txlineValidation.explorer}
+              target="_blank"
+              rel="noreferrer"
+            >
+              Solana validation <ExternalLink size={14} aria-hidden="true" />
+            </a>
+          </div>
+          <p className="boundary-note">{claim.dataBoundary}</p>
+        </>
+      ) : (
+        <div className="register-empty" role="status">
+          Claim register {status}.
+        </div>
+      )}
+    </section>
+  );
+}
+
+function SystemHealthStrip({
+  snapshot,
+  workerHealth,
+}: {
+  snapshot: RuntimeSnapshot;
+  workerHealth: WorkerHealthSnapshot | null;
+}) {
+  return (
+    <section className="systems-strip" aria-label="System health">
+      <SystemStatus
+        icon={<Waves size={18} />}
+        label="Scores input"
+        value={
+          snapshot.dataMode === "SYNTHETIC"
+            ? "Synthetic replay"
+            : snapshot.streamHealth.scores
+              ? "TxLINE healthy"
+              : "TxLINE degraded"
+        }
+        healthy={snapshot.streamHealth.scores}
+      />
+      <SystemStatus
+        icon={<Radio size={18} />}
+        label="Odds input"
+        value={
+          snapshot.dataMode === "SYNTHETIC"
+            ? "Synthetic replay"
+            : snapshot.streamHealth.odds
+              ? "TxLINE healthy"
+              : "TxLINE degraded"
+        }
+        healthy={snapshot.streamHealth.odds}
+      />
+      <SystemStatus
+        icon={<Database size={18} />}
+        label="Policy engine"
+        value="Deterministic"
+        healthy
+      />
+      <SystemStatus
+        icon={<ShieldCheck size={18} />}
+        label="Network"
+        value="Solana mainnet"
+        healthy
+      />
+      {workerHealth ? (
+        <SystemStatus
+          icon={<Activity size={18} />}
+          label="Live worker"
+          value={formatWorkerHealth(workerHealth)}
+          healthy={Boolean(
+            workerHealth.running &&
+            workerHealth.statusFresh &&
+            workerHealth.streamHealth?.scores &&
+            workerHealth.streamHealth.odds,
+          )}
+        />
+      ) : null}
+    </section>
+  );
+}
+
+function ArchitectureStep({
+  index,
+  icon,
+  title,
+  detail,
+  state,
+}: {
+  index: string;
+  icon: ReactNode;
+  title: string;
+  detail: string;
+  state: string;
+}) {
+  return (
+    <li>
+      <span className="architecture-index">{index}</span>
+      <span className="architecture-icon" aria-hidden="true">
+        {icon}
+      </span>
+      <div>
+        <strong>{title}</strong>
+        <p>{detail}</p>
+      </div>
+      <small>{state}</small>
+      {index !== "04" ? <ArrowRight size={17} aria-hidden="true" /> : null}
+    </li>
+  );
+}
+
+function ControlRow({
+  label,
+  required,
+  current,
+  pass,
+}: {
+  label: string;
+  required: string;
+  current: string;
+  pass: boolean;
+}) {
+  return (
+    <tr>
+      <th scope="row">{label}</th>
+      <td>{required}</td>
+      <td>
+        <span className={`table-status ${pass ? "pass" : "fail"}`}>
+          {pass ? <Check size={13} aria-hidden="true" /> : null}
+          {current}
+        </span>
+      </td>
+    </tr>
   );
 }
 
@@ -439,9 +897,9 @@ function ApprovedEvidenceBand({
               label="Certified reopens"
               value={String(claim.holdout.postResolutionCertifiedReopens)}
             />
-            <a className="evidence-jump" href="#mainnet-evidence">
+            <AppLink className="evidence-jump" to="/evidence">
               Inspect evidence <FileCheck2 size={15} />
-            </a>
+            </AppLink>
           </>
         ) : (
           <p className="evidence-band-empty">
@@ -583,50 +1041,142 @@ function ApprovedEvidencePanel({
   );
 }
 
-function Header({ connection }: { connection: ConnectionMode }) {
+function Header({
+  connection,
+  route,
+}: {
+  connection: ConnectionMode;
+  route: AppRoute;
+}) {
+  const modeLabel =
+    connection === "live"
+      ? "Live"
+      : connection === "local"
+        ? "Judge mode"
+        : "Offline";
   return (
     <header className="topbar">
-      <div className="brand">
-        <span className="brand-mark">
-          <ShieldCheck size={17} />
-        </span>
-        <strong>Stoppage</strong>
-        <span className="brand-version">R2</span>
-      </div>
-      <nav aria-label="Primary navigation">
-        <a href="#product-title">Console</a>
-        <a href="#mainnet-evidence">Evidence</a>
-        <a
-          href="https://txline.txodds.com/documentation/worldcup"
-          target="_blank"
-          rel="noreferrer"
-        >
-          TxLINE <ExternalLink size={13} />
-        </a>
-        <a
-          href="https://solscan.io/account/9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA"
-          target="_blank"
-          rel="noreferrer"
-        >
-          Mainnet program <ExternalLink size={13} />
-        </a>
-      </nav>
-      <div className={`connection-pill ${connection}`} role="status">
-        <span />
-        {connection === "live"
-          ? "Console live"
-          : connection === "local"
-            ? "Judge mode ready"
-            : connection}
+      <div className="topbar-inner">
+        <div className="brand">
+          <AppLink className="brand-link" to="/" aria-label="Stoppage control">
+            <span className="brand-mark">
+              <ShieldCheck size={17} aria-hidden="true" />
+            </span>
+            <strong>Stoppage</strong>
+            <span className="brand-version">R2</span>
+          </AppLink>
+        </div>
+        <div className="topbar-actions">
+          <nav aria-label="Primary navigation" className="topbar-nav">
+            <AppLink to="/" aria-current={route === "/" ? "page" : undefined}>
+              Control
+            </AppLink>
+            <AppLink
+              to="/evidence"
+              aria-current={route === "/evidence" ? "page" : undefined}
+            >
+              Evidence
+            </AppLink>
+            <AppLink
+              to="/system"
+              aria-current={route === "/system" ? "page" : undefined}
+            >
+              System
+            </AppLink>
+            <a
+              href="https://github.com/dolepee/stoppage"
+              target="_blank"
+              rel="noreferrer"
+            >
+              GitHub <ExternalLink size={13} aria-hidden="true" />
+            </a>
+            <a
+              href="https://txline.txodds.com/documentation/worldcup"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Docs <ExternalLink size={13} aria-hidden="true" />
+            </a>
+            <a
+              href="https://solscan.io/account/9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA"
+              target="_blank"
+              rel="noreferrer"
+            >
+              Mainnet program <ExternalLink size={13} aria-hidden="true" />
+            </a>
+          </nav>
+          <div className={`connection-pill ${connection}`} role="status">
+            <span />
+            {modeLabel}
+          </div>
+        </div>
       </div>
     </header>
   );
 }
 
+function AppLink({
+  to,
+  children,
+  onClick,
+  ...props
+}: {
+  to: AppRoute;
+  children: ReactNode;
+  onClick?: MouseEventHandler<HTMLAnchorElement>;
+} & Omit<AnchorHTMLAttributes<HTMLAnchorElement>, "href">) {
+  return (
+    <a
+      href={to}
+      onClick={(event) => {
+        onClick?.(event);
+        if (
+          event.defaultPrevented ||
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        ) {
+          return;
+        }
+        event.preventDefault();
+        window.history.pushState({}, "", to);
+        window.dispatchEvent(new Event(navigationEvent));
+      }}
+      {...props}
+    >
+      {children}
+    </a>
+  );
+}
+
+function useAppRoute(): AppRoute {
+  const [route, setRoute] = useState<AppRoute>(() => resolveAppRoute());
+
+  useEffect(() => {
+    const readRoute = () => setRoute(resolveAppRoute());
+    window.addEventListener("popstate", readRoute);
+    window.addEventListener(navigationEvent, readRoute);
+    return () => {
+      window.removeEventListener("popstate", readRoute);
+      window.removeEventListener(navigationEvent, readRoute);
+    };
+  }, []);
+
+  return route;
+}
+
+function resolveAppRoute(): AppRoute {
+  if (window.location.pathname === "/evidence") return "/evidence";
+  if (window.location.pathname === "/system") return "/system";
+  return "/";
+}
+
 function DataMode({ mode }: { mode: RuntimeSnapshot["dataMode"] }) {
   return (
     <span className={`data-mode ${mode.toLowerCase()}`}>
-      {mode === "SYNTHETIC" ? "Synthetic judge fixture" : "TxLINE replay"}
+      {mode === "SYNTHETIC" ? "Synthetic fixture" : "TxLINE replay"}
     </span>
   );
 }
@@ -1232,6 +1782,14 @@ function formatMilliseconds(milliseconds: number) {
 }
 function formatEventTime(timestamp: number) {
   return new Date(timestamp).toISOString().slice(11, 19);
+}
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  }).format(new Date(value));
 }
 function shortHash(hash: string, width = 10) {
   return `${hash.slice(0, width)}…${hash.slice(-6)}`;
