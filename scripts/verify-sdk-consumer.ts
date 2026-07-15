@@ -54,7 +54,7 @@ try {
   await writeFile(join(consumerRoot, "consumer.mjs"), cleanConsumerSource());
   await execFileAsync(
     "pnpm",
-    ["install", "--offline", "--ignore-scripts", "--no-frozen-lockfile"],
+    ["install", "--ignore-scripts", "--no-frozen-lockfile"],
     { cwd: consumerRoot },
   );
 
