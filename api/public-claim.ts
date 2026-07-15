@@ -1,51 +1,45 @@
 import { loadLatestPublicClaim } from "../src/evidence/public-claim.js";
 
-const normalizeHash = (value?: string) =>
+const normalizeHash = (value?: string | null) =>
   value?.toLowerCase().replace(/^0x/, "") || undefined;
 
-export default async function handler(request, response) {
-  if (request.method !== "GET") {
-    response.statusCode = 405;
-    response.setHeader("Content-Type", "application/json");
-    response.end(
-      JSON.stringify({
-        error: "Method not allowed",
-      }),
-    );
-    return;
-  }
-
-  try {
-    const requestUrl = new URL(request.url || "", "http://localhost");
-    const queryHash = normalizeHash(
-      requestUrl.searchParams.get("approvedConfigHash") ?? undefined,
-    );
-
-    const claim = await loadLatestPublicClaim(
-      "data/public",
-      queryHash ? `0x${queryHash}` : undefined,
-    );
-    if (!claim) {
-      response.statusCode = 404;
-      response.setHeader("Content-Type", "application/json");
-      response.end(
-        JSON.stringify({
-          error: "Public claim not available",
-        }),
+export default {
+  async fetch(request: Request): Promise<Response> {
+    if (request.method !== "GET") {
+      return Response.json(
+        { error: "Method not allowed" },
+        { status: 405, headers: { Allow: "GET" } },
       );
-      return;
     }
 
-    response.statusCode = 200;
-    response.setHeader("Content-Type", "application/json");
-    response.end(JSON.stringify(claim));
-  } catch (_error) {
-    response.statusCode = 404;
-    response.setHeader("Content-Type", "application/json");
-    response.end(
-      JSON.stringify({
-        error: "Public claim not available",
-      }),
-    );
-  }
-}
+    try {
+      const requestUrl = new URL(request.url);
+      const queryHash = normalizeHash(
+        requestUrl.searchParams.get("approvedConfigHash"),
+      );
+      const claim = await loadLatestPublicClaim(
+        "data/public",
+        queryHash ? `0x${queryHash}` : undefined,
+      );
+
+      if (!claim) {
+        return Response.json(
+          { error: "Public claim not available" },
+          { status: 404 },
+        );
+      }
+
+      return Response.json(claim, {
+        headers: {
+          "Cache-Control": "public, max-age=60, s-maxage=300",
+          "X-Content-Type-Options": "nosniff",
+        },
+      });
+    } catch {
+      return Response.json(
+        { error: "Public claim not available" },
+        { status: 404 },
+      );
+    }
+  },
+};

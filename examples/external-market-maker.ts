@@ -13,11 +13,7 @@ const request = {
 };
 
 const result = await client.evaluate(request);
-const permitValid = client.verifyPermitBinding(
-  result.permit,
-  request,
-  Date.now(),
-);
+const permitValid = client.verifyPermitBinding(result, request, Date.now());
 
 if (!result.permit || !permitValid) {
   console.log(`WITHHOLD ${result.decision}: ${result.reason}`);

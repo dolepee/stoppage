@@ -3,5 +3,13 @@
   <url>
     <loc>https://stoppage-txline.vercel.app/</loc>
   </url>
+  <url>
+    <loc>https://stoppage-txline.vercel.app/demo</loc>
+  </url>
+  <url>
+    <loc>https://stoppage-txline.vercel.app/evidence</loc>
+  </url>
+  <url>
+    <loc>https://stoppage-txline.vercel.app/system</loc>
+  </url>
 </urlset>
-

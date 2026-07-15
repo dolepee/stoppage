@@ -1,0 +1,150 @@
+import { expect, test, type Page } from "@playwright/test";
+
+test.describe("Stoppage release browser gate", () => {
+  test("blocks, certifies and rejects tampering without layout or browser errors", async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(60_000);
+    const browserErrors: string[] = [];
+    const pageErrors: string[] = [];
+    const failedRequests: string[] = [];
+    const origin = new URL(
+      test.info().project.use.baseURL ?? "http://127.0.0.1:4173",
+    ).origin;
+
+    page.on("console", (message) => {
+      if (message.type() === "error") browserErrors.push(message.text());
+    });
+    page.on("pageerror", (error) => pageErrors.push(error.message));
+    page.on("requestfailed", (failedRequest) => {
+      if (failedRequest.url().startsWith(origin)) {
+        const intentionallySupersededHandshake =
+          failedRequest.url() === `${origin}/api/agent-gate` &&
+          failedRequest.failure()?.errorText === "net::ERR_ABORTED";
+        if (intentionallySupersededHandshake) return;
+        failedRequests.push(
+          `${failedRequest.method()} ${failedRequest.url()}: ${failedRequest.failure()?.errorText ?? "unknown"}`,
+        );
+      }
+    });
+
+    await page.goto("/");
+    await expect(page).toHaveTitle("Home · Stoppage");
+    await expect(
+      page.getByRole("heading", {
+        name: "Agents decide. Stoppage permits.",
+        exact: true,
+      }),
+    ).toBeVisible();
+
+    const primaryNavigation = page.getByRole("navigation", {
+      name: "Primary navigation",
+    });
+    for (const label of ["Home", "Demo", "Evidence", "System"]) {
+      await expect(
+        primaryNavigation.getByRole("link", { name: label, exact: true }),
+      ).toBeVisible();
+    }
+    await expect(
+      page.getByRole("link", { name: "Skip to main content" }),
+    ).toHaveCount(1);
+    await expectNoHorizontalOverflow(page);
+    await expectMinimumNavigationText(page);
+
+    await page
+      .getByRole("link", { name: "Test an agent request", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/demo$/);
+    await expect(page).toHaveTitle("Demo · Stoppage");
+    await expectNoHorizontalOverflow(page);
+
+    await page
+      .getByRole("button", { name: /Test the firewall|Test again/ })
+      .click();
+    await expect(
+      page.getByText("Agent action blocked", { exact: true }),
+    ).toBeVisible({ timeout: 5_000 });
+    await expect(
+      page.getByRole("button", { name: "Test again", exact: true }),
+    ).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByText("BINDING VERIFIED", { exact: true }),
+    ).toBeVisible();
+
+    await page
+      .getByRole("button", { name: "Tamper quote", exact: true })
+      .click();
+    await expect(
+      page.getByText("REJECTED AS EXPECTED", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("BLOCK INVALIDATED BRANCH", { exact: true }),
+    ).toBeVisible();
+
+    await primaryNavigation
+      .getByRole("link", { name: "Evidence", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/evidence$/);
+    await expect(page).toHaveTitle("Evidence · Stoppage");
+    await expectCanonical(page, "/evidence");
+    await expectNoHorizontalOverflow(page);
+
+    await primaryNavigation
+      .getByRole("link", { name: "System", exact: true })
+      .click();
+    await expect(page).toHaveURL(/\/system$/);
+    await expect(page).toHaveTitle("System · Stoppage");
+    await expectCanonical(page, "/system");
+    await expect(
+      page.getByText("Simulated inputs", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Separate score proof", { exact: true }),
+    ).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+
+    const openapi = await request.get("/openapi.json");
+    expect(openapi.status()).toBe(200);
+    const contract = (await openapi.json()) as {
+      paths?: Record<string, unknown>;
+    };
+    expect(Object.keys(contract.paths ?? {})).toEqual(["/api/agent-gate"]);
+
+    const claim = await request.get("/api/public-claim");
+    expect(claim.status()).toBe(200);
+    await expect(claim.json()).resolves.toMatchObject({
+      version: 3,
+      status: "AVAILABLE",
+      holdout: { fixtures: 4, completeProtectedWindows: 18 },
+    });
+
+    expect(browserErrors).toEqual([]);
+    expect(pageErrors).toEqual([]);
+    expect(failedRequests).toEqual([]);
+  });
+});
+
+async function expectNoHorizontalOverflow(page: Page) {
+  const metrics = await page.evaluate(() => ({
+    clientWidth: document.documentElement.clientWidth,
+    scrollWidth: document.documentElement.scrollWidth,
+  }));
+  expect(metrics.scrollWidth).toBeLessThanOrEqual(metrics.clientWidth + 1);
+}
+
+async function expectMinimumNavigationText(page: Page) {
+  const sizes = await page
+    .getByRole("navigation", { name: "Primary navigation" })
+    .getByRole("link")
+    .evaluateAll((links) =>
+      links.map((link) => Number.parseFloat(getComputedStyle(link).fontSize)),
+    );
+  expect(Math.min(...sizes)).toBeGreaterThanOrEqual(11);
+}
+
+async function expectCanonical(page: Page, path: string) {
+  await expect
+    .poll(() => page.locator('link[rel="canonical"]').getAttribute("href"))
+    .toBe(`https://stoppage-txline.vercel.app${path}`);
+}
