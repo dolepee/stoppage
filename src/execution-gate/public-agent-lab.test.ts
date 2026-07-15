@@ -57,6 +57,22 @@ describe("public agent lab", () => {
     expect(result.challenge?.decision).toMatch(/^BLOCK_/);
   });
 
+  it.each(["QUOTE_TAMPER", "RECEIPT_TAMPER"] as const)(
+    "rehashes the %s candidate so the state binding check is exercised",
+    (challenge) => {
+      const result = evaluatePublicAgentHandshake({
+        ...requestAt(12),
+        challenge,
+      });
+
+      expect(result.challenge).toMatchObject({
+        challenge,
+        decision: "BLOCK_INVALIDATED_BRANCH",
+        reason: "The permit no longer matches the current governor state.",
+      });
+    },
+  );
+
   it("fails a quote hash from the wrong branch closed", () => {
     const result = evaluatePublicAgentHandshake({
       ...requestAt(12),

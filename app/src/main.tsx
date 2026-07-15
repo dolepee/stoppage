@@ -1475,13 +1475,19 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
   const [challengeResult, setChallengeResult] =
     useState<PublicAgentHandshakeResponse["challenge"]>(null);
   const agent = snapshot.execution.agent;
-  const decisionKey =
+  const handshakeKey =
     agent.decisionCode && agent.requestedQuoteHash
-      ? `${agent.decisionCode}:${agent.result}`
+      ? [
+          agent.decisionCode,
+          agent.result,
+          agent.requestedQuoteHash,
+          snapshot.execution.sequence,
+          snapshot.execution.subjectHash,
+        ].join(":")
       : null;
 
   useEffect(() => {
-    if (!decisionKey || !agent.requestedQuoteHash) {
+    if (!handshakeKey || !agent.requestedQuoteHash) {
       setHandshake(null);
       setLatencyMs(null);
       setBindingVerified(null);
@@ -1535,7 +1541,7 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
       });
 
     return () => controller.abort();
-  }, [client, decisionKey]);
+  }, [client, handshakeKey]);
 
   async function runChallenge(challenge: PublicAgentChallenge) {
     if (!handshake?.result.permit) return;

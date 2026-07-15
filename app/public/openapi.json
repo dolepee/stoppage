@@ -98,6 +98,26 @@
           "quoteHash": { "$ref": "#/components/schemas/Hash" }
         }
       },
+      "ExecutionGateResponseRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "command",
+          "sequence",
+          "subjectHash",
+          "market",
+          "quoteHash"
+        ],
+        "properties": {
+          "version": { "const": 1 },
+          "command": { "const": "PUBLISH_QUOTE" },
+          "sequence": { "type": "integer", "minimum": 1, "maximum": 12 },
+          "subjectHash": { "$ref": "#/components/schemas/Hash" },
+          "market": { "const": "1X2" },
+          "quoteHash": { "$ref": "#/components/schemas/Hash" }
+        }
+      },
       "PublicAgentHandshakeRequest": {
         "type": "object",
         "additionalProperties": false,
@@ -244,7 +264,9 @@
               "requestId": { "$ref": "#/components/schemas/Hash" }
             }
           },
-          "request": { "$ref": "#/components/schemas/ExecutionGateRequest" },
+          "request": {
+            "$ref": "#/components/schemas/ExecutionGateResponseRequest"
+          },
           "result": { "$ref": "#/components/schemas/ExecutionGateResult" },
           "challenge": {
             "oneOf": [
