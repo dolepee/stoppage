@@ -247,7 +247,7 @@ function App() {
 
   const isRunning = snapshot.replayStatus === "RUNNING";
   const hasRun = snapshot.timeline.length > 0;
-  const runtimeBadgeLabel = getRuntimeTitle(connection);
+  const runtimeBadgeLabel = getRuntimeTitle(connection, snapshot.dataMode);
 
   return (
     <div className="shell">
@@ -307,21 +307,22 @@ function HomePage({
           <div className="home-copy">
             <div className="eyebrow-row">
               <span className="eyebrow">
-                Execution firewall for trading agents
+                Pre-trade firewall for autonomous sports agents
               </span>
               <DataMode mode={snapshot.dataMode} />
             </div>
             <h1 id="home-title" tabIndex={-1}>
-              Block the wrong branch. <span>Permit the fresh quote.</span>
+              Agents decide. <span>Stoppage permits.</span>
             </h1>
             <p className="home-lede">
-              Stoppage sits between TxLINE consensus and an automated
-              market-maker. It suspends execution through reversible in-play
-              events, then reopens only when post-resolution consensus is fresh.
+              Other agents decide what to trade. Stoppage independently decides
+              whether they are allowed to execute it, blocking invalid price
+              branches until post-resolution TxLINE consensus is fresh.
             </p>
             <div className="home-actions">
               <AppLink className="primary-action" to="/demo">
-                Launch demo <ArrowRight size={16} aria-hidden="true" />
+                Test an agent request{" "}
+                <ArrowRight size={16} aria-hidden="true" />
               </AppLink>
               <AppLink className="secondary-action" to="/evidence">
                 Inspect evidence <FileCheck2 size={16} aria-hidden="true" />
@@ -348,35 +349,37 @@ function HomePage({
             aria-labelledby="home-incident-title"
           >
             <div className="home-panel-heading">
-              <span>Failure window</span>
-              <h2 id="home-incident-title">One event. Two price branches.</h2>
+              <span>Independent admission control</span>
+              <h2 id="home-incident-title">
+                One request. Independent verdict.
+              </h2>
               <p>
-                The baseline keeps publishing. Stoppage closes the governed path
-                until the resolved branch is safe.
+                The trading strategy proposes the quote. Stoppage owns the final
+                permission boundary before that quote can publish.
               </p>
             </div>
             <ol className="home-incident-path">
               <li>
                 <span>01</span>
                 <div>
-                  <small>Market event</small>
-                  <strong>Provisional goal</strong>
+                  <small>External market-maker</small>
+                  <strong>Requests quote publication</strong>
                 </div>
-                <code>PRICE MOVES</code>
+                <code>REQUEST</code>
               </li>
               <li className="invalidated">
                 <span>02</span>
                 <div>
-                  <small>VAR resolution</small>
-                  <strong>Goal overturned</strong>
+                  <small>Stoppage policy</small>
+                  <strong>Detects invalid VAR branch</strong>
                 </div>
-                <code>BRANCH DEAD</code>
+                <code>BRANCH VOID</code>
               </li>
               <li className="blocked">
                 <span>03</span>
                 <div>
-                  <small>Agent request</small>
-                  <strong>Publish quote</strong>
+                  <small>Execution decision</small>
+                  <strong>Withholds market permission</strong>
                 </div>
                 <code>BLOCK</code>
               </li>
@@ -386,9 +389,9 @@ function HomePage({
                 <ShieldCheck size={20} />
               </span>
               <div>
-                <small>Execution decision</small>
-                <strong>Unsafe quote withheld</strong>
-                <span>No permit reaches the market-maker.</span>
+                <small>Independent gate</small>
+                <strong>Strategy and permission stay separate</strong>
+                <span>No valid permit, no simulated publish.</span>
               </div>
             </div>
           </section>
@@ -403,7 +406,7 @@ function HomePage({
             <div>
               <span>Resolution-aware control</span>
               <h2 id="home-how-title">
-                Three gates between signal and execution.
+                Three gates between agent intent and execution.
               </h2>
             </div>
             <p>
@@ -492,17 +495,19 @@ function ControlPage({
         <div className="command-inner">
           <div className="product-copy">
             <div className="eyebrow-row">
-              <span className="eyebrow">Interactive execution simulation</span>
+              <span className="eyebrow">
+                Independent pre-trade admission control
+              </span>
               <DataMode mode={snapshot.dataMode} />
             </div>
             <h1 id="product-title" tabIndex={-1}>
-              Execution demo
+              Agent gate test
             </h1>
             <p className="product-lede">
-              Run a synthetic World Cup goal-and-VAR what-if. France and Spain
-              provide recognizable match context; every incident and probability
-              is simulated, not live. Watch the governed agent block the dead
-              branch and wait for a receipt-bound reopen.
+              An external market-maker chooses a quote, then asks Stoppage for
+              permission to publish it. This synthetic France–Spain VAR what-if
+              shows the independent gate block the dead branch and issue a
+              receipt-bound permit only after fresh consensus.
             </p>
             <div className="hero-meta">
               <span>
@@ -520,8 +525,8 @@ function ControlPage({
               <div>
                 <strong>Risk under test</strong>
                 <span>
-                  The ungoverned agent remains executable after VAR voids the
-                  price branch. The governed agent must stay closed.
+                  The external agent would remain executable after VAR voids the
+                  price branch. Stoppage must reject its request independently.
                 </span>
               </div>
             </div>
@@ -541,10 +546,10 @@ function ControlPage({
                   <Play size={17} aria-hidden="true" />
                 )}
                 {isRunning
-                  ? "Stop simulation"
+                  ? "Stop gate test"
                   : hasRun
-                    ? "Run again"
-                    : "Run simulation"}
+                    ? "Test again"
+                    : "Test the firewall"}
               </button>
               <AppLink className="secondary-action" to="/evidence">
                 Inspect evidence <FileCheck2 size={16} aria-hidden="true" />
@@ -703,7 +708,7 @@ function SystemPage({
         <div className="page-status-block">
           <span>Current gate</span>
           <strong>{snapshot.mode}</strong>
-          <small>{getRuntimeDescription(connection)}</small>
+          <small>{getRuntimeDescription(connection, snapshot.dataMode)}</small>
         </div>
       </PageIntro>
 
@@ -1074,15 +1079,19 @@ function ApprovedEvidenceBand({
               value={String(claim.holdout.fixtures)}
             />
             <EvidenceStat
+              label="Protected windows"
+              value={String(claim.holdout.completeProtectedWindows)}
+            />
+            <EvidenceStat
               label="Branches invalidated"
               value={String(claim.holdout.preResolutionRepricesInvalidated)}
             />
             <EvidenceStat
-              label="Certified reopens"
-              value={String(claim.holdout.postResolutionCertifiedReopens)}
+              label="Baseline open · gate closed"
+              value={formatDuration(claim.holdout.staleQuoteSeconds)}
             />
             <AppLink className="evidence-jump" to="/evidence">
-              Inspect evidence <FileCheck2 size={15} />
+              Inspect evidence <FileCheck2 size={15} aria-hidden="true" />
             </AppLink>
           </>
         ) : (
@@ -1144,7 +1153,7 @@ function ApprovedEvidencePanel({
           </p>
         </div>
         <span className="approval-state">
-          <Check size={14} /> Approved
+          <Check size={14} aria-hidden="true" /> Approved
         </span>
       </div>
 
@@ -1207,10 +1216,10 @@ function ApprovedEvidencePanel({
           target="_blank"
           rel="noreferrer"
         >
-          Verify TxLINE validation <ExternalLink size={14} />
+          Verify TxLINE validation <ExternalLink size={14} aria-hidden="true" />
         </a>
         <a href="/api/public-claim" target="_blank" rel="noreferrer">
-          Inspect approved JSON <ExternalLink size={14} />
+          Inspect approved JSON <ExternalLink size={14} aria-hidden="true" />
         </a>
         <div>
           <span>Candidate digest</span>
@@ -1348,16 +1357,23 @@ function ExecutionStage({ snapshot }: { snapshot: RuntimeSnapshot }) {
   return (
     <section
       className={`execution-stage ${stateClass}`}
-      aria-label="Reference agent execution gate"
+      aria-label="External agent permission request evaluated by Stoppage"
       aria-live="polite"
     >
+      <div className="agent-request-route" aria-label="Agent request route">
+        <span>Independent client</span>
+        <ArrowRight size={13} aria-hidden="true" />
+        <code>PUBLISH_QUOTE</code>
+        <ArrowRight size={13} aria-hidden="true" />
+        <strong>Stoppage</strong>
+      </div>
       <div className="agent-command-line">
         <div>
           <span className="agent-icon" aria-hidden="true">
             <Bot size={18} />
           </span>
           <span>
-            <small>{agent.name}</small>
+            <small>External agent · {agent.name}</small>
             <strong>{agent.command}</strong>
           </span>
         </div>
@@ -1369,7 +1385,7 @@ function ExecutionStage({ snapshot }: { snapshot: RuntimeSnapshot }) {
           {blocked ? <LockKeyhole size={23} /> : <ShieldCheck size={23} />}
         </span>
         <div>
-          <small>Execution Gate</small>
+          <small>Stoppage admission decision</small>
           <strong>{headline}</strong>
           <p>{agent.reason}</p>
         </div>
@@ -1377,7 +1393,7 @@ function ExecutionStage({ snapshot }: { snapshot: RuntimeSnapshot }) {
 
       <div className="consequence-grid">
         <div className="consequence-cell governed-agent">
-          <span>Stoppage-gated agent</span>
+          <span>External agent via Stoppage</span>
           <strong>
             {blocked ? "CLOSED" : allowed ? "PUBLISHED" : "WAITING"}
           </strong>
@@ -1415,7 +1431,9 @@ function ExecutionStage({ snapshot }: { snapshot: RuntimeSnapshot }) {
 
       <div className="permit-line">
         <span>
-          {agent.permitVerified ? "Permit verified" : "No permit emitted"}
+          {agent.permitVerified
+            ? "Execution permit verified"
+            : "No execution permit"}
         </span>
         <code>
           {agent.permit
@@ -1675,7 +1693,7 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
                 : "Decision receipt"}
           </h2>
         </div>
-        <ShieldCheck size={19} />
+        <ShieldCheck size={19} aria-hidden="true" />
       </div>
       {latest ? (
         <>
@@ -1788,14 +1806,18 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
             }
           >
             <code>{shortHash(copyValue!, 14)}</code>
-            {copied ? <Check size={15} /> : <Copy size={15} />}
+            {copied ? (
+              <Check size={15} aria-hidden="true" />
+            ) : (
+              <Copy size={15} aria-hidden="true" />
+            )}
           </button>
         </>
       ) : (
         <EmptyRows label="No receipt emitted" />
       )}
       <div className="proof-note">
-        <Database size={15} />
+        <Database size={15} aria-hidden="true" />
         <span>
           {certificate
             ? resolutionAware
@@ -1852,14 +1874,26 @@ function formatAge(ageMs: number) {
   return `${Math.floor(ageMs / 60_000)}m ago`;
 }
 
-function getRuntimeTitle(connection: ConnectionMode) {
+function getRuntimeTitle(
+  connection: ConnectionMode,
+  dataMode: RuntimeSnapshot["dataMode"],
+) {
+  if (connection === "live" && dataMode === "SYNTHETIC") {
+    return "Connected judge runtime";
+  }
   if (connection === "live") return "Live TxLINE runtime";
   if (connection === "local") return "Simulation mode";
   if (connection === "offline") return "Runtime offline";
   return "Connecting";
 }
 
-function getRuntimeDescription(connection: ConnectionMode) {
+function getRuntimeDescription(
+  connection: ConnectionMode,
+  dataMode: RuntimeSnapshot["dataMode"],
+) {
+  if (connection === "live" && dataMode === "SYNTHETIC") {
+    return "Synthetic judge scenario; live worker health is reported separately.";
+  }
   if (connection === "live") {
     return "Connected to live scores and consensus odds streams.";
   }
@@ -1885,7 +1919,7 @@ function Footer({
         <div className="footer-topline">
           <div className="footer-brand">
             <strong>Stoppage</strong>
-            <span>VAR-aware market control driven by TxLINE</span>
+            <span>Pre-trade control for autonomous sports agents</span>
           </div>
           <nav className="footer-links" aria-label="Proof and resources">
             <span>Proof &amp; resources</span>
@@ -1916,8 +1950,10 @@ function Footer({
           <div className={`footer-runtime ${connection}`} role="status">
             <span className="footer-runtime-dot" aria-hidden="true" />
             <div>
-              <strong>{getRuntimeTitle(connection)}</strong>
-              <span>{getRuntimeDescription(connection)}</span>
+              <strong>{getRuntimeTitle(connection, snapshot.dataMode)}</strong>
+              <span>
+                {getRuntimeDescription(connection, snapshot.dataMode)}
+              </span>
             </div>
           </div>
           <div className="footer-config">

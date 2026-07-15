@@ -13,7 +13,7 @@ import type {
 
 export interface ReferenceAgentSnapshot {
   version: 1;
-  name: "Reference market-maker";
+  name: "External market-maker";
   command: "PUBLISH_QUOTE";
   decision: "WAITING" | "BLOCK" | "ALLOW";
   decisionCode: ExecutionGateDecision | null;
@@ -67,7 +67,7 @@ export class ReferenceMarketMaker {
     if (!result.permit) {
       this.#snapshot = {
         version: 1,
-        name: "Reference market-maker",
+        name: "External market-maker",
         command: "PUBLISH_QUOTE",
         decision: "BLOCK",
         decisionCode: result.decision,
@@ -90,7 +90,7 @@ export class ReferenceMarketMaker {
     );
     this.#snapshot = {
       version: 1,
-      name: "Reference market-maker",
+      name: "External market-maker",
       command: "PUBLISH_QUOTE",
       decision: verification.valid ? "ALLOW" : "BLOCK",
       decisionCode: verification.valid
@@ -113,7 +113,7 @@ export class ReferenceMarketMaker {
 function emptySnapshot(): ReferenceAgentSnapshot {
   return {
     version: 1,
-    name: "Reference market-maker",
+    name: "External market-maker",
     command: "PUBLISH_QUOTE",
     decision: "WAITING",
     decisionCode: null,

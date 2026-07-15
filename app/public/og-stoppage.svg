@@ -8,16 +8,16 @@
   <text x="140" y="104" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="24" font-weight="700">Stoppage</text>
   <text x="1018" y="102" fill="#74df8f" font-family="Arial, sans-serif" font-size="14" font-weight="700">TxLINE × SOLANA</text>
 
-  <text x="82" y="222" fill="#42ddb7" font-family="Arial, sans-serif" font-size="16" font-weight="700">EXECUTION FIREWALL FOR TRADING AGENTS</text>
-  <text x="82" y="292" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="48" font-weight="700">Block the wrong branch.</text>
-  <text x="82" y="350" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="48" font-weight="700">Permit the fresh quote.</text>
-  <text x="82" y="414" fill="#929da0" font-family="Arial, sans-serif" font-size="20">Fresh TxLINE consensus after every VAR resolution.</text>
+  <text x="82" y="222" fill="#42ddb7" font-family="Arial, sans-serif" font-size="16" font-weight="700">PRE-TRADE FIREWALL FOR AUTONOMOUS SPORTS AGENTS</text>
+  <text x="82" y="292" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="48" font-weight="700">Agents decide.</text>
+  <text x="82" y="350" fill="#f2f5f1" font-family="Arial, sans-serif" font-size="48" font-weight="700">Stoppage permits.</text>
+  <text x="82" y="414" fill="#929da0" font-family="Arial, sans-serif" font-size="20">Independent permission after fresh TxLINE consensus.</text>
 
   <rect x="682" y="164" width="418" height="346" rx="7" fill="#111617" stroke="#39454a"/>
-  <text x="714" y="202" fill="#929da0" font-family="Arial, sans-serif" font-size="13">REFERENCE AGENT · PUBLISH_QUOTE</text>
+  <text x="714" y="202" fill="#929da0" font-family="Arial, sans-serif" font-size="13">EXTERNAL AGENT · PUBLISH_QUOTE</text>
   <text x="714" y="250" fill="#ff6f67" font-family="Arial, sans-serif" font-size="20" font-weight="700">AGENT ACTION BLOCKED</text>
   <line x1="714" y1="274" x2="1068" y2="274" stroke="#273034"/>
-  <text x="714" y="312" fill="#929da0" font-family="Arial, sans-serif" font-size="14">STOPPAGE-GATED AGENT</text>
+  <text x="714" y="312" fill="#929da0" font-family="Arial, sans-serif" font-size="14">EXTERNAL AGENT VIA STOPPAGE</text>
   <text x="1068" y="312" text-anchor="end" fill="#42ddb7" font-family="monospace" font-size="15">CLOSED</text>
   <text x="714" y="354" fill="#929da0" font-family="Arial, sans-serif" font-size="14">UNPROTECTED BASELINE</text>
   <text x="1068" y="354" text-anchor="end" fill="#ff6f67" font-family="monospace" font-size="15">EXECUTABLE</text>

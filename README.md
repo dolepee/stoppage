@@ -2,13 +2,14 @@
 
 ![Stoppage operator console social card](app/public/og-stoppage.png)
 
-**The VAR firewall for in-play markets.**
+**The pre-trade firewall for autonomous sports agents.**
 
 Live judge console: <https://stoppage-txline.vercel.app>
 
-Stoppage is an autonomous execution firewall driven by TxLINE on Solana. A
-reference market-maker agent must ask Stoppage before publishing a simulated
-quote. When a provisional goal or VAR incident moves the market, Stoppage
+Other agents decide what to trade. Stoppage independently decides whether they
+are allowed to execute it. An external reference market-maker must ask Stoppage
+before publishing a simulated quote. When a provisional goal or VAR incident
+moves the market, Stoppage
 returns `BLOCK`, invalidates any branch formed before the incident resolves,
 and issues a short-lived, machine-verifiable `ALLOW` permit only after fresh
 post-resolution consensus. It is operator risk tooling, not a wagering product:
