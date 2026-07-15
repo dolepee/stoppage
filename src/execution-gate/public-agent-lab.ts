@@ -153,6 +153,7 @@ function runChallenge(
 
   if (challenge === "QUOTE_TAMPER") {
     candidate.body.quoteHash = differentHash(candidate.body.quoteHash);
+    candidate.hash = sha256(candidate.body);
     verification = inspectExecutionPermit(
       candidate,
       context,
@@ -162,6 +163,7 @@ function runChallenge(
     candidate.body.stateReceiptHash = differentHash(
       candidate.body.stateReceiptHash ?? candidate.hash,
     );
+    candidate.hash = sha256(candidate.body);
     verification = inspectExecutionPermit(
       candidate,
       context,
