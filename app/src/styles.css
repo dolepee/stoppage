@@ -20,8 +20,8 @@
   --surface-muted: #e8ece7;
   --line: #cdd5d0;
   --line-strong: #aebbb5;
-  --muted: #66736f;
-  --faint: #87938f;
+  --muted: #626f6b;
+  --faint: #596762;
   --night: #08110f;
   --night-raised: #0e1a17;
   --night-soft: #13221e;
@@ -105,6 +105,25 @@ time,
   min-height: 100vh;
 }
 
+.skip-link {
+  position: fixed;
+  top: 8px;
+  left: 12px;
+  z-index: 100;
+  padding: 10px 14px;
+  border-radius: 4px;
+  color: #05100d;
+  background: var(--mint-bright);
+  font-size: 12px;
+  font-weight: 760;
+  transform: translateY(-160%);
+  transition: transform 120ms ease;
+}
+
+.skip-link:focus-visible {
+  transform: translateY(0);
+}
+
 .topbar {
   position: sticky;
   top: 0;
@@ -170,7 +189,7 @@ time,
 .brand-version {
   padding-left: 2px;
   color: #70807a;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .topbar-nav {
@@ -182,7 +201,7 @@ time,
 }
 
 .topbar-nav a {
-  min-height: 34px;
+  min-height: 44px;
   display: inline-flex;
   align-items: center;
   gap: 5px;
@@ -275,7 +294,7 @@ time,
   align-items: center;
   gap: 7px;
   color: #82928c;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 720;
   text-transform: uppercase;
 }
@@ -295,7 +314,7 @@ time,
 
 .home-panel-heading > span {
   color: #6e827a;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
   text-transform: uppercase;
 }
@@ -341,7 +360,7 @@ time,
 
 .home-incident-path > li > span {
   color: #64756f;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .home-incident-path li > div {
@@ -352,7 +371,7 @@ time,
 
 .home-incident-path small {
   color: #6e7e78;
-  font-size: 8px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -363,7 +382,7 @@ time,
 
 .home-incident-path code {
   color: #d7a54b;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 740;
 }
 
@@ -413,7 +432,7 @@ time,
 
 .home-block-verdict small {
   color: #6e827a;
-  font-size: 8px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -424,7 +443,7 @@ time,
 
 .home-block-verdict > div > span {
   color: #83958d;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .home-how {
@@ -447,7 +466,7 @@ time,
 
 .home-section-heading > div > span {
   color: #168363;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
   text-transform: uppercase;
 }
@@ -494,7 +513,7 @@ time,
 
 .home-steps > li > span {
   color: #87928e;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .home-steps svg {
@@ -515,7 +534,7 @@ time,
 .home-steps p {
   margin: 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.7;
 }
 
@@ -529,7 +548,7 @@ time,
 
 .home-next-actions > span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .home-next-actions > div {
@@ -544,7 +563,7 @@ time,
   align-items: center;
   gap: 6px;
   color: #087a5c;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 740;
 }
 
@@ -590,7 +609,7 @@ time,
 
 .eyebrow {
   color: var(--mint-bright);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 780;
   text-transform: uppercase;
 }
@@ -601,7 +620,7 @@ time,
   border: 1px solid #34463f;
   border-radius: 3px;
   color: #91a09a;
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
   overflow-wrap: anywhere;
 }
@@ -643,7 +662,7 @@ time,
   padding: 0 12px;
   border-right: 1px solid #34443f;
   color: #7f908a;
-  font-size: 10px;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
 
@@ -683,13 +702,13 @@ time,
 
 .failure-case strong {
   color: #f2c77f;
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
 .failure-case span {
   color: #a9b6b1;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
@@ -749,7 +768,7 @@ time,
   max-width: 620px;
   margin-top: 13px;
   color: #63736d;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -757,7 +776,7 @@ time,
 .action-error {
   margin: 12px 0 0;
   color: #ff817b;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .execution-stage {
@@ -781,7 +800,7 @@ time,
   border-radius: 4px;
   color: #667971;
   background: #0b1512;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 760;
   text-transform: uppercase;
 }
@@ -799,7 +818,7 @@ time,
 
 .agent-request-route strong {
   color: var(--mint-bright);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .agent-command-line,
@@ -847,7 +866,7 @@ time,
 
 .agent-command-line small {
   color: #6f827a;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .agent-command-line strong {
@@ -861,7 +880,7 @@ time,
   border: 1px solid #3a4c46;
   border-radius: 3px;
   color: #879790;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .agent-decision.blocked {
@@ -924,7 +943,7 @@ time,
 
 .execution-verdict small {
   color: #667871;
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -939,7 +958,7 @@ time,
 .execution-verdict p {
   margin: 0;
   color: #8fa099;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.55;
   overflow-wrap: anywhere;
 }
@@ -967,7 +986,7 @@ time,
 .consequence-cell > span {
   gap: 6px;
   color: #71827b;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .consequence-cell strong {
@@ -978,7 +997,7 @@ time,
 
 .consequence-cell small {
   color: #65766f;
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
@@ -1001,7 +1020,7 @@ time,
   gap: 12px;
   padding-top: 2px;
   color: #60716a;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .permit-line > span {
@@ -1081,7 +1100,7 @@ time,
 .agent-api-summary > div > span,
 .permit-challenge-lab > div > span {
   color: #72857d;
-  font-size: 8px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -1089,7 +1108,7 @@ time,
   min-width: 0;
   gap: 5px;
   color: #c5d1cc;
-  font-size: 9px;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
 
@@ -1130,7 +1149,7 @@ time,
 
 .agent-api-status small {
   color: #5f716a;
-  font-size: 8px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -1150,7 +1169,7 @@ time,
 
 .permit-challenge-lab > div > small {
   color: #60736b;
-  font-size: 8px;
+  font-size: 11px;
 }
 
 .permit-challenge-actions {
@@ -1165,7 +1184,7 @@ time,
   border-radius: 4px;
   color: #b8c7c1;
   background: #111f1b;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 720;
 }
 
@@ -1197,7 +1216,7 @@ time,
 
 .permit-challenge-result strong,
 .permit-challenge-result small {
-  font-size: 8px;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
 
@@ -1205,10 +1224,20 @@ time,
   color: #82968e;
 }
 
+.permit-challenge-result.failed {
+  border-color: rgba(255, 129, 123, 0.58);
+  color: #ff817b;
+  background: rgba(255, 129, 123, 0.08);
+}
+
+.permit-challenge-result.failed small {
+  color: #ffc0bc;
+}
+
 .agent-api-error {
   margin: 0;
   color: #ff817b;
-  font-size: 8px;
+  font-size: 11px;
   line-height: 1.5;
 }
 
@@ -1223,7 +1252,7 @@ time,
   align-items: center;
   gap: 5px;
   color: #7d968d;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 720;
 }
 
@@ -1265,7 +1294,7 @@ time,
 .evidence-stat span,
 .evidence-links span {
   color: #65766f;
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -1299,7 +1328,7 @@ time,
   border: 1px solid #7fa496;
   border-radius: 4px;
   color: #0b7057;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
   background: rgba(255, 255, 255, 0.34);
 }
@@ -1315,7 +1344,7 @@ time,
   align-self: center;
   margin: 0;
   color: #64766f;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .workspace {
@@ -1366,7 +1395,7 @@ time,
 
 .page-eyebrow {
   color: var(--mint-bright);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
   text-transform: uppercase;
 }
@@ -1398,7 +1427,7 @@ time,
 .page-status-block span,
 .page-status-block small {
   color: #667871;
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -1453,7 +1482,7 @@ time,
 
 .section-title-row span {
   color: var(--faint);
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -1490,7 +1519,7 @@ time,
 
 .claim-fields dt {
   color: var(--faint);
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -1522,7 +1551,7 @@ time,
   align-items: center;
   gap: 7px;
   color: #087a5c;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
 }
 
@@ -1534,7 +1563,7 @@ time,
 .boundary-note {
   margin: 18px 0 0;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.65;
 }
 
@@ -1544,7 +1573,7 @@ time,
   place-items: center;
   border-top: 1px solid var(--line);
   color: var(--faint);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .system-page {
@@ -1626,7 +1655,7 @@ time,
 .architecture-flow p {
   margin: 8px 0 0;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.6;
 }
 
@@ -1669,14 +1698,14 @@ time,
   padding: 0 16px;
   border-bottom: 1px solid var(--line);
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .control-table thead th {
   height: 42px;
   color: var(--faint);
   background: #e9ece7;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 650;
   text-transform: uppercase;
 }
@@ -1725,7 +1754,7 @@ time,
 .match-meta span,
 .replay-clock span {
   color: var(--faint);
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -1748,7 +1777,7 @@ time,
 
 .versus span {
   color: var(--faint);
-  font-size: 10px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -1779,11 +1808,11 @@ time,
 }
 
 .state-node span {
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .state-node strong {
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .state-node.complete {
@@ -1824,7 +1853,7 @@ time,
 .resolution-stage span,
 .resolution-stage small {
   color: var(--faint);
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -1885,7 +1914,7 @@ time,
 .market-book header span,
 .section-heading span {
   color: var(--faint);
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -1902,7 +1931,7 @@ time,
   border: 1px solid var(--line-strong);
   border-radius: 3px;
   color: var(--green);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .book-state.state-suspended,
@@ -1929,7 +1958,7 @@ time,
 
 .selection-label span {
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .selection-label strong {
@@ -1967,7 +1996,7 @@ time,
   border: 1px dashed #c38a34;
   color: #8b590c;
   background: rgba(250, 247, 238, 0.96);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .metric-band {
@@ -1997,7 +2026,7 @@ time,
 .metric span,
 .metric small {
   color: var(--faint);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .metric strong {
@@ -2045,7 +2074,7 @@ time,
 
 .timeline-row time {
   color: var(--faint);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .timeline-marker {
@@ -2068,12 +2097,12 @@ time,
 
 .timeline-row strong {
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .timeline-row small {
   color: var(--faint);
-  font-size: 9px;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
 
@@ -2090,7 +2119,7 @@ time,
   display: grid;
   place-items: center;
   color: var(--faint);
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .certificate-status {
@@ -2123,7 +2152,7 @@ time,
 
 .certificate-status > div span {
   color: #668079;
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
@@ -2134,7 +2163,7 @@ time,
 
 .certificate-status code {
   color: #087a5c;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .proof-action {
@@ -2178,7 +2207,7 @@ time,
 
 .proof-fields dt {
   color: var(--faint);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .proof-fields dd {
@@ -2222,7 +2251,7 @@ time,
   gap: 7px;
   margin-top: 14px;
   color: var(--faint);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .systems-strip {
@@ -2271,12 +2300,12 @@ time,
 
 .system-status small {
   color: var(--faint);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .system-status strong {
   color: var(--ink-soft);
-  font-size: 10px;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
 
@@ -2300,7 +2329,7 @@ time,
 .evidence-heading > div > span,
 .verified-lifecycle > span {
   color: #087a5c;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
   text-transform: uppercase;
 }
@@ -2315,7 +2344,7 @@ time,
 .mainnet-evidence.unavailable p {
   max-width: 520px;
   margin: 0;
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.6;
 }
 
@@ -2334,7 +2363,7 @@ time,
   max-width: 760px;
   margin: 12px 0 0;
   color: var(--muted);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 1.65;
 }
 
@@ -2347,7 +2376,7 @@ time,
   border: 1px solid #74b79f;
   border-radius: 3px;
   color: #087a5c;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 760;
   text-transform: uppercase;
   white-space: nowrap;
@@ -2419,7 +2448,7 @@ time,
 
 .lifecycle-step strong {
   color: var(--green);
-  font-size: 9px;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
 
@@ -2430,7 +2459,7 @@ time,
 .verified-lifecycle p {
   margin: 18px 0 0;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.6;
 }
 
@@ -2444,14 +2473,14 @@ time,
 
 .evidence-disclosure strong {
   color: var(--amber);
-  font-size: 9px;
+  font-size: 11px;
   text-transform: uppercase;
 }
 
 .evidence-disclosure p {
   margin: 0;
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   line-height: 1.65;
 }
 
@@ -2467,7 +2496,7 @@ time,
   align-items: center;
   gap: 7px;
   color: #087a5c;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 760;
 }
 
@@ -2486,7 +2515,7 @@ time,
 
 .evidence-links code {
   color: var(--muted);
-  font-size: 9px;
+  font-size: 11px;
   overflow-wrap: anywhere;
 }
 
@@ -2495,7 +2524,7 @@ footer {
   border-top: 1px solid #1d2c28;
   color: #71807b;
   background: var(--night);
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .footer-inner {
@@ -2541,7 +2570,7 @@ footer {
 
 .footer-brand span {
   color: #71807b;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .footer-links {
@@ -2552,7 +2581,7 @@ footer {
 
 .footer-links > span {
   color: #61716b;
-  font-size: 8px;
+  font-size: 11px;
   font-weight: 740;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2564,7 +2593,7 @@ footer {
   align-items: center;
   gap: 5px;
   color: #aebbb6;
-  font-size: 10px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -2608,12 +2637,12 @@ footer {
 
 .footer-runtime strong {
   color: #dbe5e0;
-  font-size: 10px;
+  font-size: 11px;
 }
 
 .footer-runtime > div span {
   color: #71807b;
-  font-size: 9px;
+  font-size: 11px;
 }
 
 .footer-config {
@@ -2649,7 +2678,7 @@ footer {
 }
 
 .loading-state span {
-  font-size: 10px;
+  font-size: 11px;
 }
 
 button:focus-visible,
@@ -2930,7 +2959,7 @@ main h1:focus {
 
   .topbar-nav a {
     min-height: 32px;
-    font-size: 9px;
+    font-size: 11px;
   }
 
   .product-copy {
@@ -2953,7 +2982,7 @@ main h1:focus {
 
   .hero-meta span {
     padding: 0 9px;
-    font-size: 9px;
+    font-size: 11px;
   }
 
   .failure-case {
@@ -3344,7 +3373,7 @@ main h1:focus {
   }
 
   .topbar-nav a {
-    font-size: 8px;
+    font-size: 11px;
   }
 
   .brand-mark {

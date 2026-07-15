@@ -42,36 +42,6 @@
           "405": { "description": "Only POST is supported" }
         }
       }
-    },
-    "/api/execution-gate/evaluate": {
-      "post": {
-        "summary": "Evaluate a live or persistent-runtime quote request",
-        "description": "Resolves a privacy-safe subject hash against the persistent TxLINE worker context. Missing, stale or unhealthy context fails closed without a permit.",
-        "operationId": "evaluateExecutionGate",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ExecutionGateRequest"
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "A block reason or a short-lived bound permit",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ExecutionGateResult"
-                }
-              }
-            }
-          },
-          "400": { "description": "Invalid strict request body" }
-        }
-      }
     }
   },
   "components": {

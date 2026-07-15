@@ -104,15 +104,21 @@ The public console now mirrors each meaningful reference-agent decision through
 an independent same-origin HTTPS call to `POST /api/agent-gate`. The serverless
 function reconstructs the selected public synthetic checkpoint independently,
 evaluates the exact `PUBLISH_QUOTE` request, and returns the same block decision
-or permit. The external client then verifies the permit's canonical hash, quote,
-subject, market, TTL, and expiry binding before it may publish.
+or permit. The external client fails closed unless the response is an `ALLOW`,
+the response and permit decisions agree, every receipt/proof field has the
+expected shape, the sequence and evaluation time match, and the permit's
+canonical hash, quote, subject, market, TTL, and expiry bindings all verify.
+HTTPS authenticates the public endpoint; the canonical hash is a deterministic
+integrity binding, not a substitute for transport authentication or a digital
+signature.
 
 After the Certified Reopen, the same API exposes three explicit adversarial
 checks: quote tampering, expired replay, and receipt tampering. All must return a
 machine-readable rejection. The public endpoint remains visibly synthetic; the
-persistent live-worker integration continues to use
+persistent, self-hosted live-worker integration continues to use
 `POST /api/execution-gate/evaluate` and fails closed when its private context is
-missing or stale.
+missing or stale. That private-context route is intentionally not advertised by
+the Vercel OpenAPI contract because it is not deployed on the static judge host.
 
 - Machine-readable contract: [`/openapi.json`](https://stoppage-txline.vercel.app/openapi.json)
 - Reusable TypeScript client: [`src/integration/stoppage-agent-client.ts`](src/integration/stoppage-agent-client.ts)
@@ -125,7 +131,8 @@ missing or stale.
   implemented in policy revision 2.
 - Event-first, odds-first, and stream-failure paths: implemented and tested.
 - Execution Gate and deterministic reference agent: implemented with canonical
-  permit verification, expiry, sequence revocation, and adversarial tamper tests.
+  permit and full-response consistency verification, expiry, sequence
+  revocation, and adversarial tamper tests.
 - Live gate bridge: the persistent worker projects private governor state into a
   shared runtime context, and the application API fails closed if that context
   is missing, invalid, or more than five seconds old.
@@ -181,6 +188,9 @@ Prerequisites: Node.js 22+ and pnpm 10+.
 ```bash
 pnpm install
 pnpm check
+pnpm gate:verify
+pnpm reopen:verify
+pnpm browser:smoke
 pnpm start
 ```
 
@@ -196,19 +206,20 @@ pnpm dev
 
 Stoppage uses the TxLINE mainnet deployment:
 
-| Item                | Value                                            |
-| ------------------- | ------------------------------------------------ |
-| Network             | Solana mainnet                                   |
-| TxLINE program      | `9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA`   |
-| Free real-time tier | Service level `12`                               |
-| API origin          | `https://txline.txodds.com`                      |
-| Odds stream         | `/api/odds/stream`                               |
-| Scores stream       | `/api/scores/stream`                             |
-| Historical scores   | `/api/scores/historical/{fixtureId}`             |
-| Historical odds     | `/api/odds/updates/{epochDay}/{hour}/{interval}` |
-| Score proof         | `/api/scores/stat-validation`                    |
-| Public claim        | `/api/public-claim`                              |
-| Execution Gate      | `/api/execution-gate/evaluate`                   |
+| Item                  | Value                                            |
+| --------------------- | ------------------------------------------------ |
+| Network               | Solana mainnet                                   |
+| TxLINE program        | `9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA`   |
+| Free real-time tier   | Service level `12`                               |
+| API origin            | `https://txline.txodds.com`                      |
+| Odds stream           | `/api/odds/stream`                               |
+| Scores stream         | `/api/scores/stream`                             |
+| Historical scores     | `/api/scores/historical/{fixtureId}`             |
+| Historical odds       | `/api/odds/updates/{epochDay}/{hour}/{interval}` |
+| Score proof           | `/api/scores/stat-validation`                    |
+| Public claim          | `/api/public-claim`                              |
+| Public agent gate     | `/api/agent-gate`                                |
+| Self-hosted live gate | `/api/execution-gate/evaluate`                   |
 
 The setup scripts deliberately separate wallet operations from the server:
 

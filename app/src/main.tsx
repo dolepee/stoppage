@@ -40,6 +40,7 @@ import type {
 } from "../../src/execution-gate/public-agent-lab";
 import { StoppageAgentClient } from "../../src/integration/stoppage-agent-client";
 
+import { getChallengeResultDisplay } from "./challenge-result";
 import type {
   GovernorMode,
   ProbabilityVector,
@@ -62,6 +63,30 @@ type ClaimStatus = "loading" | "available" | "unavailable";
 type AppRoute = "/" | "/demo" | "/evidence" | "/system";
 const runtimeMode = resolveRuntimeMode(import.meta.env.VITE_RUNTIME_MODE);
 const navigationEvent = "stoppage:navigate";
+const canonicalOrigin = "https://stoppage-txline.vercel.app";
+const routeMetadata: Record<AppRoute, { title: string; description: string }> =
+  {
+    "/": {
+      title: "Home · Stoppage",
+      description:
+        "Stoppage is the independent pre-trade firewall for autonomous sports agents, blocking invalid price branches until fresh consensus permits execution.",
+    },
+    "/demo": {
+      title: "Demo · Stoppage",
+      description:
+        "Test Stoppage's synthetic World Cup agent gate: block an invalid VAR price branch, certify fresh consensus, and reject permit tampering.",
+    },
+    "/evidence": {
+      title: "Evidence · Stoppage",
+      description:
+        "Inspect approved Stoppage holdout aggregates, receipt-bound lifecycle evidence, public JSON, and separate TxLINE Solana validation proof.",
+    },
+    "/system": {
+      title: "System · Stoppage",
+      description:
+        "Inspect Stoppage's deterministic execution path, fail-closed controls, permit lifetime, policy binding, and clearly labeled synthetic inputs.",
+    },
+  };
 
 function App() {
   const [snapshot, setSnapshot] = useState<RuntimeSnapshot | null>(null);
@@ -233,13 +258,18 @@ function App() {
   }
 
   useEffect(() => {
-    const labels: Record<AppRoute, string> = {
-      "/": "Home",
-      "/demo": "Demo",
-      "/evidence": "Evidence",
-      "/system": "System",
-    };
-    document.title = `${labels[route]} · Stoppage`;
+    const metadata = routeMetadata[route];
+    const canonicalUrl = `${canonicalOrigin}${route}`;
+    document.title = metadata.title;
+    setMetaContent('meta[name="description"]', metadata.description);
+    setMetaContent('meta[property="og:title"]', metadata.title);
+    setMetaContent('meta[property="og:description"]', metadata.description);
+    setMetaContent('meta[property="og:url"]', canonicalUrl);
+    setMetaContent('meta[name="twitter:title"]', metadata.title);
+    setMetaContent('meta[name="twitter:description"]', metadata.description);
+    document
+      .querySelector<HTMLLinkElement>('link[rel="canonical"]')
+      ?.setAttribute("href", canonicalUrl);
     window.scrollTo({ top: 0, behavior: "auto" });
     window.requestAnimationFrame(() => {
       document.querySelector<HTMLElement>("main h1")?.focus({
@@ -256,8 +286,11 @@ function App() {
 
   return (
     <div className="shell">
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
       <Header route={route} />
-      <main>
+      <main id="main-content">
         {route === "/" ? (
           <HomePage
             snapshot={snapshot}
@@ -344,7 +377,7 @@ function HomePage({
               </li>
               <li>
                 <ShieldCheck size={15} aria-hidden="true" />
-                Solana-validated
+                Mainnet proof linked
               </li>
             </ul>
           </div>
@@ -665,7 +698,7 @@ function EvidencePage({
         index="03"
         eyebrow="Independent verification"
         title="Evidence"
-        description="Approved holdout aggregates, receipt-bound lifecycle decisions, and TxLINE's own Solana validation path in one audit surface."
+        description="Approved holdout aggregates and receipt-bound lifecycle decisions, plus a separate TxLINE finalized-score validation path on Solana."
       >
         <div className="page-status-block">
           <span>Public claim</span>
@@ -701,6 +734,7 @@ function SystemPage({
     .reverse()
     .find((proof) => proof.body.version === 2);
   const healthy = snapshot.streamHealth.odds && snapshot.streamHealth.scores;
+  const synthetic = snapshot.dataMode === "SYNTHETIC";
 
   return (
     <>
@@ -708,7 +742,11 @@ function SystemPage({
         index="04"
         eyebrow="Runtime and controls"
         title="System"
-        description="The deterministic path from TxLINE market inputs to an agent permit, including the exact conditions that keep execution closed."
+        description={
+          synthetic
+            ? "The deterministic path from simulated match inputs to an agent permit. Separate mainnet evidence validates finalized TxLINE score data, not this synthetic VAR lifecycle."
+            : "The deterministic path from TxLINE market inputs to an agent permit, including the exact conditions that keep execution closed."
+        }
       >
         <div className="page-status-block">
           <span>Current gate</span>
@@ -732,9 +770,13 @@ function SystemPage({
             <ArchitectureStep
               index="01"
               icon={<Waves size={18} />}
-              title="TxLINE inputs"
-              detail="Scores and consensus odds enter as independent streams."
-              state={healthy ? "HEALTHY" : "DEGRADED"}
+              title={synthetic ? "Simulated inputs" : "TxLINE inputs"}
+              detail={
+                synthetic
+                  ? "Synthetic scores and consensus odds exercise the public gate without claiming live match state."
+                  : "Scores and consensus odds enter as independent streams."
+              }
+              state={synthetic ? "SIMULATED" : healthy ? "HEALTHY" : "DEGRADED"}
             />
             <ArchitectureStep
               index="02"
@@ -781,18 +823,28 @@ function SystemPage({
               </thead>
               <tbody>
                 <ControlRow
-                  label="Odds stream"
-                  required="Healthy"
-                  current={snapshot.streamHealth.odds ? "Healthy" : "Degraded"}
-                  pass={snapshot.streamHealth.odds}
+                  label={synthetic ? "Odds input" : "Odds stream"}
+                  required={synthetic ? "Scenario input available" : "Healthy"}
+                  current={
+                    synthetic
+                      ? "Simulated"
+                      : snapshot.streamHealth.odds
+                        ? "Healthy"
+                        : "Degraded"
+                  }
+                  pass={synthetic || snapshot.streamHealth.odds}
                 />
                 <ControlRow
-                  label="Scores stream"
-                  required="Healthy"
+                  label={synthetic ? "Scores input" : "Scores stream"}
+                  required={synthetic ? "Scenario input available" : "Healthy"}
                   current={
-                    snapshot.streamHealth.scores ? "Healthy" : "Degraded"
+                    synthetic
+                      ? "Simulated"
+                      : snapshot.streamHealth.scores
+                        ? "Healthy"
+                        : "Degraded"
                   }
-                  pass={snapshot.streamHealth.scores}
+                  pass={synthetic || snapshot.streamHealth.scores}
                 />
                 <ControlRow
                   label="Pending incidents"
@@ -949,7 +1001,7 @@ function SystemHealthStrip({
   workerHealth: WorkerHealthSnapshot | null;
 }) {
   return (
-    <section className="systems-strip" aria-label="System health">
+    <section className="systems-strip" aria-label="System status">
       <SystemStatus
         icon={<Waves size={18} />}
         label="Scores input"
@@ -982,8 +1034,8 @@ function SystemHealthStrip({
       />
       <SystemStatus
         icon={<ShieldCheck size={18} />}
-        label="Network"
-        value="Solana mainnet"
+        label="Mainnet evidence"
+        value="Separate score proof"
         healthy
       />
       {workerHealth ? (
@@ -1521,7 +1573,7 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
         setBindingVerified(
           response.result.permit
             ? client.verifyPermitBinding(
-                response.result.permit,
+                response.result,
                 response.request,
                 response.result.evaluatedAt,
               )
@@ -1593,6 +1645,9 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
           : handshake
             ? "rejected"
             : "armed";
+  const challengeDisplay = challengeResult
+    ? getChallengeResultDisplay(challengeResult)
+    : null;
 
   return (
     <section
@@ -1659,12 +1714,19 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
         </div>
       ) : null}
 
-      {challengeResult ? (
-        <div className="permit-challenge-result" role="status">
-          <ShieldCheck size={14} aria-hidden="true" />
+      {challengeDisplay ? (
+        <div
+          className={`permit-challenge-result ${challengeDisplay.passed ? "" : "failed"}`}
+          role={challengeDisplay.passed ? "status" : "alert"}
+        >
+          {challengeDisplay.passed ? (
+            <ShieldCheck size={14} aria-hidden="true" />
+          ) : (
+            <AlertTriangle size={14} aria-hidden="true" />
+          )}
           <span>
-            <strong>REJECTED AS EXPECTED</strong>
-            <small>{formatDecisionLabel(challengeResult.decision)}</small>
+            <strong>{challengeDisplay.title}</strong>
+            <small>{challengeDisplay.detail}</small>
           </span>
         </div>
       ) : null}
@@ -1970,8 +2032,16 @@ function ProofPanel({ snapshot }: { snapshot: RuntimeSnapshot }) {
                   </>
                 ) : null}
                 <div>
-                  <dt>TxLINE feeds</dt>
-                  <dd className="proof-pass">Healthy · 2/2</dd>
+                  <dt>
+                    {snapshot.dataMode === "SYNTHETIC"
+                      ? "Scenario inputs"
+                      : "TxLINE feeds"}
+                  </dt>
+                  <dd className="proof-pass">
+                    {snapshot.dataMode === "SYNTHETIC"
+                      ? "Simulated · 2/2"
+                      : "Healthy · 2/2"}
+                  </dd>
                 </div>
                 <div>
                   <dt>Pending incidents</dt>
@@ -2275,6 +2345,12 @@ function formatDate(value: string) {
 }
 function shortHash(hash: string, width = 10) {
   return `${hash.slice(0, width)}…${hash.slice(-6)}`;
+}
+
+function setMetaContent(selector: string, content: string) {
+  document
+    .querySelector<HTMLMetaElement>(selector)
+    ?.setAttribute("content", content);
 }
 
 createRoot(document.getElementById("root")!).render(
