@@ -1,7 +1,7 @@
 {
   "name": "Stoppage",
   "short_name": "Stoppage",
-  "description": "Blocks trading agents from reversible in-play price branches, then issues a verifiable permit after fresh TxLINE consensus.",
+  "description": "Independent pre-trade firewall for autonomous sports agents, blocking invalid price branches until fresh TxLINE consensus permits execution.",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#090b0c",
