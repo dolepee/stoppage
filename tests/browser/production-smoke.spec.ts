@@ -19,10 +19,11 @@ test.describe("Stoppage release browser gate", () => {
     page.on("pageerror", (error) => pageErrors.push(error.message));
     page.on("requestfailed", (failedRequest) => {
       if (failedRequest.url().startsWith(origin)) {
-        const intentionallySupersededHandshake =
-          failedRequest.url() === `${origin}/api/agent-gate` &&
-          failedRequest.failure()?.errorText === "net::ERR_ABORTED";
-        if (intentionallySupersededHandshake) return;
+        const intentionallySupersededGateRequest =
+          [`${origin}/api/agent-gate`, `${origin}/api/permit-keys`].includes(
+            failedRequest.url(),
+          ) && failedRequest.failure()?.errorText === "net::ERR_ABORTED";
+        if (intentionallySupersededGateRequest) return;
         failedRequests.push(
           `${failedRequest.method()} ${failedRequest.url()}: ${failedRequest.failure()?.errorText ?? "unknown"}`,
         );
