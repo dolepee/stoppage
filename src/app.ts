@@ -172,10 +172,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
 
   app.get("/api/permit-keys", async (_request, reply) => {
     return reply
-      .header(
-        "Cache-Control",
-        "public, max-age=300, stale-while-revalidate=3600",
-      )
+      .header("Cache-Control", "no-store")
       .send(publicKeySetFor(loadPermitSigner()));
   });
 

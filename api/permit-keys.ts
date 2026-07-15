@@ -15,7 +15,7 @@ export default {
     try {
       return Response.json(publicKeySetFor(loadPermitSigner()), {
         headers: {
-          "Cache-Control": "public, max-age=300, stale-while-revalidate=3600",
+          "Cache-Control": "no-store",
           "X-Content-Type-Options": "nosniff",
         },
       });

@@ -189,7 +189,7 @@ export class StoppageClient {
   async discoverKeys(signal?: AbortSignal): Promise<PermitVerificationKeySet> {
     const keys = await this.#request<PermitVerificationKeySet>(
       "/api/permit-keys",
-      { method: "GET" },
+      { method: "GET", cache: "no-store" },
       signal,
     );
     this.#keySet = keys;
@@ -299,7 +299,11 @@ export class StoppageClient {
 
   async #request<T>(
     path: string,
-    options: { method: "GET" | "POST"; body?: unknown },
+    options: {
+      method: "GET" | "POST";
+      body?: unknown;
+      cache?: RequestCache;
+    },
     signal?: AbortSignal,
   ): Promise<T> {
     const response = await this.#fetch(`${this.#baseUrl}${path}`, {
@@ -309,6 +313,7 @@ export class StoppageClient {
         ...(options.body ? { "Content-Type": "application/json" } : {}),
       },
       ...(options.body ? { body: JSON.stringify(options.body) } : {}),
+      ...(options.cache ? { cache: options.cache } : {}),
       ...(signal ? { signal } : {}),
     });
     if (!response.ok) {
@@ -342,7 +347,8 @@ export function verifyPermit({
       (candidate) =>
         candidate.kid === permit.body.kid &&
         candidate.alg === "Ed25519" &&
-        candidate.use === "sig",
+        candidate.use === "sig" &&
+        candidate.status === "ACTIVE",
     );
     if (!key) {
       return blocked(

@@ -16,6 +16,10 @@ const pair = nacl.sign.keyPair.fromSeed(
   Uint8Array.from({ length: 32 }, (_, index) => index),
 );
 const kid = `stp_${hashCanonical(Array.from(pair.publicKey)).slice(2, 18)}`;
+const rotatedPair = nacl.sign.keyPair.fromSeed(
+  Uint8Array.from({ length: 32 }, (_, index) => index + 32),
+);
+const rotatedKid = `stp_${hashCanonical(Array.from(rotatedPair.publicKey)).slice(2, 18)}`;
 const keys: PermitVerificationKeySet = {
   version: 1,
   issuer: "stoppage",
@@ -25,6 +29,19 @@ const keys: PermitVerificationKeySet = {
       alg: "Ed25519",
       use: "sig",
       publicKey: encodeBase64Url(pair.publicKey),
+      status: "ACTIVE",
+    },
+  ],
+};
+const rotatedKeys: PermitVerificationKeySet = {
+  version: 1,
+  issuer: "stoppage",
+  keys: [
+    {
+      kid: rotatedKid,
+      alg: "Ed25519",
+      use: "sig",
+      publicKey: encodeBase64Url(rotatedPair.publicKey),
       status: "ACTIVE",
     },
   ],
@@ -48,6 +65,21 @@ describe("@stoppage/sdk enforcement adapter", () => {
         now,
       }),
     ).toMatchObject({ valid: false, decision: "BLOCK_PERMIT_MALFORMED" });
+  });
+
+  it("rejects a valid signature from a retired verification key", () => {
+    const now = Date.now();
+    const intent = makeIntent("retired-key-nonce-0001");
+    const permit = makePermit(intent, now);
+    const retiredKeys = structuredClone(keys);
+    retiredKeys.keys[0]!.status = "RETIRED";
+
+    expect(
+      verifyPermit({ permit, intent, keys: retiredKeys, now: now + 1 }),
+    ).toMatchObject({
+      valid: false,
+      decision: "BLOCK_UNKNOWN_SIGNING_KEY",
+    });
   });
 
   it("never invokes the venue callback on a BLOCK decision", async () => {
@@ -100,6 +132,27 @@ describe("@stoppage/sdk enforcement adapter", () => {
         ?.verification.decision,
     ).toBe("BLOCK_NONCE_REPLAY");
   });
+
+  it("bypasses cached key discovery when the signer rotates", async () => {
+    const now = Date.now();
+    const intent = makeIntent("rotated-key-nonce-0001");
+    const response = makeResponse(intent, now, rotatedPair, rotatedKid);
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(jsonResponse(response))
+      .mockResolvedValueOnce(jsonResponse(rotatedKeys));
+    const callback = vi.fn(() => "venue-receipt");
+    const client = new StoppageClient({ fetch, keySet: keys });
+
+    const outcome = await client.guardAction(intent, callback);
+
+    expect(outcome.status).toBe("VENUE_CALL_EXECUTED");
+    expect(callback).toHaveBeenCalledOnce();
+    expect(fetch.mock.calls[1]?.[1]).toMatchObject({
+      method: "GET",
+      cache: "no-store",
+    });
+  });
 });
 
 function makeIntent(nonce: string): ExecutionIntent {
@@ -119,8 +172,10 @@ function makeIntent(nonce: string): ExecutionIntent {
 function makeResponse(
   intent: ExecutionIntent,
   now: number,
+  signingPair: typeof pair = pair,
+  signingKid = kid,
 ): PublicAgentResponseV2 {
-  const permit = makePermit(intent, now);
+  const permit = makePermit(intent, now, signingPair, signingKid);
   return {
     version: 2,
     dataMode: "SYNTHETIC",
@@ -149,11 +204,13 @@ function makeResponse(
 function makePermit(
   intent: ExecutionIntent,
   now: number,
+  signingPair: typeof pair = pair,
+  signingKid = kid,
 ): SignedExecutionPermitV2 {
   const body = {
     version: 2 as const,
     issuer: "stoppage",
-    kid,
+    kid: signingKid,
     agentId: intent.agentId,
     audience: intent.audience,
     nonce: intent.nonce,
@@ -172,7 +229,7 @@ function makePermit(
   };
   const signature = nacl.sign.detached(
     utf8ToBytes(canonicalJson({ kind: "STOPPAGE_EXECUTION_PERMIT_V2", body })),
-    pair.secretKey,
+    signingPair.secretKey,
   );
   return {
     alg: "Ed25519",

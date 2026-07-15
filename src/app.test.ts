@@ -397,7 +397,7 @@ describe("operator API", () => {
       url: "/api/permit-keys",
     });
     expect(keys.statusCode).toBe(200);
-    expect(keys.headers["cache-control"]).toContain("max-age=300");
+    expect(keys.headers["cache-control"]).toBe("no-store");
     expect(keys.json()).toMatchObject({
       version: 1,
       issuer: "stoppage",

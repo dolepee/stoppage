@@ -66,6 +66,25 @@ describe("authenticated execution permit v2", () => {
     });
   });
 
+  it("rejects a valid signature from a retired verification key", () => {
+    const { result, request } = allowedResult();
+    const signed = issueExecutionPermitV2(result, request, signer, 10_000);
+    const keys = publicKeySetFor(signer);
+    keys.keys[0]!.status = "RETIRED";
+
+    expect(
+      inspectExecutionPermitV2({
+        permit: signed.permit!,
+        request,
+        keys,
+        now: 10_001,
+      }),
+    ).toMatchObject({
+      valid: false,
+      decision: "BLOCK_UNKNOWN_SIGNING_KEY",
+    });
+  });
+
   it.each([
     "quote tamper",
     "receipt tamper",

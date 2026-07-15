@@ -237,7 +237,8 @@ export function inspectExecutionPermitV2({
       (candidate) =>
         candidate.kid === permit.body.kid &&
         candidate.alg === "Ed25519" &&
-        candidate.use === "sig",
+        candidate.use === "sig" &&
+        candidate.status === "ACTIVE",
     );
     if (!key) {
       return blocked(
