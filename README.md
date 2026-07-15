@@ -98,6 +98,26 @@ and quote hashes with the exported helpers before requesting authorization. The
 public static console runs the evaluator locally over the synthetic fixture so
 judges need no token or login.
 
+### External agent integration
+
+The public console now mirrors each meaningful reference-agent decision through
+an independent same-origin HTTPS call to `POST /api/agent-gate`. The serverless
+function reconstructs the selected public synthetic checkpoint independently,
+evaluates the exact `PUBLISH_QUOTE` request, and returns the same block decision
+or permit. The external client then verifies the permit's canonical hash, quote,
+subject, market, TTL, and expiry binding before it may publish.
+
+After the Certified Reopen, the same API exposes three explicit adversarial
+checks: quote tampering, expired replay, and receipt tampering. All must return a
+machine-readable rejection. The public endpoint remains visibly synthetic; the
+persistent live-worker integration continues to use
+`POST /api/execution-gate/evaluate` and fails closed when its private context is
+missing or stale.
+
+- Machine-readable contract: [`/openapi.json`](https://stoppage-txline.vercel.app/openapi.json)
+- Reusable TypeScript client: [`src/integration/stoppage-agent-client.ts`](src/integration/stoppage-agent-client.ts)
+- Minimal market-maker example: [`examples/external-market-maker.ts`](examples/external-market-maker.ts)
+
 ## Current status
 
 - Resolution-aware quote governor: implemented and adversarially tested.

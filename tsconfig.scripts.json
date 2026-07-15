@@ -4,6 +4,12 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["scripts/**/*.ts", "src/**/*.ts", "vendor/txodds/*.ts"],
+  "include": [
+    "api/agent-gate.ts",
+    "examples/**/*.ts",
+    "scripts/**/*.ts",
+    "src/**/*.ts",
+    "vendor/txodds/*.ts"
+  ],
   "exclude": ["node_modules", "dist", "app"]
 }

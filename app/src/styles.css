@@ -1020,6 +1020,218 @@ time,
   white-space: nowrap;
 }
 
+.agent-api-panel {
+  min-width: 0;
+  padding: 12px;
+  display: grid;
+  gap: 11px;
+  border: 1px solid #2d4039;
+  border-radius: 5px;
+  background: #0a1512;
+}
+
+.agent-api-panel.verified {
+  border-color: rgba(66, 221, 183, 0.48);
+  background: rgba(24, 70, 57, 0.2);
+}
+
+.agent-api-panel.rejected {
+  border-color: rgba(255, 129, 123, 0.32);
+}
+
+.agent-api-panel.failed {
+  border-color: rgba(255, 129, 123, 0.48);
+}
+
+.agent-api-summary,
+.agent-api-summary > div,
+.agent-api-summary strong,
+.permit-challenge-lab,
+.permit-challenge-actions,
+.permit-challenge-result,
+.permit-challenge-result > span {
+  display: flex;
+  align-items: center;
+}
+
+.agent-api-summary {
+  min-width: 0;
+  gap: 10px;
+}
+
+.agent-api-icon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border: 1px solid #345047;
+  border-radius: 4px;
+  color: var(--mint-bright);
+  background: #14251f;
+}
+
+.agent-api-summary > div:not(.agent-api-status) {
+  min-width: 0;
+  display: grid;
+  align-items: initial;
+  gap: 3px;
+}
+
+.agent-api-summary > div > span,
+.permit-challenge-lab > div > span {
+  color: #72857d;
+  font-size: 8px;
+  text-transform: uppercase;
+}
+
+.agent-api-summary strong {
+  min-width: 0;
+  gap: 5px;
+  color: #c5d1cc;
+  font-size: 9px;
+  overflow-wrap: anywhere;
+}
+
+.agent-api-summary strong svg {
+  flex: 0 0 auto;
+  color: #5e756c;
+}
+
+.agent-api-summary code {
+  color: var(--mint-bright);
+  overflow-wrap: anywhere;
+}
+
+.agent-api-status {
+  margin-left: auto;
+  display: grid !important;
+  justify-items: end;
+  gap: 3px;
+  text-align: right;
+}
+
+.agent-api-status span {
+  color: #93a69e;
+  font:
+    9px "SFMono-Regular",
+    Consolas,
+    monospace;
+}
+
+.agent-api-panel.verified .agent-api-status span {
+  color: var(--mint-bright);
+}
+
+.agent-api-panel.rejected .agent-api-status span,
+.agent-api-panel.failed .agent-api-status span {
+  color: #ff817b;
+}
+
+.agent-api-status small {
+  color: #5f716a;
+  font-size: 8px;
+  white-space: nowrap;
+}
+
+.permit-challenge-lab {
+  min-width: 0;
+  justify-content: space-between;
+  gap: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #2b4038;
+}
+
+.permit-challenge-lab > div:first-child {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.permit-challenge-lab > div > small {
+  color: #60736b;
+  font-size: 8px;
+}
+
+.permit-challenge-actions {
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+.permit-challenge-actions button {
+  min-height: 32px;
+  padding: 0 9px;
+  border: 1px solid #3c544b;
+  border-radius: 4px;
+  color: #b8c7c1;
+  background: #111f1b;
+  font-size: 8px;
+  font-weight: 720;
+}
+
+.permit-challenge-actions button:hover:not(:disabled) {
+  color: #ffffff;
+  border-color: #648176;
+}
+
+.permit-challenge-actions button:disabled {
+  cursor: wait;
+  opacity: 0.58;
+}
+
+.permit-challenge-result {
+  gap: 8px;
+  padding: 9px 10px;
+  border: 1px solid rgba(66, 221, 183, 0.34);
+  border-radius: 4px;
+  color: var(--mint-bright);
+  background: rgba(66, 221, 183, 0.06);
+}
+
+.permit-challenge-result > span {
+  min-width: 0;
+  justify-content: space-between;
+  flex: 1;
+  gap: 10px;
+}
+
+.permit-challenge-result strong,
+.permit-challenge-result small {
+  font-size: 8px;
+  overflow-wrap: anywhere;
+}
+
+.permit-challenge-result small {
+  color: #82968e;
+}
+
+.agent-api-error {
+  margin: 0;
+  color: #ff817b;
+  font-size: 8px;
+  line-height: 1.5;
+}
+
+.agent-api-resources {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.agent-api-resources a {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #7d968d;
+  font-size: 8px;
+  font-weight: 720;
+}
+
+.agent-api-resources a:hover,
+.agent-api-resources a:focus-visible {
+  color: var(--mint-bright);
+}
+
 .evidence-band {
   border-bottom: 1px solid #b7c8c0;
   background: var(--mint-pale);
@@ -2818,6 +3030,41 @@ main h1:focus {
     white-space: normal;
   }
 
+  .agent-api-summary,
+  .permit-challenge-lab {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .agent-api-status {
+    width: 100%;
+    margin-left: 40px;
+    justify-items: start;
+    text-align: left;
+  }
+
+  .permit-challenge-actions {
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .permit-challenge-actions button {
+    min-height: 40px;
+  }
+
+  .permit-challenge-result > span {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .agent-api-resources {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
   .evidence-band-inner {
     padding: 0 16px;
     grid-template-columns: 1fr;
@@ -3125,6 +3372,10 @@ main h1:focus {
 
   .command-actions > * {
     width: 100%;
+  }
+
+  .permit-challenge-actions {
+    grid-template-columns: 1fr;
   }
 }
 
