@@ -34,6 +34,11 @@ import { createRoot } from "react-dom/client";
 
 import { publicJudgeScenario } from "../../src/replay/public-scenario";
 import { StoppageRuntime } from "../../src/runtime/stoppage-runtime";
+import type {
+  PublicAgentChallenge,
+  PublicAgentHandshakeResponse,
+} from "../../src/execution-gate/public-agent-lab";
+import { StoppageAgentClient } from "../../src/integration/stoppage-agent-client";
 
 import type {
   GovernorMode,
@@ -1444,6 +1449,226 @@ function ExecutionStage({ snapshot }: { snapshot: RuntimeSnapshot }) {
           {(permitTtlMs / 1_000).toFixed(0)}s TTL · simulated action
         </small>
       </div>
+
+      <AgentApiHandshake snapshot={snapshot} />
+    </section>
+  );
+}
+
+const publicAgentId = "judge-market-maker-v1";
+const challengeLabels: Record<PublicAgentChallenge, string> = {
+  QUOTE_TAMPER: "Tamper quote",
+  EXPIRED_REPLAY: "Replay expired",
+  RECEIPT_TAMPER: "Alter receipt",
+};
+
+function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
+  const client = useMemo(() => new StoppageAgentClient(), []);
+  const [handshake, setHandshake] =
+    useState<PublicAgentHandshakeResponse | null>(null);
+  const [pending, setPending] = useState(false);
+  const [latencyMs, setLatencyMs] = useState<number | null>(null);
+  const [bindingVerified, setBindingVerified] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [challengePending, setChallengePending] =
+    useState<PublicAgentChallenge | null>(null);
+  const [challengeResult, setChallengeResult] =
+    useState<PublicAgentHandshakeResponse["challenge"]>(null);
+  const agent = snapshot.execution.agent;
+  const decisionKey =
+    agent.decisionCode && agent.requestedQuoteHash
+      ? `${agent.decisionCode}:${agent.result}`
+      : null;
+
+  useEffect(() => {
+    if (!decisionKey || !agent.requestedQuoteHash) {
+      setHandshake(null);
+      setLatencyMs(null);
+      setBindingVerified(null);
+      setError(null);
+      setChallengeResult(null);
+      return;
+    }
+
+    const controller = new AbortController();
+    const startedAt = performance.now();
+    setPending(true);
+    setError(null);
+    setBindingVerified(null);
+    setChallengeResult(null);
+
+    void client
+      .runPublicLab(
+        {
+          version: 1,
+          agentId: publicAgentId,
+          command: "PUBLISH_QUOTE",
+          sequence: snapshot.execution.sequence,
+          subjectHash: snapshot.execution.subjectHash,
+          market: "1X2",
+          quoteHash: agent.requestedQuoteHash,
+        },
+        controller.signal,
+      )
+      .then((response) => {
+        setHandshake(response);
+        setBindingVerified(
+          response.result.permit
+            ? client.verifyPermitBinding(
+                response.result.permit,
+                response.request,
+                response.result.evaluatedAt,
+              )
+            : null,
+        );
+        setLatencyMs(Math.max(1, Math.round(performance.now() - startedAt)));
+      })
+      .catch((requestError: unknown) => {
+        if ((requestError as Error).name !== "AbortError") {
+          setHandshake(null);
+          setBindingVerified(null);
+          setError((requestError as Error).message);
+        }
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setPending(false);
+      });
+
+    return () => controller.abort();
+  }, [client, decisionKey]);
+
+  async function runChallenge(challenge: PublicAgentChallenge) {
+    if (!handshake?.result.permit) return;
+    setChallengePending(challenge);
+    setChallengeResult(null);
+    setError(null);
+    try {
+      const response = await client.runPublicLab({
+        version: 1,
+        agentId: publicAgentId,
+        command: "PUBLISH_QUOTE",
+        sequence: handshake.request.sequence,
+        subjectHash: handshake.request.subjectHash,
+        market: handshake.request.market,
+        quoteHash: handshake.request.quoteHash,
+        challenge,
+      });
+      setChallengeResult(response.challenge);
+    } catch (requestError) {
+      setError((requestError as Error).message);
+    } finally {
+      setChallengePending(null);
+    }
+  }
+
+  const challengeReady =
+    handshake?.result.decision === "ALLOW_CERTIFIED_REOPEN" &&
+    Boolean(handshake.result.permit) &&
+    bindingVerified === true;
+  const status = pending
+    ? "CALLING"
+    : error
+      ? "UNAVAILABLE"
+      : handshake?.result.permit && bindingVerified
+        ? "BINDING VERIFIED"
+        : handshake?.result.permit
+          ? "PERMIT REJECTED"
+          : handshake
+            ? "REQUEST BLOCKED"
+            : "ARMED";
+  const stateClass = pending
+    ? "calling"
+    : error
+      ? "failed"
+      : handshake?.result.permit && bindingVerified
+        ? "verified"
+        : handshake?.result.permit
+          ? "failed"
+          : handshake
+            ? "rejected"
+            : "armed";
+
+  return (
+    <section
+      className={`agent-api-panel ${stateClass}`}
+      aria-labelledby="agent-api-title"
+      aria-busy={pending || challengePending !== null}
+    >
+      <div className="agent-api-summary">
+        <span className="agent-api-icon" aria-hidden="true">
+          <Server size={16} />
+        </span>
+        <div>
+          <span id="agent-api-title">Independent HTTPS handshake</span>
+          <strong>
+            {publicAgentId} <ArrowRight size={11} aria-hidden="true" />{" "}
+            <code>POST /api/agent-gate</code>
+          </strong>
+        </div>
+        <div className="agent-api-status" role="status" aria-live="polite">
+          <span>{status}</span>
+          <small>
+            {latencyMs !== null
+              ? `HTTP 200 · ${latencyMs}ms`
+              : "same-origin serverless gate"}
+          </small>
+        </div>
+      </div>
+
+      <div className="agent-api-resources">
+        <a href="/openapi.json" target="_blank" rel="noreferrer">
+          OpenAPI contract <ExternalLink size={11} aria-hidden="true" />
+        </a>
+        <a
+          href="https://github.com/dolepee/stoppage/blob/main/src/integration/stoppage-agent-client.ts"
+          target="_blank"
+          rel="noreferrer"
+        >
+          TypeScript client <ExternalLink size={11} aria-hidden="true" />
+        </a>
+      </div>
+
+      {challengeReady ? (
+        <div className="permit-challenge-lab">
+          <div>
+            <span>Adversarial permit checks</span>
+            <small>Every mutation must fail closed on the server.</small>
+          </div>
+          <div className="permit-challenge-actions">
+            {(Object.keys(challengeLabels) as PublicAgentChallenge[]).map(
+              (challenge) => (
+                <button
+                  key={challenge}
+                  type="button"
+                  onClick={() => void runChallenge(challenge)}
+                  disabled={challengePending !== null}
+                >
+                  {challengePending === challenge
+                    ? "Testing…"
+                    : challengeLabels[challenge]}
+                </button>
+              ),
+            )}
+          </div>
+        </div>
+      ) : null}
+
+      {challengeResult ? (
+        <div className="permit-challenge-result" role="status">
+          <ShieldCheck size={14} aria-hidden="true" />
+          <span>
+            <strong>REJECTED AS EXPECTED</strong>
+            <small>{formatDecisionLabel(challengeResult.decision)}</small>
+          </span>
+        </div>
+      ) : null}
+
+      {error ? (
+        <p className="agent-api-error" role="alert">
+          HTTPS mirror unavailable; the local deterministic gate remains
+          fail-closed.
+        </p>
+      ) : null}
     </section>
   );
 }

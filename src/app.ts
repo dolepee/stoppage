@@ -13,6 +13,7 @@ import { publicJudgeScenario } from "./replay/public-scenario.js";
 import { StoppageRuntime } from "./runtime/stoppage-runtime.js";
 import { loadLatestPublicClaim } from "./evidence/public-claim.js";
 import { evaluateExecutionGate } from "./execution-gate/execution-gate.js";
+import { evaluatePublicAgentHandshake } from "./execution-gate/public-agent-lab.js";
 import {
   executionContextFromPersisted,
   LIVE_EXECUTION_CONTEXT_MAX_AGE_MS,
@@ -149,6 +150,12 @@ export async function createApplication(options: ApplicationOptions = {}) {
       app.log.error({ error }, "private live execution context is invalid");
       return unavailableLiveGate(now, liveContext.sequence);
     }
+  });
+
+  app.post("/api/agent-gate", async (request, reply) => {
+    return reply
+      .header("Cache-Control", "no-store")
+      .send(evaluatePublicAgentHandshake(request.body));
   });
 
   app.get("/api/worker-health", async () => {

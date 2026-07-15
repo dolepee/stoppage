@@ -1,0 +1,268 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Stoppage Execution Gate",
+    "version": "1.0.0",
+    "description": "Machine-readable contract for autonomous market-makers that must obtain a short-lived Stoppage permit before publishing a sports-market quote."
+  },
+  "servers": [
+    {
+      "url": "https://stoppage-txline.vercel.app",
+      "description": "Public synthetic agent lab"
+    }
+  ],
+  "paths": {
+    "/api/agent-gate": {
+      "post": {
+        "summary": "Run the zero-auth public agent handshake",
+        "description": "Rebuilds a deterministic public World Cup what-if checkpoint server-side and evaluates an external agent's exact quote request. Optional challenges prove that permit tampering and expiry fail closed. This endpoint is synthetic and is not live match data.",
+        "operationId": "runPublicAgentGate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PublicAgentHandshakeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Deterministic gate decision and optional adversarial verification",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicAgentHandshakeResponse"
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid strict request body" },
+          "405": { "description": "Only POST is supported" }
+        }
+      }
+    },
+    "/api/execution-gate/evaluate": {
+      "post": {
+        "summary": "Evaluate a live or persistent-runtime quote request",
+        "description": "Resolves a privacy-safe subject hash against the persistent TxLINE worker context. Missing, stale or unhealthy context fails closed without a permit.",
+        "operationId": "evaluateExecutionGate",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ExecutionGateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "A block reason or a short-lived bound permit",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ExecutionGateResult"
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid strict request body" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Hash": {
+        "type": "string",
+        "pattern": "^0x[0-9a-f]{64}$"
+      },
+      "ExecutionGateRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "command",
+          "subjectHash",
+          "market",
+          "quoteHash"
+        ],
+        "properties": {
+          "version": { "const": 1 },
+          "command": { "const": "PUBLISH_QUOTE" },
+          "subjectHash": { "$ref": "#/components/schemas/Hash" },
+          "market": { "const": "1X2" },
+          "quoteHash": { "$ref": "#/components/schemas/Hash" }
+        }
+      },
+      "PublicAgentHandshakeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "agentId",
+          "command",
+          "sequence",
+          "subjectHash",
+          "market",
+          "quoteHash"
+        ],
+        "properties": {
+          "version": { "const": 1 },
+          "agentId": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"
+          },
+          "command": { "const": "PUBLISH_QUOTE" },
+          "sequence": { "type": "integer", "minimum": 1, "maximum": 12 },
+          "subjectHash": { "$ref": "#/components/schemas/Hash" },
+          "market": { "const": "1X2" },
+          "quoteHash": { "$ref": "#/components/schemas/Hash" },
+          "challenge": {
+            "type": "string",
+            "enum": ["QUOTE_TAMPER", "EXPIRED_REPLAY", "RECEIPT_TAMPER"]
+          }
+        }
+      },
+      "ExecutionPermit": {
+        "type": "object",
+        "required": ["body", "hash"],
+        "properties": {
+          "body": {
+            "type": "object",
+            "required": [
+              "version",
+              "decision",
+              "reason",
+              "subjectHash",
+              "market",
+              "quoteHash",
+              "configHash",
+              "sequence",
+              "issuedAt",
+              "expiresAt"
+            ],
+            "properties": {
+              "version": { "const": 1 },
+              "decision": {
+                "type": "string",
+                "enum": ["ALLOW_HEALTHY_QUOTE", "ALLOW_CERTIFIED_REOPEN"]
+              },
+              "reason": { "type": "string" },
+              "subjectHash": { "$ref": "#/components/schemas/Hash" },
+              "market": { "const": "1X2" },
+              "quoteHash": { "$ref": "#/components/schemas/Hash" },
+              "configHash": { "$ref": "#/components/schemas/Hash" },
+              "stateReceiptHash": {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/Hash" },
+                  { "type": "null" }
+                ]
+              },
+              "reopenProofHash": {
+                "oneOf": [
+                  { "$ref": "#/components/schemas/Hash" },
+                  { "type": "null" }
+                ]
+              },
+              "sequence": { "type": "integer" },
+              "issuedAt": { "type": "integer" },
+              "expiresAt": { "type": "integer" }
+            }
+          },
+          "hash": { "$ref": "#/components/schemas/Hash" }
+        }
+      },
+      "ExecutionGateResult": {
+        "type": "object",
+        "required": [
+          "version",
+          "command",
+          "decision",
+          "reason",
+          "evaluatedAt",
+          "sequence",
+          "permit"
+        ],
+        "properties": {
+          "version": { "const": 1 },
+          "command": { "const": "PUBLISH_QUOTE" },
+          "decision": {
+            "type": "string",
+            "enum": [
+              "BLOCK_UNRESOLVED_INCIDENT",
+              "BLOCK_INVALIDATED_BRANCH",
+              "BLOCK_STREAM_UNHEALTHY",
+              "BLOCK_QUOTE_STALE",
+              "BLOCK_PERMIT_EXPIRED",
+              "ALLOW_HEALTHY_QUOTE",
+              "ALLOW_CERTIFIED_REOPEN"
+            ]
+          },
+          "reason": { "type": "string" },
+          "evaluatedAt": { "type": "integer" },
+          "sequence": { "type": "integer" },
+          "permit": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/ExecutionPermit" },
+              { "type": "null" }
+            ]
+          }
+        }
+      },
+      "PublicAgentHandshakeResponse": {
+        "type": "object",
+        "required": [
+          "version",
+          "dataMode",
+          "scenario",
+          "agent",
+          "transport",
+          "request",
+          "result",
+          "challenge"
+        ],
+        "properties": {
+          "version": { "const": 1 },
+          "dataMode": { "const": "SYNTHETIC" },
+          "scenario": { "type": "string" },
+          "agent": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "automated": { "const": true }
+            }
+          },
+          "transport": {
+            "type": "object",
+            "properties": {
+              "protocol": { "const": "HTTPS" },
+              "endpoint": { "const": "/api/agent-gate" },
+              "requestId": { "$ref": "#/components/schemas/Hash" }
+            }
+          },
+          "request": { "$ref": "#/components/schemas/ExecutionGateRequest" },
+          "result": { "$ref": "#/components/schemas/ExecutionGateResult" },
+          "challenge": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "challenge": { "type": "string" },
+                  "expected": { "const": "REJECT" },
+                  "valid": { "const": false },
+                  "decision": { "type": "string" },
+                  "reason": { "type": "string" }
+                }
+              },
+              { "type": "null" }
+            ]
+          }
+        }
+      }
+    }
+  }
+}

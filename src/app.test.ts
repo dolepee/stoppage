@@ -339,6 +339,50 @@ describe("operator API", () => {
     });
   }, 5_000);
 
+  it("serves an independent HTTPS agent handshake and rejects permit replay", async () => {
+    const application = await createApplication({
+      logger: false,
+      serveStatic: false,
+    });
+    applications.push(application);
+    await application.runtime.start(16);
+    const snapshot = application.runtime.snapshot();
+
+    const response = await application.app.inject({
+      method: "POST",
+      url: "/api/agent-gate",
+      payload: {
+        version: 1,
+        agentId: "judge-market-maker-v1",
+        command: "PUBLISH_QUOTE",
+        sequence: snapshot.execution.sequence,
+        subjectHash: snapshot.execution.subjectHash,
+        market: "1X2",
+        quoteHash: snapshot.execution.agent.requestedQuoteHash,
+        challenge: "EXPIRED_REPLAY",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.json()).toMatchObject({
+      dataMode: "SYNTHETIC",
+      transport: {
+        protocol: "HTTPS",
+        endpoint: "/api/agent-gate",
+      },
+      result: {
+        decision: "ALLOW_CERTIFIED_REOPEN",
+      },
+      challenge: {
+        challenge: "EXPIRED_REPLAY",
+        expected: "REJECT",
+        valid: false,
+        decision: "BLOCK_PERMIT_EXPIRED",
+      },
+    });
+  }, 5_000);
+
   it("evaluates a fresh private live-worker context without exposing its fixture", async () => {
     const live = liveExecutionFixture();
     const application = await createApplication({

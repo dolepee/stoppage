@@ -88,7 +88,7 @@ export function evaluateExecutionGate(
     );
   }
 
-  const latestReceipt = context.state.receipts.at(-1) ?? null;
+  const latestReceipt = last(context.state.receipts);
   const reopenProof =
     latestReceipt?.body.action === "REOPEN"
       ? (context.reopenProofs.find(
@@ -173,7 +173,7 @@ export function inspectExecutionPermit(
   const currentQuoteHash = context.state.quote
     ? hashQuote(context.state.quote)
     : null;
-  const latestReceipt = context.state.receipts.at(-1) ?? null;
+  const latestReceipt = last(context.state.receipts);
   if (
     context.state.mode !== "OPEN" ||
     !context.state.streamHealth.odds ||
@@ -268,6 +268,10 @@ function allowed(
     sequence: context.sequence,
     permit: { body, hash: sha256(body) },
   };
+}
+
+function last<T>(items: readonly T[]): T | null {
+  return items.length ? (items[items.length - 1] ?? null) : null;
 }
 
 function invalid(
