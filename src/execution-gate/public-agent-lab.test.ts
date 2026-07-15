@@ -132,6 +132,7 @@ describe("public agent lab", () => {
           subjectHash: allowed.request.subjectHash,
           market: allowed.request.market,
           quoteHash: allowed.request.quoteHash,
+          sequence: allowed.request.sequence,
         },
         keys: publicKeySetFor(signer),
         now: allowed.result.evaluatedAt,

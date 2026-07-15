@@ -82,6 +82,7 @@ export interface PermitV2RequestBinding {
   subjectHash: string;
   market: "1X2";
   quoteHash: string;
+  sequence: number;
 }
 
 export interface PermitV2VerificationResult {
@@ -278,7 +279,8 @@ export function inspectExecutionPermitV2({
       permit.body.command !== request.command ||
       permit.body.subjectHash !== request.subjectHash ||
       permit.body.market !== request.market ||
-      permit.body.quoteHash !== request.quoteHash
+      permit.body.quoteHash !== request.quoteHash ||
+      permit.body.sequence !== request.sequence
     ) {
       return blocked(
         "BLOCK_BINDING_INVALID",
@@ -363,7 +365,9 @@ function validRequestShape(request: PermitV2RequestBinding): boolean {
     request.command === "PUBLISH_QUOTE" &&
     isHash(request.subjectHash) &&
     request.market === "1X2" &&
-    isHash(request.quoteHash)
+    isHash(request.quoteHash) &&
+    Number.isInteger(request.sequence) &&
+    request.sequence >= 1
   );
 }
 

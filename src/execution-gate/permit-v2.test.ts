@@ -49,6 +49,23 @@ describe("authenticated execution permit v2", () => {
     ).toBeNull();
   });
 
+  it("rejects a valid permit when the intended sequence has advanced", () => {
+    const { result, request } = allowedResult();
+    const signed = issueExecutionPermitV2(result, request, signer, 10_000);
+
+    expect(
+      inspectExecutionPermitV2({
+        permit: signed.permit!,
+        request: { ...request, sequence: request.sequence + 1 },
+        keys: publicKeySetFor(signer),
+        now: 10_001,
+      }),
+    ).toMatchObject({
+      valid: false,
+      decision: "BLOCK_BINDING_INVALID",
+    });
+  });
+
   it.each([
     "quote tamper",
     "receipt tamper",
@@ -135,6 +152,7 @@ function requestBinding(): PermitV2RequestBinding {
     subjectHash: `0x${"1".repeat(64)}`,
     market: "1X2",
     quoteHash: `0x${"2".repeat(64)}`,
+    sequence: 12,
   };
 }
 

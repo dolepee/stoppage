@@ -327,6 +327,7 @@ function bindingFor(
     subjectHash: input.subjectHash,
     market: input.market,
     quoteHash: input.quoteHash,
+    sequence: input.sequence,
   };
 }
 
