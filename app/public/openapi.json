@@ -2,44 +2,70 @@
   "openapi": "3.1.0",
   "info": {
     "title": "Stoppage Execution Gate",
-    "version": "1.0.0",
-    "description": "Machine-readable contract for autonomous market-makers that must obtain a short-lived Stoppage permit before publishing a sports-market quote."
+    "version": "2.0.0",
+    "description": "Public synthetic integration contract for autonomous agents that must pass Stoppage enforcement before a simulated venue callback can run. Permit V2 is Ed25519-signed and offline-verifiable; Permit V1 remains available for compatibility but is never accepted by the enforcement SDK."
   },
   "servers": [
     {
       "url": "https://stoppage-txline.vercel.app",
-      "description": "Public synthetic agent lab"
+      "description": "Public synthetic Judge Integration Lab"
     }
   ],
   "paths": {
     "/api/agent-gate": {
       "post": {
-        "summary": "Run the zero-auth public agent handshake",
-        "description": "Rebuilds a deterministic public World Cup what-if checkpoint server-side and evaluates an external agent's exact quote request. Optional challenges prove that permit tampering and expiry fail closed. This endpoint is synthetic and is not live match data.",
-        "operationId": "runPublicAgentGate",
+        "summary": "Evaluate an external agent action",
+        "description": "Rebuilds a deterministic public World Cup checkpoint and evaluates the exact quote action. Version 2 returns an Ed25519-signed permit only for an ALLOW decision. Optional Bench Lite challenges prove six execution attacks fail closed. The endpoint is synthetic and contains no private live match data.",
+        "operationId": "evaluateAgentAction",
         "requestBody": {
           "required": true,
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PublicAgentHandshakeRequest"
+                "oneOf": [
+                  { "$ref": "#/components/schemas/HandshakeRequestV1" },
+                  { "$ref": "#/components/schemas/HandshakeRequestV2" }
+                ]
               }
             }
           }
         },
         "responses": {
           "200": {
-            "description": "Deterministic gate decision and optional adversarial verification",
+            "description": "Gate decision, optional permit, and optional adversarial result",
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/PublicAgentHandshakeResponse"
+                  "oneOf": [
+                    { "$ref": "#/components/schemas/HandshakeResponseV1" },
+                    { "$ref": "#/components/schemas/HandshakeResponseV2" }
+                  ]
                 }
               }
             }
           },
           "400": { "description": "Invalid strict request body" },
-          "405": { "description": "Only POST is supported" }
+          "405": { "description": "Only POST is supported" },
+          "500": { "description": "Gate failed closed" }
+        }
+      }
+    },
+    "/api/permit-keys": {
+      "get": {
+        "summary": "Discover Permit V2 verification keys",
+        "description": "Returns active and retained retired Ed25519 public keys. Private signing material is never returned.",
+        "operationId": "discoverPermitKeys",
+        "responses": {
+          "200": {
+            "description": "Stoppage public verification key set",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/VerificationKeySet" }
+              }
+            }
+          },
+          "405": { "description": "Only GET is supported" },
+          "503": { "description": "Verification keys unavailable" }
         }
       }
     }
@@ -50,45 +76,19 @@
         "type": "string",
         "pattern": "^0x[0-9a-f]{64}$"
       },
-      "ExecutionGateRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "version",
-          "command",
-          "subjectHash",
-          "market",
-          "quoteHash"
-        ],
-        "properties": {
-          "version": { "const": 1 },
-          "command": { "const": "PUBLISH_QUOTE" },
-          "subjectHash": { "$ref": "#/components/schemas/Hash" },
-          "market": { "const": "1X2" },
-          "quoteHash": { "$ref": "#/components/schemas/Hash" }
-        }
+      "AgentId": {
+        "type": "string",
+        "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"
       },
-      "ExecutionGateResponseRequest": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "version",
-          "command",
-          "sequence",
-          "subjectHash",
-          "market",
-          "quoteHash"
-        ],
-        "properties": {
-          "version": { "const": 1 },
-          "command": { "const": "PUBLISH_QUOTE" },
-          "sequence": { "type": "integer", "minimum": 1, "maximum": 12 },
-          "subjectHash": { "$ref": "#/components/schemas/Hash" },
-          "market": { "const": "1X2" },
-          "quoteHash": { "$ref": "#/components/schemas/Hash" }
-        }
+      "Audience": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._/-]{2,127}$"
       },
-      "PublicAgentHandshakeRequest": {
+      "Nonce": {
+        "type": "string",
+        "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{7,127}$"
+      },
+      "HandshakeRequestV1": {
         "type": "object",
         "additionalProperties": false,
         "required": [
@@ -102,10 +102,7 @@
         ],
         "properties": {
           "version": { "const": 1 },
-          "agentId": {
-            "type": "string",
-            "pattern": "^[a-z0-9][a-z0-9-]{2,63}$"
-          },
+          "agentId": { "$ref": "#/components/schemas/AgentId" },
           "command": { "const": "PUBLISH_QUOTE" },
           "sequence": { "type": "integer", "minimum": 1, "maximum": 12 },
           "subjectHash": { "$ref": "#/components/schemas/Hash" },
@@ -113,30 +110,115 @@
           "quoteHash": { "$ref": "#/components/schemas/Hash" },
           "challenge": {
             "type": "string",
-            "enum": ["QUOTE_TAMPER", "EXPIRED_REPLAY", "RECEIPT_TAMPER"]
+            "enum": ["QUOTE_TAMPER", "RECEIPT_TAMPER", "EXPIRED_REPLAY"]
           }
         }
       },
-      "ExecutionPermit": {
+      "HandshakeRequestV2": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "agentId",
+          "audience",
+          "nonce",
+          "command",
+          "sequence",
+          "subjectHash",
+          "market",
+          "quoteHash"
+        ],
+        "properties": {
+          "version": { "const": 2 },
+          "agentId": { "$ref": "#/components/schemas/AgentId" },
+          "audience": { "$ref": "#/components/schemas/Audience" },
+          "nonce": { "$ref": "#/components/schemas/Nonce" },
+          "command": { "const": "PUBLISH_QUOTE" },
+          "sequence": { "type": "integer", "minimum": 1, "maximum": 12 },
+          "subjectHash": { "$ref": "#/components/schemas/Hash" },
+          "market": { "const": "1X2" },
+          "quoteHash": { "$ref": "#/components/schemas/Hash" },
+          "challenge": {
+            "type": "string",
+            "enum": [
+              "QUOTE_TAMPER",
+              "RECEIPT_TAMPER",
+              "EXPIRED_REPLAY",
+              "WRONG_AUDIENCE",
+              "UNKNOWN_SIGNING_KEY",
+              "REUSED_NONCE"
+            ]
+          }
+        }
+      },
+      "GateResponseRequestV1": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "command",
+          "sequence",
+          "subjectHash",
+          "market",
+          "quoteHash"
+        ],
+        "properties": {
+          "version": { "const": 1 },
+          "command": { "const": "PUBLISH_QUOTE" },
+          "sequence": { "type": "integer", "minimum": 1, "maximum": 12 },
+          "subjectHash": { "$ref": "#/components/schemas/Hash" },
+          "market": { "const": "1X2" },
+          "quoteHash": { "$ref": "#/components/schemas/Hash" }
+        }
+      },
+      "PermitV1": {
         "type": "object",
         "required": ["body", "hash"],
         "properties": {
           "body": {
             "type": "object",
+            "properties": { "version": { "const": 1 } }
+          },
+          "hash": { "$ref": "#/components/schemas/Hash" }
+        }
+      },
+      "PermitV2": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["alg", "body", "hash", "signature"],
+        "properties": {
+          "alg": { "const": "Ed25519" },
+          "body": {
+            "type": "object",
+            "additionalProperties": false,
             "required": [
               "version",
+              "issuer",
+              "kid",
+              "agentId",
+              "audience",
+              "nonce",
+              "command",
               "decision",
               "reason",
               "subjectHash",
               "market",
               "quoteHash",
               "configHash",
+              "stateReceiptHash",
+              "reopenProofHash",
               "sequence",
               "issuedAt",
               "expiresAt"
             ],
             "properties": {
-              "version": { "const": 1 },
+              "version": { "const": 2 },
+              "issuer": { "const": "stoppage" },
+              "kid": { "type": "string" },
+              "agentId": { "$ref": "#/components/schemas/AgentId" },
+              "audience": { "$ref": "#/components/schemas/Audience" },
+              "nonce": { "$ref": "#/components/schemas/Nonce" },
+              "command": { "const": "PUBLISH_QUOTE" },
               "decision": {
                 "type": "string",
                 "enum": ["ALLOW_HEALTHY_QUOTE", "ALLOW_CERTIFIED_REOPEN"]
@@ -158,100 +240,127 @@
                   { "type": "null" }
                 ]
               },
-              "sequence": { "type": "integer" },
+              "sequence": { "type": "integer", "minimum": 1 },
               "issuedAt": { "type": "integer" },
               "expiresAt": { "type": "integer" }
             }
           },
-          "hash": { "$ref": "#/components/schemas/Hash" }
+          "hash": { "$ref": "#/components/schemas/Hash" },
+          "signature": {
+            "type": "string",
+            "description": "Base64url Ed25519 signature"
+          }
         }
       },
-      "ExecutionGateResult": {
+      "GateDecision": {
+        "type": "string",
+        "enum": [
+          "BLOCK_UNRESOLVED_INCIDENT",
+          "BLOCK_INVALIDATED_BRANCH",
+          "BLOCK_STREAM_UNHEALTHY",
+          "BLOCK_QUOTE_STALE",
+          "BLOCK_PERMIT_EXPIRED",
+          "ALLOW_HEALTHY_QUOTE",
+          "ALLOW_CERTIFIED_REOPEN"
+        ]
+      },
+      "GateResultV1": {
         "type": "object",
-        "required": [
-          "version",
-          "command",
-          "decision",
-          "reason",
-          "evaluatedAt",
-          "sequence",
-          "permit"
-        ],
         "properties": {
           "version": { "const": 1 },
           "command": { "const": "PUBLISH_QUOTE" },
-          "decision": {
-            "type": "string",
-            "enum": [
-              "BLOCK_UNRESOLVED_INCIDENT",
-              "BLOCK_INVALIDATED_BRANCH",
-              "BLOCK_STREAM_UNHEALTHY",
-              "BLOCK_QUOTE_STALE",
-              "BLOCK_PERMIT_EXPIRED",
-              "ALLOW_HEALTHY_QUOTE",
-              "ALLOW_CERTIFIED_REOPEN"
-            ]
-          },
+          "decision": { "$ref": "#/components/schemas/GateDecision" },
           "reason": { "type": "string" },
           "evaluatedAt": { "type": "integer" },
           "sequence": { "type": "integer" },
           "permit": {
             "oneOf": [
-              { "$ref": "#/components/schemas/ExecutionPermit" },
+              { "$ref": "#/components/schemas/PermitV1" },
               { "type": "null" }
             ]
           }
         }
       },
-      "PublicAgentHandshakeResponse": {
+      "GateResultV2": {
         "type": "object",
-        "required": [
-          "version",
-          "dataMode",
-          "scenario",
-          "agent",
-          "transport",
-          "request",
-          "result",
-          "challenge"
-        ],
+        "properties": {
+          "version": { "const": 2 },
+          "command": { "const": "PUBLISH_QUOTE" },
+          "decision": { "$ref": "#/components/schemas/GateDecision" },
+          "reason": { "type": "string" },
+          "evaluatedAt": { "type": "integer" },
+          "sequence": { "type": "integer" },
+          "permit": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/PermitV2" },
+              { "type": "null" }
+            ]
+          }
+        }
+      },
+      "ChallengeResult": {
+        "type": "object",
+        "properties": {
+          "challenge": { "type": "string" },
+          "expected": { "const": "REJECT" },
+          "valid": { "type": "boolean" },
+          "decision": { "type": "string" },
+          "reason": { "type": "string" }
+        }
+      },
+      "HandshakeResponseV1": {
+        "type": "object",
         "properties": {
           "version": { "const": 1 },
           "dataMode": { "const": "SYNTHETIC" },
-          "scenario": { "type": "string" },
-          "agent": {
-            "type": "object",
-            "properties": {
-              "id": { "type": "string" },
-              "automated": { "const": true }
-            }
-          },
-          "transport": {
-            "type": "object",
-            "properties": {
-              "protocol": { "const": "HTTPS" },
-              "endpoint": { "const": "/api/agent-gate" },
-              "requestId": { "$ref": "#/components/schemas/Hash" }
-            }
-          },
           "request": {
-            "$ref": "#/components/schemas/ExecutionGateResponseRequest"
+            "$ref": "#/components/schemas/GateResponseRequestV1"
           },
-          "result": { "$ref": "#/components/schemas/ExecutionGateResult" },
+          "result": { "$ref": "#/components/schemas/GateResultV1" },
           "challenge": {
             "oneOf": [
-              {
-                "type": "object",
-                "properties": {
-                  "challenge": { "type": "string" },
-                  "expected": { "const": "REJECT" },
-                  "valid": { "const": false },
-                  "decision": { "type": "string" },
-                  "reason": { "type": "string" }
-                }
-              },
+              { "$ref": "#/components/schemas/ChallengeResult" },
               { "type": "null" }
             ]
+          }
+        }
+      },
+      "HandshakeResponseV2": {
+        "type": "object",
+        "properties": {
+          "version": { "const": 2 },
+          "dataMode": { "const": "SYNTHETIC" },
+          "request": { "$ref": "#/components/schemas/HandshakeRequestV2" },
+          "result": { "$ref": "#/components/schemas/GateResultV2" },
+          "challenge": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/ChallengeResult" },
+              { "type": "null" }
+            ]
+          }
+        }
+      },
+      "VerificationKeySet": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["version", "issuer", "keys"],
+        "properties": {
+          "version": { "const": 1 },
+          "issuer": { "const": "stoppage" },
+          "keys": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["kid", "alg", "use", "publicKey", "status"],
+              "properties": {
+                "kid": { "type": "string" },
+                "alg": { "const": "Ed25519" },
+                "use": { "const": "sig" },
+                "publicKey": { "type": "string" },
+                "status": { "type": "string", "enum": ["ACTIVE", "RETIRED"] }
+              }
+            }
           }
         }
       }

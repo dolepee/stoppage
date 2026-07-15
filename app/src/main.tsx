@@ -27,18 +27,22 @@ import {
   useRef,
   useState,
   type AnchorHTMLAttributes,
+  type FormEvent,
   type MouseEventHandler,
   type ReactNode,
 } from "react";
 import { createRoot } from "react-dom/client";
+import {
+  StoppageClient,
+  type BenchLiteAttack,
+  type ExecutionIntent,
+  type GuardActionResult,
+  type PublicAgentResponseV2,
+} from "@stoppage/sdk";
 
 import { publicJudgeScenario } from "../../src/replay/public-scenario";
 import { StoppageRuntime } from "../../src/runtime/stoppage-runtime";
-import type {
-  PublicAgentChallenge,
-  PublicAgentHandshakeResponse,
-} from "../../src/execution-gate/public-agent-lab";
-import { StoppageAgentClient } from "../../src/integration/stoppage-agent-client";
+import type { PublicAgentChallengeResult } from "../../src/execution-gate/public-agent-lab";
 
 import { getChallengeResultDisplay } from "./challenge-result";
 import type {
@@ -69,12 +73,12 @@ const routeMetadata: Record<AppRoute, { title: string; description: string }> =
     "/": {
       title: "Home · Stoppage",
       description:
-        "Stoppage is the independent pre-trade firewall for autonomous sports agents, blocking invalid price branches until fresh consensus permits execution.",
+        "Stoppage is the independent pre-trade firewall that keeps an autonomous sports agent's venue callback closed until a signed execution permit verifies.",
     },
     "/demo": {
       title: "Demo · Stoppage",
       description:
-        "Test Stoppage's synthetic World Cup agent gate: block an invalid VAR price branch, certify fresh consensus, and reject permit tampering.",
+        "Test Stoppage's synthetic World Cup enforcement adapter: withhold the venue callback during VAR uncertainty, verify a signed permit, and reject six execution attacks.",
     },
     "/evidence": {
       title: "Evidence · Stoppage",
@@ -84,7 +88,7 @@ const routeMetadata: Record<AppRoute, { title: string; description: string }> =
     "/system": {
       title: "System · Stoppage",
       description:
-        "Inspect Stoppage's deterministic execution path, fail-closed controls, permit lifetime, policy binding, and clearly labeled synthetic inputs.",
+        "Inspect Stoppage's deterministic execution path, Ed25519 permit, fail-closed callback controls, policy binding, and clearly labeled synthetic inputs.",
     },
   };
 
@@ -354,8 +358,9 @@ function HomePage({
             </h1>
             <p className="home-lede">
               Other agents decide what to trade. Stoppage independently decides
-              whether they are allowed to execute it, blocking invalid price
-              branches until post-resolution TxLINE consensus is fresh.
+              whether their venue callback may run, blocking invalid price
+              branches until post-resolution TxLINE consensus is fresh and an
+              Ed25519 permit verifies.
             </p>
             <div className="home-actions">
               <AppLink className="primary-action" to="/demo">
@@ -377,7 +382,7 @@ function HomePage({
               </li>
               <li>
                 <ShieldCheck size={15} aria-hidden="true" />
-                Mainnet proof linked
+                Signed Permit V2
               </li>
             </ul>
           </div>
@@ -428,8 +433,8 @@ function HomePage({
               </span>
               <div>
                 <small>Independent gate</small>
-                <strong>Strategy and permission stay separate</strong>
-                <span>No valid permit, no simulated publish.</span>
+                <strong>The venue callback stays outside the strategy</strong>
+                <span>No valid signed permit, no callback.</span>
               </div>
             </div>
           </section>
@@ -1507,25 +1512,46 @@ function ExecutionStage({ snapshot }: { snapshot: RuntimeSnapshot }) {
   );
 }
 
-const publicAgentId = "judge-market-maker-v1";
-const challengeLabels: Record<PublicAgentChallenge, string> = {
-  QUOTE_TAMPER: "Tamper quote",
-  EXPIRED_REPLAY: "Replay expired",
-  RECEIPT_TAMPER: "Alter receipt",
+const publicAgentId = "judge-market-maker-v2";
+const publicAgentAudience = "venue:judge-market-maker-v2";
+const benchLiteAttacks: BenchLiteAttack[] = [
+  "QUOTE_TAMPER",
+  "RECEIPT_TAMPER",
+  "EXPIRED_REPLAY",
+  "WRONG_AUDIENCE",
+  "UNKNOWN_SIGNING_KEY",
+  "REUSED_NONCE",
+];
+const challengeLabels: Record<BenchLiteAttack, string> = {
+  QUOTE_TAMPER: "Quote tamper",
+  RECEIPT_TAMPER: "Receipt tamper",
+  EXPIRED_REPLAY: "Expired permit",
+  WRONG_AUDIENCE: "Wrong audience",
+  UNKNOWN_SIGNING_KEY: "Unknown key",
+  REUSED_NONCE: "Reused nonce",
 };
+type VenueOutcome = GuardActionResult<{ receipt: string }>;
 
 function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
-  const client = useMemo(() => new StoppageAgentClient(), []);
-  const [handshake, setHandshake] =
-    useState<PublicAgentHandshakeResponse | null>(null);
+  const client = useMemo(() => new StoppageClient(), []);
+  const [identity, setIdentity] = useState({
+    agentId: publicAgentId,
+    audience: publicAgentAudience,
+  });
+  const [agentDraft, setAgentDraft] = useState(publicAgentId);
+  const [audienceDraft, setAudienceDraft] = useState(publicAgentAudience);
+  const [identityError, setIdentityError] = useState<string | null>(null);
+  const [handshake, setHandshake] = useState<PublicAgentResponseV2 | null>(
+    null,
+  );
+  const [outcome, setOutcome] = useState<VenueOutcome | null>(null);
   const [pending, setPending] = useState(false);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
-  const [bindingVerified, setBindingVerified] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [challengePending, setChallengePending] =
-    useState<PublicAgentChallenge | null>(null);
-  const [challengeResult, setChallengeResult] =
-    useState<PublicAgentHandshakeResponse["challenge"]>(null);
+  const [benchPending, setBenchPending] = useState(false);
+  const [benchResults, setBenchResults] = useState<
+    PublicAgentChallengeResult[]
+  >([]);
   const agent = snapshot.execution.agent;
   const handshakeKey =
     agent.decisionCode && agent.requestedQuoteHash
@@ -1535,56 +1561,54 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
           agent.requestedQuoteHash,
           snapshot.execution.sequence,
           snapshot.execution.subjectHash,
+          identity.agentId,
+          identity.audience,
         ].join(":")
       : null;
 
   useEffect(() => {
     if (!handshakeKey || !agent.requestedQuoteHash) {
       setHandshake(null);
+      setOutcome(null);
       setLatencyMs(null);
-      setBindingVerified(null);
       setError(null);
-      setChallengeResult(null);
+      setBenchResults([]);
       return;
     }
 
     const controller = new AbortController();
     const startedAt = performance.now();
+    const intent: ExecutionIntent = {
+      version: 2,
+      agentId: identity.agentId,
+      audience: identity.audience,
+      nonce: `judge-${crypto.randomUUID()}`,
+      command: "PUBLISH_QUOTE",
+      sequence: snapshot.execution.sequence,
+      subjectHash: snapshot.execution.subjectHash,
+      market: "1X2",
+      quoteHash: agent.requestedQuoteHash,
+    };
     setPending(true);
     setError(null);
-    setBindingVerified(null);
-    setChallengeResult(null);
+    setBenchResults([]);
 
     void client
-      .runPublicLab(
-        {
-          version: 1,
-          agentId: publicAgentId,
-          command: "PUBLISH_QUOTE",
-          sequence: snapshot.execution.sequence,
-          subjectHash: snapshot.execution.subjectHash,
-          market: "1X2",
-          quoteHash: agent.requestedQuoteHash,
-        },
+      .guardAction(
+        intent,
+        async () => ({ receipt: `venue-${crypto.randomUUID()}` }),
         controller.signal,
       )
-      .then((response) => {
-        setHandshake(response);
-        setBindingVerified(
-          response.result.permit
-            ? client.verifyPermitBinding(
-                response.result,
-                response.request,
-                response.result.evaluatedAt,
-              )
-            : null,
-        );
+      .then((nextOutcome) => {
+        if (controller.signal.aborted) return;
+        setOutcome(nextOutcome);
+        setHandshake(nextOutcome.response);
         setLatencyMs(Math.max(1, Math.round(performance.now() - startedAt)));
       })
       .catch((requestError: unknown) => {
         if ((requestError as Error).name !== "AbortError") {
           setHandshake(null);
-          setBindingVerified(null);
+          setOutcome(null);
           setError((requestError as Error).message);
         }
       })
@@ -1595,146 +1619,238 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
     return () => controller.abort();
   }, [client, handshakeKey]);
 
-  async function runChallenge(challenge: PublicAgentChallenge) {
+  function applyIdentity(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!/^[a-z0-9][a-z0-9-]{2,63}$/.test(agentDraft)) {
+      setIdentityError(
+        "Agent ID must use 3–64 lowercase letters, numbers or hyphens.",
+      );
+      return;
+    }
+    if (!/^[a-zA-Z0-9][a-zA-Z0-9:._/-]{2,127}$/.test(audienceDraft)) {
+      setIdentityError("Audience must be 3–128 URL-safe characters.");
+      return;
+    }
+    setIdentityError(null);
+    setIdentity({ agentId: agentDraft, audience: audienceDraft });
+  }
+
+  async function runBenchLite() {
     if (!handshake?.result.permit) return;
-    setChallengePending(challenge);
-    setChallengeResult(null);
+    setBenchPending(true);
+    setBenchResults([]);
     setError(null);
     try {
-      const response = await client.runPublicLab({
-        version: 1,
-        agentId: publicAgentId,
-        command: "PUBLISH_QUOTE",
-        sequence: handshake.request.sequence,
-        subjectHash: handshake.request.subjectHash,
-        market: handshake.request.market,
-        quoteHash: handshake.request.quoteHash,
-        challenge,
-      });
-      setChallengeResult(response.challenge);
+      const responses = await Promise.all(
+        benchLiteAttacks.map((challenge) =>
+          client.runBenchLiteCheck(handshake.request, challenge),
+        ),
+      );
+      const results = responses.flatMap((response) =>
+        response.challenge ? [response.challenge] : [],
+      ) as PublicAgentChallengeResult[];
+      setBenchResults(results);
+      if (results.length !== benchLiteAttacks.length) {
+        setError("Bench Lite did not return all six enforcement checks.");
+      }
     } catch (requestError) {
       setError((requestError as Error).message);
     } finally {
-      setChallengePending(null);
+      setBenchPending(false);
     }
   }
 
-  const challengeReady =
-    handshake?.result.decision === "ALLOW_CERTIFIED_REOPEN" &&
-    Boolean(handshake.result.permit) &&
-    bindingVerified === true;
+  const permit = handshake?.result.permit ?? null;
+  const venueExecuted = outcome?.status === "VENUE_CALL_EXECUTED";
   const status = pending
     ? "CALLING"
     : error
       ? "UNAVAILABLE"
-      : handshake?.result.permit && bindingVerified
-        ? "BINDING VERIFIED"
-        : handshake?.result.permit
-          ? "PERMIT REJECTED"
-          : handshake
-            ? "REQUEST BLOCKED"
-            : "ARMED";
+      : venueExecuted
+        ? "VENUE CALL EXECUTED"
+        : outcome
+          ? "VENUE CALL WITHHELD"
+          : "ARMED";
   const stateClass = pending
     ? "calling"
     : error
       ? "failed"
-      : handshake?.result.permit && bindingVerified
+      : venueExecuted
         ? "verified"
-        : handshake?.result.permit
-          ? "failed"
-          : handshake
-            ? "rejected"
-            : "armed";
-  const challengeDisplay = challengeResult
-    ? getChallengeResultDisplay(challengeResult)
-    : null;
+        : outcome
+          ? "rejected"
+          : "armed";
+  const challengeReady =
+    handshake?.result.decision === "ALLOW_CERTIFIED_REOPEN" &&
+    venueExecuted &&
+    Boolean(permit);
+  const passedBench = benchResults.filter(
+    (result) => getChallengeResultDisplay(result).passed,
+  ).length;
 
   return (
     <section
       className={`agent-api-panel ${stateClass}`}
       aria-labelledby="agent-api-title"
-      aria-busy={pending || challengePending !== null}
+      aria-busy={pending || benchPending}
     >
       <div className="agent-api-summary">
         <span className="agent-api-icon" aria-hidden="true">
           <Server size={16} />
         </span>
         <div>
-          <span id="agent-api-title">Independent HTTPS handshake</span>
+          <span id="agent-api-title">Agent enforcement SDK</span>
           <strong>
-            {publicAgentId} <ArrowRight size={11} aria-hidden="true" />{" "}
-            <code>POST /api/agent-gate</code>
+            <code>guardAction()</code>
+            <ArrowRight size={11} aria-hidden="true" /> venue.publish()
           </strong>
         </div>
         <div className="agent-api-status" role="status" aria-live="polite">
           <span>{status}</span>
           <small>
             {latencyMs !== null
-              ? `HTTP 200 · ${latencyMs}ms`
-              : "same-origin serverless gate"}
+              ? `offline verify · ${latencyMs}ms total`
+              : "callback closed by default"}
           </small>
         </div>
       </div>
+
+      <form className="agent-identity-form" onSubmit={applyIdentity} noValidate>
+        <label htmlFor="agent-id">
+          <span>Agent ID</span>
+          <input
+            id="agent-id"
+            value={agentDraft}
+            onChange={(event) => setAgentDraft(event.target.value)}
+            aria-invalid={identityError ? "true" : undefined}
+            aria-describedby={
+              identityError ? "agent-identity-error" : undefined
+            }
+          />
+        </label>
+        <label htmlFor="permit-audience">
+          <span>Permit audience</span>
+          <input
+            id="permit-audience"
+            value={audienceDraft}
+            onChange={(event) => setAudienceDraft(event.target.value)}
+            aria-invalid={identityError ? "true" : undefined}
+            aria-describedby={
+              identityError ? "agent-identity-error" : undefined
+            }
+          />
+        </label>
+        <button type="submit">Apply identity</button>
+      </form>
+      {identityError ? (
+        <p id="agent-identity-error" className="agent-api-error" role="alert">
+          {identityError}
+        </p>
+      ) : null}
+
+      <div
+        className={`venue-call-result ${venueExecuted ? "executed" : "withheld"}`}
+        role="status"
+        aria-live="polite"
+      >
+        {venueExecuted ? (
+          <ShieldCheck size={17} aria-hidden="true" />
+        ) : (
+          <LockKeyhole size={17} aria-hidden="true" />
+        )}
+        <span>
+          <strong>
+            {venueExecuted ? "VENUE CALL EXECUTED" : "VENUE CALL WITHHELD"}
+          </strong>
+          <small>
+            {outcome?.verification.reason ??
+              "No signed Permit V2 has authorized this callback."}
+          </small>
+        </span>
+      </div>
+
+      {permit ? (
+        <dl className="signed-permit-details">
+          <div>
+            <dt>Signer key</dt>
+            <dd>{permit.body.kid}</dd>
+          </div>
+          <div>
+            <dt>Signature</dt>
+            <dd>{venueExecuted ? "Ed25519 verified" : "Rejected"}</dd>
+          </div>
+          <div>
+            <dt>Audience</dt>
+            <dd>{permit.body.audience}</dd>
+          </div>
+          <div>
+            <dt>Permit life</dt>
+            <dd>
+              {(permit.body.expiresAt - permit.body.issuedAt) / 1_000}s · one
+              use
+            </dd>
+          </div>
+        </dl>
+      ) : null}
 
       <div className="agent-api-resources">
         <a href="/openapi.json" target="_blank" rel="noreferrer">
           OpenAPI contract <ExternalLink size={11} aria-hidden="true" />
         </a>
+        <a href="/api/permit-keys" target="_blank" rel="noreferrer">
+          Verification keys <ExternalLink size={11} aria-hidden="true" />
+        </a>
         <a
-          href="https://github.com/dolepee/stoppage/blob/main/src/integration/stoppage-agent-client.ts"
+          href="https://github.com/dolepee/stoppage/tree/main/packages/sdk"
           target="_blank"
           rel="noreferrer"
         >
-          TypeScript client <ExternalLink size={11} aria-hidden="true" />
+          Enforcement SDK <ExternalLink size={11} aria-hidden="true" />
         </a>
       </div>
 
       {challengeReady ? (
         <div className="permit-challenge-lab">
           <div>
-            <span>Adversarial permit checks</span>
-            <small>Every mutation must fail closed on the server.</small>
+            <span>Bench Lite</span>
+            <small>Six attacks must fail before the venue callback.</small>
           </div>
           <div className="permit-challenge-actions">
-            {(Object.keys(challengeLabels) as PublicAgentChallenge[]).map(
-              (challenge) => (
-                <button
-                  key={challenge}
-                  type="button"
-                  onClick={() => void runChallenge(challenge)}
-                  disabled={challengePending !== null}
-                >
-                  {challengePending === challenge
-                    ? "Testing…"
-                    : challengeLabels[challenge]}
-                </button>
-              ),
-            )}
+            <button
+              type="button"
+              onClick={() => void runBenchLite()}
+              disabled={benchPending}
+            >
+              {benchPending ? "Running 6 checks…" : "Run 6 execution attacks"}
+            </button>
           </div>
         </div>
       ) : null}
 
-      {challengeDisplay ? (
+      {benchResults.length > 0 ? (
         <div
-          className={`permit-challenge-result ${challengeDisplay.passed ? "" : "failed"}`}
-          role={challengeDisplay.passed ? "status" : "alert"}
+          className={`permit-challenge-result ${passedBench === 6 ? "" : "failed"}`}
+          role={passedBench === 6 ? "status" : "alert"}
         >
-          {challengeDisplay.passed ? (
+          {passedBench === 6 ? (
             <ShieldCheck size={14} aria-hidden="true" />
           ) : (
             <AlertTriangle size={14} aria-hidden="true" />
           )}
           <span>
-            <strong>{challengeDisplay.title}</strong>
-            <small>{challengeDisplay.detail}</small>
+            <strong>{passedBench}/6 EXECUTION ATTACKS REJECTED</strong>
+            <small>
+              {benchResults
+                .map((result) => challengeLabels[result.challenge])
+                .join(" · ")}
+            </small>
           </span>
         </div>
       ) : null}
 
       {error ? (
         <p className="agent-api-error" role="alert">
-          HTTPS mirror unavailable; the local deterministic gate remains
-          fail-closed.
+          Enforcement unavailable; the venue callback remains fail-closed.
         </p>
       ) : null}
     </section>

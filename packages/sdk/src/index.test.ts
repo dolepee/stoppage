@@ -1,0 +1,214 @@
+import { sha256 as sha256Digest } from "@noble/hashes/sha2.js";
+import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
+import { describe, expect, it, vi } from "vitest";
+import nacl from "tweetnacl";
+
+import {
+  StoppageClient,
+  verifyPermit,
+  type ExecutionIntent,
+  type PermitVerificationKeySet,
+  type PublicAgentResponseV2,
+  type SignedExecutionPermitV2,
+} from "./index.js";
+
+const pair = nacl.sign.keyPair.fromSeed(
+  Uint8Array.from({ length: 32 }, (_, index) => index),
+);
+const kid = `stp_${hashCanonical(Array.from(pair.publicKey)).slice(2, 18)}`;
+const keys: PermitVerificationKeySet = {
+  version: 1,
+  issuer: "stoppage",
+  keys: [
+    {
+      kid,
+      alg: "Ed25519",
+      use: "sig",
+      publicKey: encodeBase64Url(pair.publicKey),
+      status: "ACTIVE",
+    },
+  ],
+};
+
+describe("@stoppage/sdk enforcement adapter", () => {
+  it("verifies a Permit V2 offline and rejects a V1 object", () => {
+    const now = Date.now();
+    const intent = makeIntent("offline-nonce-0001");
+    const permit = makePermit(intent, now);
+
+    expect(verifyPermit({ permit, intent, keys, now: now + 1 })).toMatchObject({
+      valid: true,
+      decision: "ALLOW",
+    });
+    expect(
+      verifyPermit({
+        permit: { body: { version: 1 } } as never,
+        intent,
+        keys,
+        now,
+      }),
+    ).toMatchObject({ valid: false, decision: "BLOCK_PERMIT_MALFORMED" });
+  });
+
+  it("never invokes the venue callback on a BLOCK decision", async () => {
+    const intent = makeIntent("blocked-nonce-0001");
+    const callback = vi.fn();
+    const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue(
+      jsonResponse({
+        ...makeResponse(intent, Date.now()),
+        result: {
+          version: 2,
+          command: "PUBLISH_QUOTE",
+          decision: "BLOCK_UNRESOLVED_INCIDENT",
+          reason: "Uncertainty",
+          evaluatedAt: Date.now(),
+          sequence: intent.sequence,
+          permit: null,
+        },
+      }),
+    );
+    const client = new StoppageClient({ fetch, keySet: keys });
+
+    const outcome = await client.guardAction(intent, callback);
+
+    expect(outcome.status).toBe("VENUE_CALL_WITHHELD");
+    expect(callback).not.toHaveBeenCalled();
+  });
+
+  it("claims a nonce before callback invocation so concurrent replay executes once", async () => {
+    const now = Date.now();
+    const intent = makeIntent("one-use-nonce-0001");
+    const response = makeResponse(intent, now);
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async () => jsonResponse(response));
+    const callback = vi.fn(async () => "venue-receipt");
+    const client = new StoppageClient({ fetch, keySet: keys });
+
+    const outcomes = await Promise.all([
+      client.guardAction(intent, callback),
+      client.guardAction(intent, callback),
+    ]);
+
+    expect(callback).toHaveBeenCalledTimes(1);
+    expect(outcomes.map((outcome) => outcome.status).sort()).toEqual([
+      "VENUE_CALL_EXECUTED",
+      "VENUE_CALL_WITHHELD",
+    ]);
+    expect(
+      outcomes.find((outcome) => outcome.status === "VENUE_CALL_WITHHELD")
+        ?.verification.decision,
+    ).toBe("BLOCK_NONCE_REPLAY");
+  });
+});
+
+function makeIntent(nonce: string): ExecutionIntent {
+  return {
+    version: 2,
+    agentId: "clean-consumer-agent",
+    audience: "venue:clean-consumer-agent",
+    nonce,
+    command: "PUBLISH_QUOTE",
+    sequence: 12,
+    subjectHash: `0x${"1".repeat(64)}`,
+    market: "1X2",
+    quoteHash: `0x${"2".repeat(64)}`,
+  };
+}
+
+function makeResponse(
+  intent: ExecutionIntent,
+  now: number,
+): PublicAgentResponseV2 {
+  const permit = makePermit(intent, now);
+  return {
+    version: 2,
+    dataMode: "SYNTHETIC",
+    scenario: "test",
+    agent: { id: intent.agentId, automated: true },
+    transport: {
+      protocol: "HTTPS",
+      endpoint: "/api/agent-gate",
+      keyEndpoint: "/api/permit-keys",
+      requestId: `0x${"9".repeat(64)}`,
+    },
+    request: intent,
+    result: {
+      version: 2,
+      command: "PUBLISH_QUOTE",
+      decision: "ALLOW_CERTIFIED_REOPEN",
+      reason: permit.body.reason,
+      evaluatedAt: now,
+      sequence: intent.sequence,
+      permit,
+    },
+    challenge: null,
+  };
+}
+
+function makePermit(
+  intent: ExecutionIntent,
+  now: number,
+): SignedExecutionPermitV2 {
+  const body = {
+    version: 2 as const,
+    issuer: "stoppage",
+    kid,
+    agentId: intent.agentId,
+    audience: intent.audience,
+    nonce: intent.nonce,
+    command: intent.command,
+    decision: "ALLOW_CERTIFIED_REOPEN" as const,
+    reason: "Certified",
+    subjectHash: intent.subjectHash,
+    market: intent.market,
+    quoteHash: intent.quoteHash,
+    configHash: `0x${"3".repeat(64)}`,
+    stateReceiptHash: `0x${"4".repeat(64)}`,
+    reopenProofHash: `0x${"5".repeat(64)}`,
+    sequence: intent.sequence,
+    issuedAt: now,
+    expiresAt: now + 5_000,
+  };
+  const signature = nacl.sign.detached(
+    utf8ToBytes(canonicalJson({ kind: "STOPPAGE_EXECUTION_PERMIT_V2", body })),
+    pair.secretKey,
+  );
+  return {
+    alg: "Ed25519",
+    body,
+    hash: hashCanonical(body),
+    signature: encodeBase64Url(signature),
+  };
+}
+
+function hashCanonical(value: unknown): string {
+  return `0x${bytesToHex(sha256Digest(utf8ToBytes(canonicalJson(value))))}`;
+}
+
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(normalize(value));
+}
+
+function normalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalize);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>)
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([key, nested]) => [key, normalize(nested)]),
+    );
+  }
+  return value;
+}
+
+function encodeBase64Url(bytes: Uint8Array): string {
+  return Buffer.from(bytes).toString("base64url");
+}
+
+function jsonResponse(value: unknown): Response {
+  return new Response(JSON.stringify(value), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}

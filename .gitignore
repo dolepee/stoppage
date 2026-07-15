@@ -9,6 +9,8 @@ data/private/
 data/raw/
 data/runtime/
 *.log
+test-results/
+playwright-report/
 .DS_Store
 
 # Private hackathon operations stay outside the public repository.

@@ -1,7 +1,8 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 RUN corepack enable
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/sdk/package.json ./packages/sdk/package.json
 RUN pnpm install --frozen-lockfile
 COPY . .
 RUN pnpm build
@@ -10,9 +11,11 @@ FROM node:22-alpine AS runtime
 WORKDIR /app
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=4173
 RUN corepack enable
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/sdk/package.json ./packages/sdk/package.json
 RUN pnpm install --prod --frozen-lockfile && pnpm store prune
 COPY --from=build /app/dist ./dist
+COPY --from=build /app/packages/sdk/dist ./packages/sdk/dist
 RUN mkdir -p data/private data/runtime && chown -R node:node data
 USER node
 EXPOSE 4173

@@ -1,6 +1,7 @@
 import { ZodError } from "zod";
 
 import { evaluatePublicAgentHandshake } from "../src/execution-gate/public-agent-lab.js";
+import { loadPermitSigner } from "../src/execution-gate/permit-v2.js";
 
 export default {
   async fetch(request: Request): Promise<Response> {
@@ -12,7 +13,9 @@ export default {
     }
 
     try {
-      return Response.json(evaluatePublicAgentHandshake(await request.json()), {
+      const body: unknown = await request.json();
+      const signer = isPermitV2Request(body) ? loadPermitSigner() : undefined;
+      return Response.json(evaluatePublicAgentHandshake(body, signer), {
         headers: {
           "Cache-Control": "no-store",
           "X-Content-Type-Options": "nosniff",
@@ -32,3 +35,14 @@ export default {
     }
   },
 };
+
+function isPermitV2Request(
+  value: unknown,
+): value is { version: 2 } & Record<string, unknown> {
+  return Boolean(
+    value &&
+    typeof value === "object" &&
+    "version" in value &&
+    value.version === 2,
+  );
+}

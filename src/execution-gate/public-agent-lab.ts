@@ -10,6 +10,17 @@ import {
   hashExecutionSubject,
   inspectExecutionPermit,
 } from "./execution-gate.js";
+import {
+  inspectExecutionPermitV2,
+  issueExecutionPermitV2,
+  nonceKey,
+  publicKeySetFor,
+  type ExecutionGateResultV2,
+  type PermitSigner,
+  type PermitV2BlockDecision,
+  type PermitV2RequestBinding,
+  type SignedExecutionPermitV2,
+} from "./permit-v2.js";
 import type {
   ExecutionGateContext,
   ExecutionGateDecision,
@@ -19,43 +30,83 @@ import type {
   PermitVerificationResult,
 } from "./types.js";
 
-export const publicAgentChallengeSchema = z.enum([
+export const publicAgentChallengeV1Schema = z.enum([
   "QUOTE_TAMPER",
   "EXPIRED_REPLAY",
   "RECEIPT_TAMPER",
 ]);
 
-export const publicAgentHandshakeSchema = z
+export const publicAgentChallengeSchema = z.enum([
+  "QUOTE_TAMPER",
+  "RECEIPT_TAMPER",
+  "EXPIRED_REPLAY",
+  "WRONG_AUDIENCE",
+  "UNKNOWN_SIGNING_KEY",
+  "REUSED_NONCE",
+]);
+
+const commonHandshakeShape = {
+  agentId: z.string().regex(/^[a-z0-9][a-z0-9-]{2,63}$/),
+  command: z.literal("PUBLISH_QUOTE"),
+  sequence: z.number().int().min(1).max(publicJudgeScenario.steps.length),
+  subjectHash: z.string().regex(/^0x[0-9a-f]{64}$/),
+  market: z.literal("1X2"),
+  quoteHash: z.string().regex(/^0x[0-9a-f]{64}$/),
+};
+
+export const publicAgentHandshakeV1Schema = z
   .object({
     version: z.literal(1),
-    agentId: z.string().regex(/^[a-z0-9][a-z0-9-]{2,63}$/),
-    command: z.literal("PUBLISH_QUOTE"),
-    sequence: z.number().int().min(1).max(publicJudgeScenario.steps.length),
-    subjectHash: z.string().regex(/^0x[0-9a-f]{64}$/),
-    market: z.literal("1X2"),
-    quoteHash: z.string().regex(/^0x[0-9a-f]{64}$/),
+    ...commonHandshakeShape,
+    challenge: publicAgentChallengeV1Schema.optional(),
+  })
+  .strict();
+
+export const publicAgentHandshakeV2Schema = z
+  .object({
+    version: z.literal(2),
+    ...commonHandshakeShape,
+    audience: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9:._/-]{2,127}$/),
+    nonce: z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9:._-]{7,127}$/),
     challenge: publicAgentChallengeSchema.optional(),
   })
   .strict();
 
+export const publicAgentHandshakeSchema = z.discriminatedUnion("version", [
+  publicAgentHandshakeV1Schema,
+  publicAgentHandshakeV2Schema,
+]);
+
 export type PublicAgentChallenge = z.infer<typeof publicAgentChallengeSchema>;
+export type PublicAgentHandshakeRequestV1 = z.infer<
+  typeof publicAgentHandshakeV1Schema
+>;
+export type PublicAgentHandshakeRequestV2 = z.infer<
+  typeof publicAgentHandshakeV2Schema
+>;
 export type PublicAgentHandshakeRequest = z.infer<
   typeof publicAgentHandshakeSchema
 >;
 
-export interface PublicAgentChallengeResult extends PermitVerificationResult {
+export interface PublicAgentChallengeResult {
   challenge: PublicAgentChallenge;
   expected: "REJECT";
+  valid: boolean;
+  decision: ExecutionGateDecision | PermitV2BlockDecision | "ALLOW";
+  reason: string;
 }
 
-export interface PublicAgentHandshakeResponse {
-  version: 1;
+interface PublicAgentResponseBase {
   dataMode: "SYNTHETIC";
   scenario: string;
   agent: {
     id: string;
     automated: true;
   };
+}
+
+export interface PublicAgentHandshakeResponseV1 extends PublicAgentResponseBase {
+  version: 1;
   transport: {
     protocol: "HTTPS";
     endpoint: "/api/agent-gate";
@@ -66,8 +117,37 @@ export interface PublicAgentHandshakeResponse {
   challenge: PublicAgentChallengeResult | null;
 }
 
+export interface PublicAgentHandshakeResponseV2 extends PublicAgentResponseBase {
+  version: 2;
+  transport: {
+    protocol: "HTTPS";
+    endpoint: "/api/agent-gate";
+    keyEndpoint: "/api/permit-keys";
+    requestId: string;
+  };
+  request: PublicAgentHandshakeRequestV2;
+  result: ExecutionGateResultV2;
+  challenge: PublicAgentChallengeResult | null;
+}
+
+export type PublicAgentHandshakeResponse =
+  PublicAgentHandshakeResponseV1 | PublicAgentHandshakeResponseV2;
+
+export function evaluatePublicAgentHandshake(
+  value: PublicAgentHandshakeRequestV1,
+  signer?: PermitSigner,
+): PublicAgentHandshakeResponseV1;
+export function evaluatePublicAgentHandshake(
+  value: PublicAgentHandshakeRequestV2,
+  signer: PermitSigner,
+): PublicAgentHandshakeResponseV2;
 export function evaluatePublicAgentHandshake(
   value: unknown,
+  signer?: PermitSigner,
+): PublicAgentHandshakeResponse;
+export function evaluatePublicAgentHandshake(
+  value: unknown,
+  signer?: PermitSigner,
 ): PublicAgentHandshakeResponse {
   const input = publicAgentHandshakeSchema.parse(value);
   const context = buildPublicCheckpoint(input.sequence);
@@ -79,30 +159,48 @@ export function evaluatePublicAgentHandshake(
     quoteHash: input.quoteHash,
   };
   const result = evaluateExecutionGate(request, context);
-  const challenge = input.challenge
-    ? runChallenge(input.challenge, result.permit, context)
-    : null;
 
+  if (input.version === 1) {
+    const challenge = input.challenge
+      ? runChallengeV1(input.challenge, result.permit, context)
+      : null;
+    return {
+      version: 1,
+      dataMode: "SYNTHETIC",
+      scenario: publicJudgeScenario.id,
+      agent: { id: input.agentId, automated: true },
+      transport: {
+        protocol: "HTTPS",
+        endpoint: "/api/agent-gate",
+        requestId: requestIdFor(input, result.decision),
+      },
+      request: { ...request, sequence: input.sequence },
+      result,
+      challenge,
+    };
+  }
+
+  if (!signer) {
+    throw new Error("Permit V2 signing is unavailable; execution fails closed");
+  }
+  const binding = bindingFor(input);
+  const signedResult = issueExecutionPermitV2(result, binding, signer);
+  const challenge = input.challenge
+    ? runChallengeV2(input.challenge, signedResult.permit, binding, signer)
+    : null;
   return {
-    version: 1,
+    version: 2,
     dataMode: "SYNTHETIC",
     scenario: publicJudgeScenario.id,
-    agent: {
-      id: input.agentId,
-      automated: true,
-    },
+    agent: { id: input.agentId, automated: true },
     transport: {
       protocol: "HTTPS",
       endpoint: "/api/agent-gate",
-      requestId: sha256({
-        kind: "STOPPAGE_PUBLIC_AGENT_REQUEST",
-        version: 1,
-        input,
-        decision: result.decision,
-      }),
+      keyEndpoint: "/api/permit-keys",
+      requestId: requestIdFor(input, signedResult.decision),
     },
-    request: { ...request, sequence: input.sequence },
-    result,
+    request: input,
+    result: signedResult,
     challenge,
   };
 }
@@ -133,19 +231,13 @@ function buildPublicCheckpoint(sequence: number): ExecutionGateContext {
   };
 }
 
-function runChallenge(
-  challenge: PublicAgentChallenge,
+function runChallengeV1(
+  challenge: z.infer<typeof publicAgentChallengeV1Schema>,
   permit: ExecutionPermit | null,
   context: ExecutionGateContext,
 ): PublicAgentChallengeResult {
   if (!permit) {
-    return {
-      challenge,
-      expected: "REJECT",
-      valid: false,
-      decision: "BLOCK_INVALIDATED_BRANCH",
-      reason: "No valid permit exists at this checkpoint to challenge.",
-    };
+    return noPermitChallenge(challenge);
   }
 
   const candidate = structuredClone(permit);
@@ -177,10 +269,88 @@ function runChallenge(
     );
   }
 
+  return { challenge, expected: "REJECT", ...verification };
+}
+
+function runChallengeV2(
+  challenge: PublicAgentChallenge,
+  permit: SignedExecutionPermitV2 | null,
+  request: PermitV2RequestBinding,
+  signer: PermitSigner,
+): PublicAgentChallengeResult {
+  if (!permit) {
+    return noPermitChallenge(challenge);
+  }
+
+  const candidate = structuredClone(permit);
+  const expected = { ...request };
+  const usedNonces = new Set<string>();
+  let now = candidate.body.issuedAt;
+
+  if (challenge === "QUOTE_TAMPER") {
+    candidate.body.quoteHash = differentHash(candidate.body.quoteHash);
+    candidate.hash = sha256(candidate.body);
+  } else if (challenge === "RECEIPT_TAMPER") {
+    candidate.body.stateReceiptHash = differentHash(
+      candidate.body.stateReceiptHash ?? candidate.hash,
+    );
+    candidate.hash = sha256(candidate.body);
+  } else if (challenge === "EXPIRED_REPLAY") {
+    now = candidate.body.expiresAt;
+  } else if (challenge === "WRONG_AUDIENCE") {
+    expected.audience = `${request.audience}-other`;
+  } else if (challenge === "UNKNOWN_SIGNING_KEY") {
+    candidate.body.kid = "stp_unknown000000";
+    candidate.hash = sha256(candidate.body);
+  } else {
+    usedNonces.add(nonceKey(candidate.body));
+  }
+
+  const verification = inspectExecutionPermitV2({
+    permit: candidate,
+    request: expected,
+    keys: publicKeySetFor(signer),
+    now,
+    usedNonces,
+  });
+  return { challenge, expected: "REJECT", ...verification };
+}
+
+function bindingFor(
+  input: PublicAgentHandshakeRequestV2,
+): PermitV2RequestBinding {
+  return {
+    agentId: input.agentId,
+    audience: input.audience,
+    nonce: input.nonce,
+    command: input.command,
+    subjectHash: input.subjectHash,
+    market: input.market,
+    quoteHash: input.quoteHash,
+  };
+}
+
+function requestIdFor(
+  input: PublicAgentHandshakeRequest,
+  decision: ExecutionGateDecision,
+): string {
+  return sha256({
+    kind: "STOPPAGE_PUBLIC_AGENT_REQUEST",
+    version: input.version,
+    input,
+    decision,
+  });
+}
+
+function noPermitChallenge(
+  challenge: PublicAgentChallenge,
+): PublicAgentChallengeResult {
   return {
     challenge,
     expected: "REJECT",
-    ...verification,
+    valid: false,
+    decision: "BLOCK_BINDING_INVALID",
+    reason: "No valid permit exists at this checkpoint to challenge.",
   };
 }
 

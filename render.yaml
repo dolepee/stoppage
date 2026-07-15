@@ -16,6 +16,10 @@ services:
         value: /var/data/private
       - key: STOPPAGE_RUNTIME_ROOT
         value: /var/data/runtime
+      - key: STOPPAGE_PERMIT_ISSUER
+        value: stoppage
+      - key: STOPPAGE_PERMIT_SIGNING_SEED
+        sync: false
       - key: TXLINE_ORIGIN
         value: https://txline.txodds.com
       - key: TXLINE_SERVICE_LEVEL

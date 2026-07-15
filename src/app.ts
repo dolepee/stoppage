@@ -15,6 +15,10 @@ import { loadLatestPublicClaim } from "./evidence/public-claim.js";
 import { evaluateExecutionGate } from "./execution-gate/execution-gate.js";
 import { evaluatePublicAgentHandshake } from "./execution-gate/public-agent-lab.js";
 import {
+  loadPermitSigner,
+  publicKeySetFor,
+} from "./execution-gate/permit-v2.js";
+import {
   executionContextFromPersisted,
   LIVE_EXECUTION_CONTEXT_MAX_AGE_MS,
   readLiveExecutionState,
@@ -153,9 +157,26 @@ export async function createApplication(options: ApplicationOptions = {}) {
   });
 
   app.post("/api/agent-gate", async (request, reply) => {
+    const value = request.body;
+    const signer =
+      value &&
+      typeof value === "object" &&
+      "version" in value &&
+      value.version === 2
+        ? loadPermitSigner()
+        : undefined;
     return reply
       .header("Cache-Control", "no-store")
-      .send(evaluatePublicAgentHandshake(request.body));
+      .send(evaluatePublicAgentHandshake(value, signer));
+  });
+
+  app.get("/api/permit-keys", async (_request, reply) => {
+    return reply
+      .header(
+        "Cache-Control",
+        "public, max-age=300, stale-while-revalidate=3600",
+      )
+      .send(publicKeySetFor(loadPermitSigner()));
   });
 
   app.get("/api/worker-health", async () => {

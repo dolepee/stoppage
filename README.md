@@ -98,31 +98,49 @@ and quote hashes with the exported helpers before requesting authorization. The
 public static console runs the evaluator locally over the synthetic fixture so
 judges need no token or login.
 
-### External agent integration
+### External agent enforcement
 
-The public console now mirrors each meaningful reference-agent decision through
-an independent same-origin HTTPS call to `POST /api/agent-gate`. The serverless
-function reconstructs the selected public synthetic checkpoint independently,
-evaluates the exact `PUBLISH_QUOTE` request, and returns the same block decision
-or permit. The external client fails closed unless the response is an `ALLOW`,
-the response and permit decisions agree, every receipt/proof field has the
-expected shape, the sequence and evaluation time match, and the permit's
-canonical hash, quote, subject, market, TTL, and expiry bindings all verify.
-HTTPS authenticates the public endpoint; the canonical hash is a deterministic
-integrity binding, not a substitute for transport authentication or a digital
-signature.
+The public Judge Integration Lab sends each meaningful reference-agent decision
+through `POST /api/agent-gate`. Permit V2 wraps an allowed governor decision in
+an Ed25519 signature bound to the issuer key, agent, audience, one-use request
+nonce, command, quote, policy, receipt, Certified Reopen proof, sequence and
+five-second expiry. Public verification keys are discovered from
+`GET /api/permit-keys`, so an agent can verify the permit offline immediately
+before calling its venue adapter.
 
-After the Certified Reopen, the same API exposes three explicit adversarial
-checks: quote tampering, expired replay, and receipt tampering. All must return a
-machine-readable rejection. The public endpoint remains visibly synthetic; the
-persistent, self-hosted live-worker integration continues to use
+The installable `@stoppage/sdk` workspace artifact exposes `evaluate()`,
+`verifyPermit()` and `guardAction()`. `guardAction()` keeps the callback closed
+on every BLOCK or verification failure and claims the nonce synchronously before
+callback invocation. Its replay memory is intentionally process-local in this
+release: production multi-instance replay protection remains outside the
+submission scope. Permit V1 remains available for compatibility, but the
+enforcement adapter never accepts V1 as authority to execute.
+
+Production deployments must provide `STOPPAGE_PERMIT_SIGNING_SEED` as a
+base64url-encoded 32-byte Ed25519 seed. Development and tests use an explicitly
+non-production signer; production fails closed rather than falling back to it.
+Signing material is never returned by the key-discovery endpoint or included in
+the browser bundle.
+
+Bench Lite exercises quote and receipt tampering, expiry, wrong audience,
+unknown signing key and reused nonce. The public endpoint remains visibly
+synthetic. The persistent live-worker integration still uses
 `POST /api/execution-gate/evaluate` and fails closed when its private context is
-missing or stale. That private-context route is intentionally not advertised by
-the Vercel OpenAPI contract because it is not deployed on the static judge host.
+missing or stale; that private route is not advertised on the static judge host.
 
 - Machine-readable contract: [`/openapi.json`](https://stoppage-txline.vercel.app/openapi.json)
-- Reusable TypeScript client: [`src/integration/stoppage-agent-client.ts`](src/integration/stoppage-agent-client.ts)
-- Minimal market-maker example: [`examples/external-market-maker.ts`](examples/external-market-maker.ts)
+- Packaged enforcement SDK: [`packages/sdk`](packages/sdk)
+- Callback-enforced example: [`examples/enforced-market-maker.ts`](examples/enforced-market-maker.ts)
+- Legacy Permit V1 client: [`src/integration/stoppage-agent-client.ts`](src/integration/stoppage-agent-client.ts)
+
+The CI clean-consumer gate packs the SDK, installs it in a temporary project,
+starts Stoppage, completes Certified Reopen through public HTTP endpoints and
+proves the venue callback runs once while a nonce replay is withheld:
+
+```bash
+pnpm build
+pnpm sdk:consumer:verify
+```
 
 ## Current status
 
@@ -130,9 +148,10 @@ the Vercel OpenAPI contract because it is not deployed on the static judge host.
 - Provisional reprice invalidation and post-resolution freshness gate:
   implemented in policy revision 2.
 - Event-first, odds-first, and stream-failure paths: implemented and tested.
-- Execution Gate and deterministic reference agent: implemented with canonical
-  permit and full-response consistency verification, expiry, sequence
-  revocation, and adversarial tamper tests.
+- Execution Gate and deterministic reference agent: implemented with V1
+  compatibility plus Ed25519-signed Permit V2, offline verification, exact
+  action/audience/nonce bindings, expiry, sequence revocation and adversarial
+  enforcement tests.
 - Live gate bridge: the persistent worker projects private governor state into a
   shared runtime context, and the application API fails closed if that context
   is missing, invalid, or more than five seconds old.

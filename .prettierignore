@@ -5,3 +5,5 @@ TXODDS_STOPPAGE_MASTER_PLAN.md
 data/private/
 data/raw/
 data/runtime/
+test-results/
+playwright-report/
