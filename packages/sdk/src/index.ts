@@ -2,6 +2,8 @@ import { sha256 as sha256Digest } from "@noble/hashes/sha2.js";
 import { bytesToHex, utf8ToBytes } from "@noble/hashes/utils.js";
 import nacl from "tweetnacl";
 
+export const STOPPAGE_PERMIT_MAX_CLOCK_SKEW_MS = 1_000;
+
 export type GateDecision =
   | "BLOCK_UNRESOLVED_INCIDENT"
   | "BLOCK_INVALIDATED_BRANCH"
@@ -400,7 +402,7 @@ export function verifyPermit({
     }
     if (
       !Number.isInteger(now) ||
-      now < permit.body.issuedAt ||
+      now + STOPPAGE_PERMIT_MAX_CLOCK_SKEW_MS < permit.body.issuedAt ||
       permit.body.expiresAt !== permit.body.issuedAt + 5_000 ||
       now >= permit.body.expiresAt
     ) {

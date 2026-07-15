@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import nacl from "tweetnacl";
 
 import {
+  STOPPAGE_PERMIT_MAX_CLOCK_SKEW_MS,
   StoppageClient,
   verifyPermit,
   type ExecutionIntent,
@@ -79,6 +80,29 @@ describe("@stoppage/sdk enforcement adapter", () => {
     ).toMatchObject({
       valid: false,
       decision: "BLOCK_UNKNOWN_SIGNING_KEY",
+    });
+  });
+
+  it("tolerates bounded signer clock skew while keeping expiry strict", () => {
+    const now = Date.now();
+    const intent = makeIntent("clock-skew-nonce-0001");
+    const permit = makePermit(intent, now);
+    const verifyAt = (verificationTime: number) =>
+      verifyPermit({ permit, intent, keys, now: verificationTime });
+
+    expect(verifyAt(now - STOPPAGE_PERMIT_MAX_CLOCK_SKEW_MS)).toMatchObject({
+      valid: true,
+      decision: "ALLOW",
+    });
+    expect(verifyAt(now - STOPPAGE_PERMIT_MAX_CLOCK_SKEW_MS - 1)).toMatchObject(
+      {
+        valid: false,
+        decision: "BLOCK_PERMIT_EXPIRED",
+      },
+    );
+    expect(verifyAt(permit.body.expiresAt)).toMatchObject({
+      valid: false,
+      decision: "BLOCK_PERMIT_EXPIRED",
     });
   });
 

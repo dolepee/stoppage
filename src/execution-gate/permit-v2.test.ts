@@ -85,6 +85,28 @@ describe("authenticated execution permit v2", () => {
     });
   });
 
+  it("tolerates bounded verifier clock skew without weakening expiry", () => {
+    const { result, request } = allowedResult();
+    const signed = issueExecutionPermitV2(result, request, signer, 10_000);
+    const inspectAt = (now: number) =>
+      inspectExecutionPermitV2({
+        permit: signed.permit!,
+        request,
+        keys: publicKeySetFor(signer),
+        now,
+      });
+
+    expect(inspectAt(9_000)).toMatchObject({ valid: true, decision: "ALLOW" });
+    expect(inspectAt(8_999)).toMatchObject({
+      valid: false,
+      decision: "BLOCK_PERMIT_EXPIRED",
+    });
+    expect(inspectAt(15_000)).toMatchObject({
+      valid: false,
+      decision: "BLOCK_PERMIT_EXPIRED",
+    });
+  });
+
   it.each([
     "quote tamper",
     "receipt tamper",

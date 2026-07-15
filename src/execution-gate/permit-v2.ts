@@ -5,6 +5,7 @@ import type { ExecutionGateDecision, ExecutionGateResult } from "./types.js";
 
 export const STOPPAGE_PERMIT_ISSUER = "stoppage";
 export const STOPPAGE_PERMIT_TTL_MS = 5_000;
+export const STOPPAGE_PERMIT_MAX_CLOCK_SKEW_MS = 1_000;
 
 export type PermitV2BlockDecision =
   | "BLOCK_PERMIT_MALFORMED"
@@ -290,7 +291,7 @@ export function inspectExecutionPermitV2({
     }
     if (
       !Number.isInteger(now) ||
-      now < permit.body.issuedAt ||
+      now + STOPPAGE_PERMIT_MAX_CLOCK_SKEW_MS < permit.body.issuedAt ||
       permit.body.expiresAt !== permit.body.issuedAt + STOPPAGE_PERMIT_TTL_MS ||
       now >= permit.body.expiresAt
     ) {
