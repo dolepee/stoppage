@@ -1153,6 +1153,147 @@ time,
   white-space: nowrap;
 }
 
+.agent-identity-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) auto;
+  align-items: end;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid #2b4038;
+}
+
+.agent-identity-form label {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.agent-identity-form label > span,
+.signed-permit-details dt {
+  color: #81958d;
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.agent-identity-form input {
+  width: 100%;
+  min-height: 36px;
+  padding: 0 9px;
+  border: 1px solid #3a5148;
+  border-radius: 4px;
+  color: #e4eee9;
+  background: #0d1a16;
+  font:
+    11px "SFMono-Regular",
+    Consolas,
+    monospace;
+}
+
+.agent-identity-form input:focus-visible,
+.agent-identity-form button:focus-visible,
+.permit-challenge-actions button:focus-visible {
+  outline: 2px solid var(--mint-bright);
+  outline-offset: 2px;
+}
+
+.agent-identity-form input[aria-invalid="true"] {
+  border-color: #ff817b;
+}
+
+.agent-identity-form button {
+  min-height: 36px;
+  padding: 0 11px;
+  border: 1px solid #49665a;
+  border-radius: 4px;
+  color: #d8e5df;
+  background: #172a23;
+  font-size: 11px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.agent-identity-form button:hover {
+  border-color: var(--mint-bright);
+  color: #ffffff;
+}
+
+.venue-call-result {
+  min-width: 0;
+  padding: 11px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 9px;
+  border: 1px solid rgba(255, 129, 123, 0.4);
+  border-radius: 4px;
+  color: #ff9a94;
+  background: rgba(255, 129, 123, 0.07);
+}
+
+.venue-call-result.executed {
+  border-color: rgba(66, 221, 183, 0.48);
+  color: var(--mint-bright);
+  background: rgba(66, 221, 183, 0.08);
+}
+
+.venue-call-result > span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.venue-call-result strong {
+  font:
+    11px "SFMono-Regular",
+    Consolas,
+    monospace;
+  letter-spacing: 0.04em;
+}
+
+.venue-call-result small {
+  color: #b98b87;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.venue-call-result.executed small {
+  color: #83a79a;
+}
+
+.signed-permit-details {
+  margin: 0;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border: 1px solid #2b4038;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.signed-permit-details > div {
+  min-width: 0;
+  padding: 9px;
+  display: grid;
+  gap: 4px;
+  border-right: 1px solid #2b4038;
+}
+
+.signed-permit-details > div:last-child {
+  border-right: 0;
+}
+
+.signed-permit-details dd {
+  min-width: 0;
+  margin: 0;
+  color: #c2d0ca;
+  font:
+    10px "SFMono-Regular",
+    Consolas,
+    monospace;
+  overflow-wrap: anywhere;
+}
+
 .permit-challenge-lab {
   min-width: 0;
   justify-content: space-between;
@@ -3072,10 +3213,31 @@ main h1:focus {
     text-align: left;
   }
 
+  .agent-identity-form {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-identity-form input,
+  .agent-identity-form button {
+    min-height: 42px;
+  }
+
+  .signed-permit-details {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .signed-permit-details > div:nth-child(2) {
+    border-right: 0;
+  }
+
+  .signed-permit-details > div:nth-child(-n + 2) {
+    border-bottom: 1px solid #2b4038;
+  }
+
   .permit-challenge-actions {
     width: 100%;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: 1fr;
   }
 
   .permit-challenge-actions button {

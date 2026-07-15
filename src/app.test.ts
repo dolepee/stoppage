@@ -383,6 +383,75 @@ describe("operator API", () => {
     });
   }, 5_000);
 
+  it("serves signed Permit V2 and public verification keys", async () => {
+    const application = await createApplication({
+      logger: false,
+      serveStatic: false,
+    });
+    applications.push(application);
+    await application.runtime.start(16);
+    const snapshot = application.runtime.snapshot();
+
+    const keys = await application.app.inject({
+      method: "GET",
+      url: "/api/permit-keys",
+    });
+    expect(keys.statusCode).toBe(200);
+    expect(keys.headers["cache-control"]).toBe("no-store");
+    expect(keys.json()).toMatchObject({
+      version: 1,
+      issuer: "stoppage",
+      keys: [
+        {
+          alg: "Ed25519",
+          use: "sig",
+          status: "ACTIVE",
+          publicKey: expect.any(String),
+        },
+      ],
+    });
+
+    const response = await application.app.inject({
+      method: "POST",
+      url: "/api/agent-gate",
+      payload: {
+        version: 2,
+        agentId: "judge-market-maker-v2",
+        audience: "venue:judge-market-maker-v2",
+        nonce: "judge-request-0001",
+        command: "PUBLISH_QUOTE",
+        sequence: snapshot.execution.sequence,
+        subjectHash: snapshot.execution.subjectHash,
+        market: "1X2",
+        quoteHash: snapshot.execution.agent.requestedQuoteHash,
+        challenge: "UNKNOWN_SIGNING_KEY",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      version: 2,
+      transport: { keyEndpoint: "/api/permit-keys" },
+      result: {
+        decision: "ALLOW_CERTIFIED_REOPEN",
+        permit: {
+          alg: "Ed25519",
+          body: {
+            version: 2,
+            audience: "venue:judge-market-maker-v2",
+            nonce: "judge-request-0001",
+          },
+          signature: expect.any(String),
+        },
+      },
+      challenge: {
+        expected: "REJECT",
+        valid: false,
+        decision: "BLOCK_UNKNOWN_SIGNING_KEY",
+      },
+    });
+  }, 5_000);
+
   it("evaluates a fresh private live-worker context without exposing its fixture", async () => {
     const live = liveExecutionFixture();
     const application = await createApplication({

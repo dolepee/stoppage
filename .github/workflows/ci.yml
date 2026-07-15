@@ -23,6 +23,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+      - run: pnpm sdk:consumer:verify
       - run: pnpm gate:verify
       - run: pnpm reopen:verify
       - run: pnpm exec playwright install --with-deps chromium

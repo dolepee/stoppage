@@ -11,13 +11,13 @@
     "dev:server": "tsx watch src/server.ts",
     "dev:web": "vite --config app/vite.config.ts",
     "clean": "rm -rf dist",
-    "build": "pnpm clean && pnpm build:server && pnpm build:web",
+    "build": "pnpm sdk:build && pnpm clean && pnpm build:server && pnpm build:web",
     "build:server": "tsc -p tsconfig.server.json",
     "build:web": "vite build --config app/vite.config.ts",
     "start": "node dist/server/server.js",
     "start:hosted": "node dist/server/hosted.js",
     "start:worker": "node dist/server/worker.js",
-    "typecheck": "tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.scripts.json --noEmit && tsc -p app/tsconfig.json --noEmit",
+    "typecheck": "pnpm sdk:build && tsc -p tsconfig.server.json --noEmit && tsc -p tsconfig.scripts.json --noEmit && tsc -p app/tsconfig.json --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
     "browser:smoke": "playwright test",
@@ -39,15 +39,20 @@
     "policy:calibrate": "tsx scripts/calibrate-policy.ts",
     "policy:holdout": "tsx scripts/evaluate-holdout.ts",
     "evidence:prepare": "tsx scripts/prepare-public-evidence.ts",
-    "evidence:publish": "tsx scripts/publish-public-evidence.ts"
+    "evidence:publish": "tsx scripts/publish-public-evidence.ts",
+    "sdk:build": "pnpm --filter @stoppage/sdk build",
+    "sdk:pack": "pnpm --filter @stoppage/sdk pack:artifact",
+    "sdk:consumer:verify": "tsx scripts/verify-sdk-consumer.ts"
   },
   "dependencies": {
+    "@stoppage/sdk": "workspace:*",
     "@fastify/static": "9.3.0",
     "@noble/hashes": "2.2.0",
     "fastify": "5.10.0",
     "lucide-react": "1.24.0",
     "react": "19.2.7",
     "react-dom": "19.2.7",
+    "tweetnacl": "1.0.3",
     "zod": "4.4.3"
   },
   "devDependencies": {
@@ -61,7 +66,6 @@
     "concurrently": "10.0.3",
     "prettier": "3.9.5",
     "tsx": "4.23.0",
-    "tweetnacl": "1.0.3",
     "typescript": "5.9.3",
     "vite": "8.1.4",
     "vitest": "4.1.10"

@@ -6,9 +6,17 @@ import {
   evaluatePublicAgentHandshake,
   type PublicAgentChallenge,
 } from "./public-agent-lab.js";
+import {
+  createPermitSigner,
+  inspectExecutionPermitV2,
+  publicKeySetFor,
+} from "./permit-v2.js";
 
 const agentId = "judge-market-maker-v1";
 const subjectHash = hashExecutionSubject(publicJudgeScenario.id);
+const signer = createPermitSigner(
+  Uint8Array.from({ length: 32 }, (_, index) => index + 1),
+);
 
 describe("public agent lab", () => {
   it("reproduces the blocked external-agent request during the VAR hold", () => {
@@ -90,12 +98,88 @@ describe("public agent lab", () => {
       evaluatePublicAgentHandshake({ ...requestAt(12), fixtureId: 9_000_001 }),
     ).toThrow();
   });
+
+  it("signs Permit V2 only after Certified Reopen and verifies it offline", () => {
+    const blocked = evaluatePublicAgentHandshake(requestV2At(2), signer);
+    expect(blocked.result).toMatchObject({
+      decision: "BLOCK_UNRESOLVED_INCIDENT",
+      permit: null,
+    });
+
+    const allowed = evaluatePublicAgentHandshake(requestV2At(12), signer);
+    if (allowed.version !== 2) throw new Error("Expected Permit V2 response");
+    expect(allowed.result).toMatchObject({
+      decision: "ALLOW_CERTIFIED_REOPEN",
+      permit: {
+        alg: "Ed25519",
+        body: {
+          version: 2,
+          kid: signer.kid,
+          audience: "venue:judge-market-maker-v2",
+          nonce: "judge-request-0001",
+        },
+        signature: expect.any(String),
+      },
+    });
+    expect(
+      inspectExecutionPermitV2({
+        permit: allowed.result.permit!,
+        request: {
+          agentId: allowed.request.agentId,
+          audience: allowed.request.audience,
+          nonce: allowed.request.nonce,
+          command: allowed.request.command,
+          subjectHash: allowed.request.subjectHash,
+          market: allowed.request.market,
+          quoteHash: allowed.request.quoteHash,
+          sequence: allowed.request.sequence,
+        },
+        keys: publicKeySetFor(signer),
+        now: allowed.result.evaluatedAt,
+      }),
+    ).toMatchObject({ valid: true, decision: "ALLOW" });
+  });
+
+  it.each<PublicAgentChallenge>([
+    "QUOTE_TAMPER",
+    "RECEIPT_TAMPER",
+    "EXPIRED_REPLAY",
+    "WRONG_AUDIENCE",
+    "UNKNOWN_SIGNING_KEY",
+    "REUSED_NONCE",
+  ])("rejects Permit V2 Bench Lite attack %s", (challenge) => {
+    const response = evaluatePublicAgentHandshake(
+      { ...requestV2At(12), challenge },
+      signer,
+    );
+
+    expect(response.challenge).toMatchObject({
+      challenge,
+      expected: "REJECT",
+      valid: false,
+      decision: expect.stringMatching(/^BLOCK_/),
+    });
+  });
 });
 
 function requestAt(sequence: number) {
   return {
     version: 1 as const,
     agentId,
+    command: "PUBLISH_QUOTE" as const,
+    sequence,
+    subjectHash,
+    market: "1X2" as const,
+    quoteHash: quoteHashAt(sequence),
+  };
+}
+
+function requestV2At(sequence: number) {
+  return {
+    version: 2 as const,
+    agentId: "judge-market-maker-v2",
+    audience: "venue:judge-market-maker-v2",
+    nonce: "judge-request-0001",
     command: "PUBLISH_QUOTE" as const,
     sequence,
     subjectHash,

@@ -1,0 +1,37 @@
+{
+  "name": "@stoppage/sdk",
+  "version": "0.2.0",
+  "description": "Fail-closed enforcement adapter for Stoppage execution permits",
+  "type": "module",
+  "license": "MIT",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "pack:artifact": "pnpm build && pnpm pack"
+  },
+  "dependencies": {
+    "@noble/hashes": "2.2.0",
+    "tweetnacl": "1.0.3"
+  },
+  "devDependencies": {
+    "typescript": "5.9.3"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

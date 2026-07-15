@@ -69,17 +69,14 @@ test.describe("Stoppage release browser gate", () => {
       page.getByRole("button", { name: "Test again", exact: true }),
     ).toBeVisible({ timeout: 15_000 });
     await expect(
-      page.getByText("BINDING VERIFIED", { exact: true }),
+      page.getByText("VENUE CALL EXECUTED", { exact: true }).first(),
     ).toBeVisible();
 
     await page
-      .getByRole("button", { name: "Tamper quote", exact: true })
+      .getByRole("button", { name: "Run 6 execution attacks", exact: true })
       .click();
     await expect(
-      page.getByText("REJECTED AS EXPECTED", { exact: true }),
-    ).toBeVisible();
-    await expect(
-      page.getByText("BLOCK INVALIDATED BRANCH", { exact: true }),
+      page.getByText("6/6 EXECUTION ATTACKS REJECTED", { exact: true }),
     ).toBeVisible();
 
     await primaryNavigation
@@ -109,7 +106,18 @@ test.describe("Stoppage release browser gate", () => {
     const contract = (await openapi.json()) as {
       paths?: Record<string, unknown>;
     };
-    expect(Object.keys(contract.paths ?? {})).toEqual(["/api/agent-gate"]);
+    expect(Object.keys(contract.paths ?? {}).sort()).toEqual([
+      "/api/agent-gate",
+      "/api/permit-keys",
+    ]);
+
+    const keys = await request.get("/api/permit-keys");
+    expect(keys.status()).toBe(200);
+    await expect(keys.json()).resolves.toMatchObject({
+      version: 1,
+      issuer: "stoppage",
+      keys: [{ alg: "Ed25519", use: "sig", status: "ACTIVE" }],
+    });
 
     const claim = await request.get("/api/public-claim");
     expect(claim.status()).toBe(200);
