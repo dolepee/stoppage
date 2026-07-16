@@ -154,9 +154,11 @@ SDK must reject it and keep the callback closed. This proves permit
 non-transferability, not authenticated real-world identity. Block decisions
 never issue a permit and never delegate to either agent. Tape persistence runs
 on an isolated queue capped at 64 pending snapshots. Excess snapshots are
-dropped with a coalesced overflow diagnostic, so an optional tape burst or
-write failure cannot grow memory without bound, interrupt the core odds
-callback, or trigger a stream reconnect.
+dropped with a coalesced overflow diagnostic, and every accepted snapshot is
+rechecked against the latest fixture sequence before permit issuance so stale
+work cannot execute. An optional tape burst or write failure therefore cannot
+grow memory without bound, interrupt the core odds callback, or trigger a
+stream reconnect.
 
 Licensed feed records and full private tape entries remain ignored. A separate
 preparation step can replay an existing private TxLINE capture through the same

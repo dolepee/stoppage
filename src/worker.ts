@@ -55,6 +55,12 @@ const liveDecisionTape = config.liveDecisionTapeEnabled
 const liveDecisionTapeQueue = liveDecisionTape
   ? new LiveDecisionTapeQueue({
       recorder: liveDecisionTape,
+      resolveContext: (queued) => {
+        const current = executionContexts
+          .contexts(governor)
+          .find((candidate) => candidate.subjectHash === queued.subjectHash);
+        return current?.sequence === queued.sequence ? current : null;
+      },
       reportFailure: async (failure) => {
         console.error(JSON.stringify(failure));
         await writeRuntimeState("live-decision-tape-error.json", failure);

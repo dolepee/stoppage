@@ -316,7 +316,7 @@ export interface LiveDecisionTapeFailure {
   type: "LIVE_DECISION_TAPE_FAILURE";
   failedAt: string;
   failureCount: number;
-  reason: "RECORDER_FAILURE" | "QUEUE_OVERFLOW";
+  reason: "RECORDER_FAILURE" | "QUEUE_OVERFLOW" | "STALE_SNAPSHOT";
   errorName: string;
   queue: {
     pending: number;
@@ -327,12 +327,19 @@ export interface LiveDecisionTapeFailure {
 
 interface LiveDecisionTapeQueueOptions {
   recorder: Pick<LiveDecisionTapeRecorder, "record">;
+  resolveContext: (
+    queued: PersistedExecutionGateContext,
+  ) =>
+    | PersistedExecutionGateContext
+    | null
+    | Promise<PersistedExecutionGateContext | null>;
   reportFailure: (failure: LiveDecisionTapeFailure) => Promise<unknown>;
   maxPending?: number;
 }
 
 export class LiveDecisionTapeQueue {
   readonly #recorder: Pick<LiveDecisionTapeRecorder, "record">;
+  readonly #resolveContext: LiveDecisionTapeQueueOptions["resolveContext"];
   readonly #reportFailure: (
     failure: LiveDecisionTapeFailure,
   ) => Promise<unknown>;
@@ -350,6 +357,7 @@ export class LiveDecisionTapeQueue {
 
   constructor(options: LiveDecisionTapeQueueOptions) {
     this.#recorder = options.recorder;
+    this.#resolveContext = options.resolveContext;
     this.#reportFailure = options.reportFailure;
     this.#maxPending = options.maxPending ?? LIVE_TAPE_QUEUE_CAPACITY;
     if (!Number.isInteger(this.#maxPending) || this.#maxPending < 1) {
@@ -374,7 +382,13 @@ export class LiveDecisionTapeQueue {
 
     this.#pendingCount += 1;
     const operation = this.#pending.then(async () => {
-      await this.#recorder.record(snapshot);
+      const current = await this.#resolveContext(snapshot);
+      if (!current) {
+        this.#droppedCount += 1;
+        this.#recordFailure("STALE_SNAPSHOT", "StaleTapeSnapshot");
+        return;
+      }
+      await this.#recorder.record(structuredClone(current));
     });
     this.#pending = operation
       .catch((error: unknown) => {

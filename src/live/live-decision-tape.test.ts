@@ -174,7 +174,11 @@ describe("live decision tape", () => {
     const reportFailure = vi.fn(async () => {
       throw new Error("diagnostic unavailable");
     });
-    const queue = new LiveDecisionTapeQueue({ recorder, reportFailure });
+    const queue = new LiveDecisionTapeQueue({
+      recorder,
+      resolveContext: (context) => context,
+      reportFailure,
+    });
 
     expect(() => queue.enqueue(checkpointAt(3))).not.toThrow();
     expect(() => queue.enqueue(checkpointAt(3))).not.toThrow();
@@ -230,6 +234,7 @@ describe("live decision tape", () => {
     const reportFailure = vi.fn(async () => undefined);
     const queue = new LiveDecisionTapeQueue({
       recorder,
+      resolveContext: (context) => context,
       reportFailure,
       maxPending: 1,
     });
@@ -245,6 +250,28 @@ describe("live decision tape", () => {
         reason: "QUEUE_OVERFLOW",
         errorName: "TapeQueueOverflow",
         queue: { pending: 1, limit: 1, dropped: 1 },
+      }),
+    );
+  });
+
+  it("drops a queued snapshot after the live sequence advances", async () => {
+    const recorder = { record: vi.fn() };
+    const reportFailure = vi.fn(async () => undefined);
+    const queue = new LiveDecisionTapeQueue({
+      recorder,
+      resolveContext: () => null,
+      reportFailure,
+    });
+
+    expect(queue.enqueue(checkpointAt(12))).toBe(true);
+    await queue.drain();
+
+    expect(recorder.record).not.toHaveBeenCalled();
+    expect(reportFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "STALE_SNAPSHOT",
+        errorName: "StaleTapeSnapshot",
+        queue: expect.objectContaining({ dropped: 1 }),
       }),
     );
   });

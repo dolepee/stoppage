@@ -32,7 +32,9 @@
    proves permit non-transferability, not authenticated caller identity.
    Optional tape persistence and coalesced diagnostics run behind an isolated
    queue capped at 64 pending snapshots; overflow is dropped and reported
-   without rejecting the core feed callback.
+   without rejecting the core feed callback. Each queued snapshot is
+   re-resolved against the current fixture sequence immediately before
+   recording, and superseded work is withheld with a stale-snapshot diagnostic.
 9. **Approval boundary** aggregates private tape records, re-verifies the signed
    sample, enforces both zero-callback invariants, strips licensed fields, and
    requires an exact human approval before writing public evidence.
