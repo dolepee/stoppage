@@ -20,6 +20,7 @@ import {
   assertLiveTapePublicBoundary,
   buildApprovedLiveDecisionTape,
   buildLiveDecisionTapeCandidate,
+  loadLatestLiveDecisionTapeCandidate,
   loadPublicLiveDecisionTape,
 } from "./live-decision-tape.js";
 
@@ -160,6 +161,22 @@ describe("public live decision-tape evidence", () => {
     ).toThrow(/probabilities/);
     expect(() => assertLiveTapePublicBoundary({ sourceTs: 123 })).toThrow(
       /sourceTs/,
+    );
+  });
+
+  it("loads an approval candidate from an operator-configured private root", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stoppage-live-tape-private-"));
+    const candidate = buildLiveDecisionTapeCandidate(
+      await completeTape(),
+      publicKeySetFor(signer),
+    );
+    await writeFile(
+      join(root, "live-decision-tape-candidate-2026-07-16.json"),
+      JSON.stringify(candidate),
+    );
+
+    await expect(loadLatestLiveDecisionTapeCandidate(root)).resolves.toEqual(
+      candidate,
     );
   });
 });

@@ -7,7 +7,9 @@ import {
 } from "../src/evidence/live-decision-tape.js";
 
 const approvalStatement = readOptionalStringArgument("--approval");
-const candidate = await loadLatestLiveDecisionTapeCandidate();
+const candidate = await loadLatestLiveDecisionTapeCandidate(
+  process.env.STOPPAGE_PRIVATE_ROOT ?? "data/private",
+);
 if (!candidate) {
   throw new Error("No valid live decision-tape candidate is ready");
 }
