@@ -1,0 +1,90 @@
+{
+  "version": 1,
+  "status": "AVAILABLE",
+  "evidenceType": "RECORDED_BUILDER_ATTESTED_TXLINE_DECISION_TAPE",
+  "network": "solana-mainnet",
+  "source": "TXLINE_CAPTURE_PROVENANCE_NOT_INDEPENDENTLY_VERIFIED",
+  "operation": "BUILDER_OPERATED_CAPTURE",
+  "hostingClaim": "RECORDED_CAPTURE_NOT_HOSTED_UPTIME",
+  "dataBoundary": "Sanitized derived enforcement results only. Replay provenance is builder-attested and not independently verified. No raw fixture IDs, quote vectors, feed records, source timestamps, API tokens, wallet keys, or venue credentials.",
+  "timingDisclosure": "PERMIT_ISSUED_AT_IS_ENFORCEMENT_EXECUTION_TIME_NOT_FEED_TIME",
+  "captureModes": {
+    "live": 0,
+    "privateCaptureReplay": 20
+  },
+  "contract": {
+    "command": "PUBLISH_QUOTE",
+    "enforcement": "CALLBACK_AFTER_OFFLINE_ED25519_VERIFICATION_ONLY",
+    "intendedAgent": "stoppage-reference-agent",
+    "adversaryAgent": "cross-agent-adversary"
+  },
+  "signer": {
+    "issuer": "stoppage",
+    "kid": "stp_b17a52d58d688dab",
+    "alg": "Ed25519",
+    "publicKey": "zRfn8K2b66meZOC9TjcFUzKXGeO1WnddnXOODdRoW2k"
+  },
+  "counters": {
+    "capturedRequests": 20,
+    "blockedRequests": 10,
+    "verifiedPermits": 10,
+    "callbacksAfterBlock": 0,
+    "callbacksWithoutVerifiedPermit": 0,
+    "crossAgentPermitTheftsRejected": 10
+  },
+  "decisions": {
+    "allowHealthyQuote": 9,
+    "allowCertifiedReopen": 1,
+    "blockedUncertainty": 10,
+    "blockedOther": 0
+  },
+  "sampleProof": {
+    "decision": "ALLOW_CERTIFIED_REOPEN",
+    "permit": {
+      "alg": "Ed25519",
+      "body": {
+        "version": 2,
+        "issuer": "stoppage",
+        "kid": "stp_b17a52d58d688dab",
+        "agentId": "stoppage-reference-agent",
+        "audience": "venue:stoppage-reference-agent",
+        "nonce": "live-2e011ac10bc3ebaf6cae3b2f04e5a1c4",
+        "command": "PUBLISH_QUOTE",
+        "decision": "ALLOW_CERTIFIED_REOPEN",
+        "reason": "Fresh post-resolution consensus and the exact Certified Reopen proof authorize this quote.",
+        "subjectHash": "0xc10a43102b5bc9da25742ff31a50ca2207d560d8684fb9082de57087d0e1ddff",
+        "market": "1X2",
+        "quoteHash": "0x6518c8caa3c4ec7cec84f331350e21a152e7c98b6d45cdcbbf9360268205a79f",
+        "configHash": "0x1d773fb526081fb15a4643c0767f692144ecbec28cf4fc75a96b43aa17b5fcf2",
+        "stateReceiptHash": "0xdbdd54977f08a79a9ef78b4c3ae975f1ca76601fd8f72357ae4aaf32625f392b",
+        "reopenProofHash": "0xeb7ca2b871c5b3464a33f6b36a4f3b4df4c2594a798bc7d425ca2bb35e1d0022",
+        "sequence": 1659,
+        "issuedAt": 1784223967739,
+        "expiresAt": 1784223972739
+      },
+      "hash": "0x474482a79e38ca11ab3bcf8a59ed6da440f780191b071efb3b9e93cf8b49213a",
+      "signature": "Qv634zrNOu34zT9Quffr-NogPqd6x5xfWsmfNiL60wz1f8IreJM7tfY0nskHoMG973VCb6t0VSS3hf5QmJ8iCw"
+    },
+    "intendedAgent": {
+      "id": "stoppage-reference-agent",
+      "audience": "venue:stoppage-reference-agent",
+      "verification": "ALLOW",
+      "callbackInvoked": true,
+      "callbackInvokedAt": "2026-07-16T17:46:07.745Z",
+      "callbackReceiptHash": "0x6b21a44c5f2692394bd8d7d03bd285d0cd39ef37e0f66c6e73411c5b9c641b6a"
+    },
+    "crossAgentAttempt": {
+      "id": "cross-agent-adversary",
+      "audience": "venue:cross-agent-adversary",
+      "verification": "BLOCK_AUDIENCE_MISMATCH",
+      "callbackInvoked": false,
+      "callbackInvokedAt": null,
+      "callbackReceiptHash": null
+    }
+  },
+  "candidateHash": "0x4d591631d6317170973447b75245f1498387aef46f8b6a2cee32314a05b63188",
+  "approvedAt": "2026-07-16T17:48:09.281Z",
+  "approval": {
+    "statement": "APPROVE STOPPAGE LIVE DECISION TAPE stp_b17a52d58d688dab 0x4d591631d6317170973447b75245f1498387aef46f8b6a2cee32314a05b63188"
+  }
+}

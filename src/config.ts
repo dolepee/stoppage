@@ -17,6 +17,10 @@ const environmentSchema = z.object({
   TXLINE_KEYPAIR_PATH: z.string().default(".secrets/solana-mainnet.json"),
   TXLINE_SERVICE_LEVEL: z.coerce.number().int().positive().default(12),
   TXLINE_SUBSCRIPTION_WEEKS: z.coerce.number().int().positive().default(4),
+  STOPPAGE_LIVE_TAPE_ENABLED: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((value) => value === "true"),
 });
 
 export type AppConfig = ReturnType<typeof loadConfig>;
@@ -33,5 +37,6 @@ export function loadConfig(environment: NodeJS.ProcessEnv = process.env) {
     txlineKeypairPath: resolve(parsed.TXLINE_KEYPAIR_PATH),
     txlineServiceLevel: parsed.TXLINE_SERVICE_LEVEL,
     txlineSubscriptionWeeks: parsed.TXLINE_SUBSCRIPTION_WEEKS,
+    liveDecisionTapeEnabled: parsed.STOPPAGE_LIVE_TAPE_ENABLED,
   };
 }

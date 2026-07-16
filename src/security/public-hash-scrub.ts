@@ -17,3 +17,40 @@ export function scrubApprovedPublicClaimHashes(content: string) {
     content,
   );
 }
+
+export function scrubApprovedLiveDecisionTapeHashes(content: string) {
+  const tape = JSON.parse(content) as {
+    candidateHash?: string;
+    sampleProof?: {
+      permit?: {
+        hash?: string;
+        body?: {
+          subjectHash?: string;
+          quoteHash?: string;
+          configHash?: string;
+          stateReceiptHash?: string | null;
+          reopenProofHash?: string | null;
+        };
+      };
+      intendedAgent?: { callbackReceiptHash?: string | null };
+      crossAgentAttempt?: { callbackReceiptHash?: string | null };
+    };
+  };
+  const body = tape.sampleProof?.permit?.body;
+  const approvedHashes = [
+    tape.candidateHash,
+    tape.sampleProof?.permit?.hash,
+    body?.subjectHash,
+    body?.quoteHash,
+    body?.configHash,
+    body?.stateReceiptHash,
+    body?.reopenProofHash,
+    tape.sampleProof?.intendedAgent?.callbackReceiptHash,
+    tape.sampleProof?.crossAgentAttempt?.callbackReceiptHash,
+  ].filter((value): value is string => Boolean(value));
+
+  return approvedHashes.reduce(
+    (scrubbed, hash) => scrubbed.replaceAll(hash, "<approved-live-tape-hash>"),
+    content,
+  );
+}

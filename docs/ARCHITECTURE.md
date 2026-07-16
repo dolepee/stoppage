@@ -22,11 +22,30 @@
 7. **Reference market-maker** verifies the permit immediately before every
    simulated `PUBLISH_QUOTE` action. It cannot publish in `SUSPENDED`,
    `REPRICED`, or `FAILSAFE`.
-8. **Operator API** publishes synthetic judge snapshots and approved projections
-   of derived lifecycle evidence. It never publishes TxLINE records, odds
-   vectors, source identifiers, or credentials.
-9. **Operator console** renders the same gate evaluator used by the API and
-   reference client.
+8. **Live Decision Tape** converts a real or privately replayed TxLINE quote
+   into a Permit V2 request. The intended reference agent verifies it offline
+   and atomically claims the one-use nonce in private durable storage before its
+   simulated callback. The claim remains effective across a process restart
+   until permit expiry. That adapter durably records a permit-bound venue action
+   and returns its canonical receipt hash before the tape can mark execution. A
+   second audience attempts the same permit and must remain closed. The result
+   proves permit non-transferability, not authenticated caller identity.
+   Optional tape persistence and coalesced diagnostics run behind an isolated
+   queue capped at 64 pending snapshots; overflow is dropped and reported
+   without rejecting the core feed callback. Each queued snapshot is
+   re-resolved against the current fixture sequence immediately before
+   recording, and superseded work is withheld with a stale-snapshot diagnostic.
+9. **Approval boundary** aggregates private tape records, re-verifies the signed
+   sample, enforces both zero-callback invariants, strips licensed fields, and
+   requires an exact human approval before writing public evidence. Legacy
+   replay rows are labeled builder-attested with provenance not independently
+   verified; their schema is never treated as proof of competition or service
+   level.
+10. **Operator API** publishes synthetic judge snapshots and approved
+    projections of derived lifecycle and enforcement evidence. It never
+    publishes TxLINE records, odds vectors, source identifiers, or credentials.
+11. **Operator console** renders the same gate evaluator used by the API and
+    reference client.
 
 ## State machine
 
@@ -105,3 +124,15 @@ private object only when evaluating `POST /api/execution-gate/evaluate`; it
 returns the `BLOCK` result or canonical permit without returning fixture IDs,
 quotes, source IDs, or proofs. Context age is capped at five seconds, so a dead
 worker cannot authorize from a cached healthy state.
+
+Permit V1 requests retain their existing response contract. A strict Permit V2
+request additionally supplies agent ID, audience, nonce, and expected sequence.
+The live route signs only after that sequence matches the fresh private context.
+Key discovery is origin-specific, so a consumer must fetch keys from the same
+origin that issued its permit.
+
+The public Vercel deployment serves only the human-approved frozen Live Decision
+Tape aggregate. It labels private-capture replay separately and does not present
+that aggregate as persistent hosted-worker uptime. Replay Permit V2 timestamps
+come from the replay execution clock rather than the private capture, and a
+publishable aggregate must contain a signed Certified Reopen sample.

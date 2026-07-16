@@ -40,6 +40,9 @@
     "policy:holdout": "tsx scripts/evaluate-holdout.ts",
     "evidence:prepare": "tsx scripts/prepare-public-evidence.ts",
     "evidence:publish": "tsx scripts/publish-public-evidence.ts",
+    "tape:prepare": "tsx scripts/prepare-live-decision-tape.ts",
+    "tape:publish": "tsx scripts/publish-live-decision-tape.ts",
+    "tape:replay": "tsx scripts/replay-live-decision-tape.ts",
     "sdk:build": "pnpm --filter @stoppage/sdk build",
     "sdk:pack": "pnpm --filter @stoppage/sdk pack:artifact",
     "sdk:consumer:verify": "tsx scripts/verify-sdk-consumer.ts"

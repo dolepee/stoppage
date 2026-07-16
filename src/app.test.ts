@@ -11,6 +11,7 @@ import {
   hashExecutionSubject,
   hashQuote,
 } from "./execution-gate/execution-gate.js";
+import { createPermitSigner } from "./execution-gate/permit-v2.js";
 import type { PersistedLiveExecutionState } from "./execution-gate/live-context.js";
 import {
   buildApprovedPublicClaim,
@@ -493,6 +494,88 @@ describe("operator API", () => {
       },
     });
     expect(response.body).not.toContain("fixtureId");
+  });
+
+  it("serves a signed Permit V2 from fresh private live-worker context", async () => {
+    const live = liveExecutionFixture();
+    const signer = createPermitSigner(
+      Uint8Array.from({ length: 32 }, (_, index) => index + 11),
+    );
+    const application = await createApplication({
+      logger: false,
+      serveStatic: false,
+      readLiveGateState: async () => live.state,
+      loadPermitSigner: () => signer,
+    });
+    applications.push(application);
+
+    const response = await application.app.inject({
+      method: "POST",
+      url: "/api/execution-gate/evaluate",
+      payload: {
+        ...live.request,
+        version: 2,
+        agentId: "agent-a-reference",
+        audience: "venue:agent-a-reference",
+        nonce: "live-request-0001",
+        sequence: live.state.contexts[0]!.sequence,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      version: 2,
+      dataMode: "LIVE_PRIVATE",
+      agent: { id: "agent-a-reference", automated: true },
+      result: {
+        decision: "ALLOW_CERTIFIED_REOPEN",
+        permit: {
+          body: {
+            kid: signer.kid,
+            audience: "venue:agent-a-reference",
+            nonce: "live-request-0001",
+          },
+          signature: expect.any(String),
+        },
+      },
+    });
+    expect(response.body).not.toContain("fixtureId");
+  });
+
+  it("fails a stale private Permit V2 request closed without loading a signer", async () => {
+    const live = liveExecutionFixture();
+    live.state.contexts[0]!.updatedAt = "2026-01-01T00:00:00.000Z";
+    const application = await createApplication({
+      logger: false,
+      serveStatic: false,
+      readLiveGateState: async () => live.state,
+      loadPermitSigner: () => {
+        throw new Error("Signer must not be loaded for a stale context");
+      },
+    });
+    applications.push(application);
+
+    const response = await application.app.inject({
+      method: "POST",
+      url: "/api/execution-gate/evaluate",
+      payload: {
+        ...live.request,
+        version: 2,
+        agentId: "agent-a-reference",
+        audience: "venue:agent-a-reference",
+        nonce: "live-request-0002",
+        sequence: live.state.contexts[0]!.sequence,
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      version: 2,
+      result: {
+        decision: "BLOCK_STREAM_UNHEALTHY",
+        permit: null,
+      },
+    });
   });
 
   it("fails a stale live-worker context closed without issuing a permit", async () => {

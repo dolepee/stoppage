@@ -50,4 +50,25 @@ describe("private capture store", () => {
     expect(path).toBe(join(root, "capture.json"));
     expect(JSON.parse(await readFile(path, "utf8"))).toEqual({ private: true });
   });
+
+  it("atomically claims one use and prunes it after expiry", async () => {
+    root = await mkdtemp(join(tmpdir(), "stoppage-capture-claims-"));
+    process.env.STOPPAGE_PRIVATE_ROOT = root;
+    const { claimPrivateUse } = await import("./capture-store.js");
+    const claim = {
+      namespace: "stoppage-live-tape",
+      key: "issuer:agent:audience:nonce-0001",
+      expiresAt: 15_000,
+      now: 10_000,
+    };
+
+    const concurrent = await Promise.all([
+      claimPrivateUse(claim),
+      claimPrivateUse(claim),
+    ]);
+    expect(concurrent.sort()).toEqual([false, true]);
+    await expect(
+      claimPrivateUse({ ...claim, now: 15_000, expiresAt: 20_000 }),
+    ).resolves.toBe(true);
+  });
 });

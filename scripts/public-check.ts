@@ -1,6 +1,9 @@
 import { execFileSync } from "node:child_process";
 import { readFile, stat } from "node:fs/promises";
-import { scrubApprovedPublicClaimHashes } from "../src/security/public-hash-scrub.js";
+import {
+  scrubApprovedLiveDecisionTapeHashes,
+  scrubApprovedPublicClaimHashes,
+} from "../src/security/public-hash-scrub.js";
 
 const repositoryRoot = new URL("../", import.meta.url);
 const listed = execFileSync(
@@ -72,7 +75,9 @@ for (const path of listed) {
   const contentForSecretScan =
     path === "data/public/public-claim.json"
       ? scrubApprovedPublicClaimHashes(content)
-      : content;
+      : path === "data/public/live-decision-tape.json"
+        ? scrubApprovedLiveDecisionTapeHashes(content)
+        : content;
   for (const [label, pattern] of secretPatterns) {
     if (pattern.test(contentForSecretScan))
       failures.push(`${label} pattern in ${path}`);

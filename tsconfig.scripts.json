@@ -6,6 +6,7 @@
   },
   "include": [
     "api/agent-gate.ts",
+    "api/live-decision-tape.ts",
     "api/permit-keys.ts",
     "api/public-claim.ts",
     "examples/**/*.ts",

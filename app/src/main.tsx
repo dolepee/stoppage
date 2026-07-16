@@ -53,6 +53,10 @@ import type {
   WorkerHealthSnapshot,
 } from "./types";
 import { parsePublicClaim, type PublicClaim } from "./public-claim";
+import {
+  parseLiveDecisionTape,
+  type LiveDecisionTape,
+} from "./live-decision-tape";
 import { resolveRuntimeMode } from "./runtime-mode";
 import "./styles.css";
 
@@ -78,7 +82,7 @@ const routeMetadata: Record<AppRoute, { title: string; description: string }> =
     "/demo": {
       title: "Demo · Stoppage",
       description:
-        "Test Stoppage's synthetic World Cup enforcement adapter: withhold the venue callback during VAR uncertainty, verify a signed permit, and reject six execution attacks.",
+        "Test Stoppage's synthetic World Cup enforcement adapter and inspect the approved Live Decision Tape: real TxLINE capture, signed permit enforcement, and cross-agent isolation.",
     },
     "/evidence": {
       title: "Evidence · Stoppage",
@@ -97,6 +101,8 @@ function App() {
   const [connection, setConnection] = useState<ConnectionMode>("connecting");
   const [publicClaim, setPublicClaim] = useState<PublicClaim | null>(null);
   const [claimStatus, setClaimStatus] = useState<ClaimStatus>("loading");
+  const [liveTape, setLiveTape] = useState<LiveDecisionTape | null>(null);
+  const [liveTapeStatus, setLiveTapeStatus] = useState<ClaimStatus>("loading");
   const [workerHealth, setWorkerHealth] = useState<WorkerHealthSnapshot | null>(
     null,
   );
@@ -216,6 +222,29 @@ function App() {
     return () => controller.abort();
   }, []);
 
+  useEffect(() => {
+    const controller = new AbortController();
+
+    void fetch("/api/live-decision-tape", { signal: controller.signal })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error("Tape failed: " + response.status);
+        }
+        return response.json() as Promise<unknown>;
+      })
+      .then((value) => {
+        setLiveTape(parseLiveDecisionTape(value));
+        setLiveTapeStatus("available");
+      })
+      .catch((error: unknown) => {
+        if ((error as Error).name !== "AbortError") {
+          setLiveTapeStatus("unavailable");
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
   async function startReplay() {
     setActionPending(true);
     setActionError(null);
@@ -308,6 +337,8 @@ function App() {
             claim={publicClaim}
             claimStatus={claimStatus}
             workerHealth={workerHealth}
+            liveTape={liveTape}
+            liveTapeStatus={liveTapeStatus}
             isRunning={isRunning}
             hasRun={hasRun}
             actionPending={actionPending}
@@ -511,6 +542,8 @@ function ControlPage({
   claim,
   claimStatus,
   workerHealth,
+  liveTape,
+  liveTapeStatus,
   isRunning,
   hasRun,
   actionPending,
@@ -522,6 +555,8 @@ function ControlPage({
   claim: PublicClaim | null;
   claimStatus: ClaimStatus;
   workerHealth: WorkerHealthSnapshot | null;
+  liveTape: LiveDecisionTape | null;
+  liveTapeStatus: ClaimStatus;
   isRunning: boolean;
   hasRun: boolean;
   actionPending: boolean;
@@ -612,6 +647,8 @@ function ControlPage({
 
       <ApprovedEvidenceBand claim={claim} status={claimStatus} />
 
+      <LiveDecisionTapePanel tape={liveTape} status={liveTapeStatus} />
+
       <div className="workspace" id="operations">
         <section
           className="match-strip"
@@ -685,6 +722,146 @@ function ControlPage({
         <SystemHealthStrip snapshot={snapshot} workerHealth={workerHealth} />
       </div>
     </>
+  );
+}
+
+function LiveDecisionTapePanel({
+  tape,
+  status,
+}: {
+  tape: LiveDecisionTape | null;
+  status: ClaimStatus;
+}) {
+  if (!tape) {
+    return (
+      <section className="live-tape unavailable" aria-live="polite">
+        <div className="live-tape-inner">
+          <div className="live-tape-heading">
+            <span>Live Decision Tape</span>
+            <h2>Recorded agent enforcement evidence</h2>
+            <p>
+              {status === "loading"
+                ? "Loading the approved frozen aggregate…"
+                : "No human-approved live decision tape is published."}
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const metrics = [
+    ["Captured requests", tape.counters.capturedRequests],
+    ["Blocked requests", tape.counters.blockedRequests],
+    ["Verified permits", tape.counters.verifiedPermits],
+    ["Callbacks after BLOCK", tape.counters.callbacksAfterBlock],
+    ["Callbacks without permit", tape.counters.callbacksWithoutVerifiedPermit],
+    [
+      "Cross-agent thefts rejected",
+      tape.counters.crossAgentPermitTheftsRejected,
+    ],
+  ] as const;
+  const captureLabel =
+    tape.captureModes.privateCaptureReplay === tape.counters.capturedRequests
+      ? "Builder-attested TxLINE capture replay"
+      : "Builder-attested live and replay capture";
+
+  return (
+    <section className="live-tape" aria-labelledby="live-tape-title">
+      <div className="live-tape-inner">
+        <header className="live-tape-heading">
+          <div>
+            <span>Approved builder-attested enforcement proof</span>
+            <h2 id="live-tape-title">Live Decision Tape</h2>
+          </div>
+          <p>
+            Builder-attested TxLINE captures entered the same deterministic
+            gate. Agent A executed only after offline Ed25519 verification; the
+            permit was non-transferable to Agent B's audience. Capture
+            provenance is not independently verified by this public aggregate.
+          </p>
+          <div className="live-tape-label">
+            <Radio size={14} aria-hidden="true" />
+            <span>
+              <strong>Frozen approved aggregate</strong>
+              <small>{captureLabel} · not hosted uptime</small>
+            </span>
+          </div>
+        </header>
+
+        <div className="live-tape-route" aria-label="Recorded agent route">
+          <div className="tape-route-node source">
+            <Radio size={17} aria-hidden="true" />
+            <span>
+              <small>Builder-attested TxLINE capture</small>
+              <strong>PUBLISH_QUOTE</strong>
+            </span>
+          </div>
+          <ArrowRight size={16} aria-hidden="true" />
+          <div className="tape-route-node gate">
+            <ShieldCheck size={17} aria-hidden="true" />
+            <span>
+              <small>Stoppage</small>
+              <strong>Permit V2</strong>
+            </span>
+          </div>
+          <ArrowRight size={16} aria-hidden="true" />
+          <div className="tape-agent-branches">
+            <div className="tape-agent verified">
+              <Bot size={17} aria-hidden="true" />
+              <span>
+                <small>Agent A · intended audience</small>
+                <strong>VERIFIED → CALLBACK EXECUTED</strong>
+              </span>
+            </div>
+            <div className="tape-agent rejected">
+              <LockKeyhole size={17} aria-hidden="true" />
+              <span>
+                <small>Agent B · stolen permit</small>
+                <strong>AUDIENCE MISMATCH → WITHHELD</strong>
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="live-tape-metrics">
+          {metrics.map(([label, value]) => (
+            <div
+              className={"live-tape-metric" + (value === 0 ? " zero" : "")}
+              key={label}
+            >
+              <span>{label}</span>
+              <strong>{value}</strong>
+            </div>
+          ))}
+        </div>
+
+        <footer className="live-tape-proof">
+          <span>
+            <ShieldCheck size={14} aria-hidden="true" />
+            Sample{" "}
+            {tape.sampleProof.decision === "ALLOW_CERTIFIED_REOPEN"
+              ? "Certified Reopen"
+              : formatDecisionLabel(tape.sampleProof.decision)}{" "}
+            · callback{" "}
+            <code>
+              {shortHash(
+                tape.sampleProof.intendedAgent.callbackReceiptHash,
+                10,
+              )}
+            </code>{" "}
+            · signer <code>{tape.signer.kid}</code>
+          </span>
+          <span>
+            Approved {formatDate(tape.approvedAt)} ·{" "}
+            <code>{shortHash(tape.candidateHash, 12)}</code>
+          </span>
+          <a href="/api/live-decision-tape" target="_blank" rel="noreferrer">
+            Inspect signed proof <ExternalLink size={11} aria-hidden="true" />
+          </a>
+        </footer>
+      </div>
+    </section>
   );
 }
 

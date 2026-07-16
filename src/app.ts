@@ -12,7 +12,14 @@ import { readRuntimeState } from "./private/runtime-store.js";
 import { publicJudgeScenario } from "./replay/public-scenario.js";
 import { StoppageRuntime } from "./runtime/stoppage-runtime.js";
 import { loadLatestPublicClaim } from "./evidence/public-claim.js";
+import { loadPublicLiveDecisionTape } from "./evidence/live-decision-tape.js";
 import { evaluateExecutionGate } from "./execution-gate/execution-gate.js";
+import {
+  evaluateLiveAgentRequest,
+  liveExecutionGateRequestSchema,
+  unavailableLiveAgentResponse,
+  type LiveAgentRequestV2,
+} from "./execution-gate/live-agent-gate.js";
 import {
   evaluatePublicAgentHandshake,
   getPublicAgentContext,
@@ -20,6 +27,7 @@ import {
 import {
   loadPermitSigner,
   publicKeySetFor,
+  type PermitSigner,
 } from "./execution-gate/permit-v2.js";
 import {
   executionContextFromPersisted,
@@ -36,6 +44,7 @@ interface ApplicationOptions {
   readWorkerStatus?: WorkerStatusReader;
   readLiveGateState?: LiveGateStateReader;
   publicClaimRoot?: string;
+  loadPermitSigner?: () => PermitSigner;
 }
 
 type PersistedWorkerStatus = LiveWorkerStatus & { updatedAt: string };
@@ -53,6 +62,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
   const readLiveGateState =
     options.readLiveGateState ?? (() => readLiveExecutionState());
   const publicClaimRoot = options.publicClaimRoot ?? "data/public";
+  const resolvePermitSigner = options.loadPermitSigner ?? loadPermitSigner;
 
   app.addHook("onRequest", async (_request, reply) => {
     reply
@@ -107,18 +117,12 @@ export async function createApplication(options: ApplicationOptions = {}) {
   app.get("/api/execution-gate", async () => runtime.snapshot().execution);
 
   app.post("/api/execution-gate/evaluate", async (request) => {
-    const body = z
-      .object({
-        version: z.literal(1),
-        command: z.literal("PUBLISH_QUOTE"),
-        subjectHash: z.string().regex(/^0x[0-9a-f]{64}$/),
-        market: z.literal("1X2"),
-        quoteHash: z.string().regex(/^0x[0-9a-f]{64}$/),
-      })
-      .strict()
-      .parse(request.body);
+    const body = liveExecutionGateRequestSchema.parse(request.body);
     const synthetic = runtime.snapshot();
-    if (body.subjectHash === synthetic.execution.subjectHash) {
+    if (
+      body.version === 1 &&
+      body.subjectHash === synthetic.execution.subjectHash
+    ) {
       return runtime.evaluateExecution(body);
     }
 
@@ -134,7 +138,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
         : undefined;
     } catch (error) {
       app.log.error({ error }, "private live execution state is unreadable");
-      return unavailableLiveGate(now, 0);
+      return unavailableLiveGateFor(body, now, 0);
     }
     const contextUpdatedAt = liveContext
       ? Date.parse(liveContext.updatedAt)
@@ -145,17 +149,17 @@ export async function createApplication(options: ApplicationOptions = {}) {
       contextUpdatedAt > now + 5_000 ||
       now - contextUpdatedAt >= LIVE_EXECUTION_CONTEXT_MAX_AGE_MS
     ) {
-      return unavailableLiveGate(now, liveContext?.sequence ?? 0);
+      return unavailableLiveGateFor(body, now, liveContext?.sequence ?? 0);
     }
 
     try {
-      return evaluateExecutionGate(
-        body,
-        executionContextFromPersisted(liveContext, now),
-      );
+      const context = executionContextFromPersisted(liveContext, now);
+      return body.version === 1
+        ? evaluateExecutionGate(body, context)
+        : evaluateLiveAgentRequest(body, context, resolvePermitSigner(), now);
     } catch (error) {
       app.log.error({ error }, "private live execution context is invalid");
-      return unavailableLiveGate(now, liveContext.sequence);
+      return unavailableLiveGateFor(body, now, liveContext.sequence);
     }
   });
 
@@ -166,7 +170,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
       typeof value === "object" &&
       "version" in value &&
       value.version === 2
-        ? loadPermitSigner()
+        ? resolvePermitSigner()
         : undefined;
     return reply
       .header("Cache-Control", "no-store")
@@ -182,7 +186,7 @@ export async function createApplication(options: ApplicationOptions = {}) {
   app.get("/api/permit-keys", async (_request, reply) => {
     return reply
       .header("Cache-Control", "no-store")
-      .send(publicKeySetFor(loadPermitSigner()));
+      .send(publicKeySetFor(resolvePermitSigner()));
   });
 
   app.get("/api/worker-health", async () => {
@@ -227,6 +231,18 @@ export async function createApplication(options: ApplicationOptions = {}) {
       },
       updatedAt: status.updatedAt,
     };
+  });
+
+  app.get("/api/live-decision-tape", async (_request, reply) => {
+    const tape = await loadPublicLiveDecisionTape(publicClaimRoot);
+    if (!tape) {
+      return reply.code(404).send({
+        error: "Live decision tape not available",
+      });
+    }
+    return reply
+      .header("Cache-Control", "public, max-age=60, s-maxage=300")
+      .send(tape);
   });
 
   app.get("/api/host-health", async (_request, reply) => {
@@ -354,4 +370,14 @@ function unavailableLiveGate(evaluatedAt: number, sequence: number) {
     sequence,
     permit: null,
   };
+}
+
+function unavailableLiveGateFor(
+  request: { version: 1 } | LiveAgentRequestV2,
+  evaluatedAt: number,
+  sequence: number,
+) {
+  return request.version === 1
+    ? unavailableLiveGate(evaluatedAt, sequence)
+    : unavailableLiveAgentResponse(request, evaluatedAt, sequence);
 }

@@ -5,8 +5,18 @@ import {
   LiveExecutionContextTracker,
   writeLiveExecutionState,
 } from "./execution-gate/live-context.js";
+import { loadPermitSigner } from "./execution-gate/permit-v2.js";
+import {
+  createLiveTapeVenueReceipt,
+  LIVE_DECISION_TAPE_VENUE_ACTIONS_FILE,
+  LiveDecisionTapeQueue,
+  LiveDecisionTapeRecorder,
+} from "./live/live-decision-tape.js";
 import { TxLineLiveWorker } from "./live/txline-live-worker.js";
-import { appendPrivateCapture } from "./private/capture-store.js";
+import {
+  appendPrivateCapture,
+  claimPrivateUse,
+} from "./private/capture-store.js";
 import { writeRuntimeState } from "./private/runtime-store.js";
 import { TxLineClient } from "./txline/client.js";
 
@@ -25,6 +35,38 @@ const client = new TxLineClient({
 let lastStatusLogAt = 0;
 let inputQueue = Promise.resolve();
 const executionContexts = new LiveExecutionContextTracker();
+const liveDecisionTape = config.liveDecisionTapeEnabled
+  ? new LiveDecisionTapeRecorder({
+      signer: loadPermitSigner({ ...process.env, NODE_ENV: "production" }),
+      claimNonce: (claim) =>
+        claimPrivateUse({ namespace: "stoppage-live-tape", ...claim }),
+      invokeAgentA: async (action) => {
+        await appendPrivateCapture(
+          LIVE_DECISION_TAPE_VENUE_ACTIONS_FILE,
+          action,
+        );
+        return createLiveTapeVenueReceipt(action);
+      },
+      invokeAgentB: async () => {
+        throw new Error("The adversary venue callback must remain closed");
+      },
+    })
+  : null;
+const liveDecisionTapeQueue = liveDecisionTape
+  ? new LiveDecisionTapeQueue({
+      recorder: liveDecisionTape,
+      resolveContext: (queued) => {
+        const current = executionContexts
+          .contexts(governor)
+          .find((candidate) => candidate.subjectHash === queued.subjectHash);
+        return current?.sequence === queued.sequence ? current : null;
+      },
+      reportFailure: async (failure) => {
+        console.error(JSON.stringify(failure));
+        await writeRuntimeState("live-decision-tape-error.json", failure);
+      },
+    })
+  : null;
 const worker = new TxLineLiveWorker({
   client,
   callbacks: {
@@ -82,6 +124,15 @@ async function processInput(input: GovernorInput) {
   }
   const contexts = executionContexts.contexts(governor);
   if (contexts.length > 0) await writeLiveExecutionState(contexts);
+  if (input.kind === "quote" && liveDecisionTapeQueue) {
+    const context = contexts.find(
+      (candidate) => candidate.state.fixtureId === input.fixtureId,
+    );
+    if (!context) {
+      throw new Error("Missing live execution context for the received quote");
+    }
+    liveDecisionTapeQueue.enqueue(context);
+  }
 }
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
@@ -95,6 +146,7 @@ try {
   await worker.run(controller.signal);
 } finally {
   if (durationTimeout) clearTimeout(durationTimeout);
+  await liveDecisionTapeQueue?.drain();
 }
 
 function readOptionalDuration() {

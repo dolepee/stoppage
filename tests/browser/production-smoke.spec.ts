@@ -1,4 +1,8 @@
+import { existsSync } from "node:fs";
+
 import { expect, test, type Page } from "@playwright/test";
+
+const approvedTapePublished = existsSync("data/public/live-decision-tape.json");
 
 test.describe("Stoppage release browser gate", () => {
   test("blocks, certifies and rejects tampering without layout or browser errors", async ({
@@ -59,6 +63,35 @@ test.describe("Stoppage release browser gate", () => {
     await expect(page).toHaveURL(/\/demo$/);
     await expect(page).toHaveTitle("Demo · Stoppage");
     await expectNoHorizontalOverflow(page);
+    if (approvedTapePublished) {
+      await expect(
+        page.getByRole("heading", {
+          name: "Live Decision Tape",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("VERIFIED → CALLBACK EXECUTED", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("AUDIENCE MISMATCH → WITHHELD", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("Callbacks after BLOCK", { exact: true }),
+      ).toBeVisible();
+    } else {
+      await expect(
+        page.getByRole("heading", {
+          name: "Recorded agent enforcement evidence",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(
+        page.getByText("No human-approved live decision tape is published.", {
+          exact: true,
+        }),
+      ).toBeVisible();
+    }
 
     await page
       .getByRole("button", { name: /Test the firewall|Test again/ })
@@ -113,6 +146,7 @@ test.describe("Stoppage release browser gate", () => {
     expect(Object.keys(contract.paths ?? {}).sort()).toEqual([
       "/api/agent-context",
       "/api/agent-gate",
+      "/api/live-decision-tape",
       "/api/permit-keys",
     ]);
 
@@ -143,7 +177,36 @@ test.describe("Stoppage release browser gate", () => {
       holdout: { fixtures: 4, completeProtectedWindows: 18 },
     });
 
-    expect(browserErrors).toEqual([]);
+    const tape = await request.get("/api/live-decision-tape");
+    if (approvedTapePublished) {
+      expect(tape.status()).toBe(200);
+      await expect(tape.json()).resolves.toMatchObject({
+        version: 1,
+        status: "AVAILABLE",
+        evidenceType: "RECORDED_BUILDER_ATTESTED_TXLINE_DECISION_TAPE",
+        hostingClaim: "RECORDED_CAPTURE_NOT_HOSTED_UPTIME",
+        timingDisclosure:
+          "PERMIT_ISSUED_AT_IS_ENFORCEMENT_EXECUTION_TIME_NOT_FEED_TIME",
+        counters: {
+          capturedRequests: 20,
+          blockedRequests: 10,
+          verifiedPermits: 10,
+          callbacksAfterBlock: 0,
+          callbacksWithoutVerifiedPermit: 0,
+          crossAgentPermitTheftsRejected: 10,
+        },
+      });
+    } else {
+      expect(tape.status()).toBe(404);
+    }
+
+    expect(browserErrors).toEqual(
+      approvedTapePublished
+        ? []
+        : [
+            "Failed to load resource: the server responded with a status of 404 (Not Found)",
+          ],
+    );
     expect(pageErrors).toEqual([]);
     expect(failedRequests).toEqual([]);
   });
