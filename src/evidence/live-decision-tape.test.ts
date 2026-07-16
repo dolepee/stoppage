@@ -154,6 +154,25 @@ describe("public live decision-tape evidence", () => {
     ).toThrow(/callback receipt is not bound/);
   });
 
+  it("verifies a callback receipt issued after a delayed nonce claim", async () => {
+    const records: LiveDecisionTapeRecord[] = [];
+    const recorder = new LiveDecisionTapeRecorder({
+      signer,
+      clock: () => 10_001,
+      appendRecord: async (record) => records.push(record),
+      writeStatus: async () => undefined,
+      claimNonce: createNonceClaimer(),
+      invokeAgentA: createLiveTapeVenueReceipt,
+      invokeAgentB: createLiveTapeVenueReceipt,
+    });
+    await recorder.record(checkpointAt(12), 10_000);
+    await recorder.record(checkpointAt(3), 20_000);
+
+    expect(() =>
+      buildLiveDecisionTapeCandidate(records, publicKeySetFor(signer)),
+    ).not.toThrow();
+  });
+
   it("rejects replay capture time at both the private and public boundaries", async () => {
     const records: LiveDecisionTapeRecord[] = [];
     const recorder = new LiveDecisionTapeRecorder({

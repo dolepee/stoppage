@@ -346,13 +346,17 @@ function validateRecord(
 
   if (allow) {
     const permit = record.agentA.signedPermit;
+    const callbackInvokedAt = Date.parse(record.agentA.callbackInvokedAt ?? "");
     if (
       !permit ||
       !record.agentA.permitIssued ||
       !record.agentA.callbackInvoked ||
+      !Number.isFinite(callbackInvokedAt) ||
       !isHash(record.agentA.callbackReceiptHash) ||
       !record.agentA.verification.valid ||
-      permit.body.issuedAt !== recordedAt
+      permit.body.issuedAt !== recordedAt ||
+      callbackInvokedAt < permit.body.issuedAt ||
+      callbackInvokedAt >= permit.body.expiresAt
     ) {
       throw new Error("An allowed tape record lacks verified enforcement");
     }
@@ -375,7 +379,7 @@ function validateRecord(
           quoteHash: record.agentA.intent.quoteHash,
           sequence: record.agentA.intent.sequence,
           permitHash: permit.hash,
-          invokedAt: record.recordedAt,
+          invokedAt: record.agentA.callbackInvokedAt!,
         }),
       )
     ) {
@@ -387,6 +391,7 @@ function validateRecord(
       !record.agentB.verification ||
       record.agentB.verification.valid ||
       record.agentB.callbackInvoked ||
+      record.agentB.callbackInvokedAt !== null ||
       record.agentB.callbackReceiptHash !== null
     ) {
       throw new Error("An allowed tape record lacks rejected permit theft");
@@ -407,9 +412,11 @@ function validateRecord(
     record.agentA.signedPermit ||
     record.agentA.permitIssued ||
     record.agentA.callbackInvoked ||
+    record.agentA.callbackInvokedAt !== null ||
     record.agentA.callbackReceiptHash !== null ||
     record.agentB.attemptedPermitTheft ||
     record.agentB.callbackInvoked ||
+    record.agentB.callbackInvokedAt !== null ||
     record.agentB.callbackReceiptHash !== null
   ) {
     throw new Error("A blocked tape record invoked or delegated a callback");

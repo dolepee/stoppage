@@ -94,6 +94,7 @@ export interface LiveDecisionTapeRecord {
     signedPermit: SignedExecutionPermitV2 | null;
     verification: PermitVerificationResult;
     callbackInvoked: boolean;
+    callbackInvokedAt: string | null;
     callbackReceiptHash: string | null;
   };
   agentB: {
@@ -101,6 +102,7 @@ export interface LiveDecisionTapeRecord {
     intent: ExecutionIntent | null;
     verification: PermitVerificationResult | null;
     callbackInvoked: boolean;
+    callbackInvokedAt: string | null;
     callbackReceiptHash: string | null;
   };
   invariants: {
@@ -200,10 +202,12 @@ export class LiveDecisionTapeRecorder {
       reason: response.result.reason,
     };
     let agentACallbackInvoked = false;
+    let agentACallbackInvokedAt: string | null = null;
     let agentACallbackReceiptHash: string | null = null;
     let agentBIntent: ExecutionIntent | null = null;
     let agentBVerification: PermitVerificationResult | null = null;
     let agentBCallbackInvoked = false;
+    let agentBCallbackInvokedAt: string | null = null;
     let agentBCallbackReceiptHash: string | null = null;
 
     if (
@@ -245,6 +249,7 @@ export class LiveDecisionTapeRecorder {
             const receipt = await this.#invokeAgentA(action);
             assertVenueReceipt(receipt, action);
             agentACallbackInvoked = true;
+            agentACallbackInvokedAt = action.invokedAt;
             agentACallbackReceiptHash = receipt.actionHash;
           }
         }
@@ -270,6 +275,7 @@ export class LiveDecisionTapeRecorder {
         const receipt = await this.#invokeAgentB(action);
         assertVenueReceipt(receipt, action);
         agentBCallbackInvoked = true;
+        agentBCallbackInvokedAt = action.invokedAt;
         agentBCallbackReceiptHash = receipt.actionHash;
       }
     }
@@ -295,6 +301,7 @@ export class LiveDecisionTapeRecorder {
         signedPermit: response.result.permit,
         verification: agentAVerification,
         callbackInvoked: agentACallbackInvoked,
+        callbackInvokedAt: agentACallbackInvokedAt,
         callbackReceiptHash: agentACallbackReceiptHash,
       },
       agentB: {
@@ -302,6 +309,7 @@ export class LiveDecisionTapeRecorder {
         intent: agentBIntent,
         verification: agentBVerification,
         callbackInvoked: agentBCallbackInvoked,
+        callbackInvokedAt: agentBCallbackInvokedAt,
         callbackReceiptHash: agentBCallbackReceiptHash,
       },
       invariants: {

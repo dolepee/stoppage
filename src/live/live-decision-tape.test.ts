@@ -48,6 +48,7 @@ describe("live decision tape", () => {
         permitIssued: true,
         verification: { valid: true, decision: "ALLOW" },
         callbackInvoked: true,
+        callbackInvokedAt: new Date(10_000).toISOString(),
         callbackReceiptHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
       },
       agentB: {
@@ -57,6 +58,7 @@ describe("live decision tape", () => {
           decision: "BLOCK_AUDIENCE_MISMATCH",
         },
         callbackInvoked: false,
+        callbackInvokedAt: null,
         callbackReceiptHash: null,
       },
       invariants: {
@@ -221,6 +223,7 @@ describe("live decision tape", () => {
     expect(retry.agentA).toMatchObject({
       verification: { valid: false, decision: "BLOCK_NONCE_REPLAY" },
       callbackInvoked: false,
+      callbackInvokedAt: null,
       callbackReceiptHash: null,
     });
     expect(invokeAgentA).toHaveBeenCalledOnce();
@@ -247,9 +250,30 @@ describe("live decision tape", () => {
     expect(record.agentA).toMatchObject({
       verification: { valid: false, decision: "BLOCK_PERMIT_EXPIRED" },
       callbackInvoked: false,
+      callbackInvokedAt: null,
       callbackReceiptHash: null,
     });
     expect(invokeAgentA).not.toHaveBeenCalled();
+  });
+
+  it("binds a delayed callback receipt to its actual invocation time", async () => {
+    const recorder = new LiveDecisionTapeRecorder({
+      signer,
+      clock: () => 10_001,
+      appendRecord: async () => undefined,
+      writeStatus: async () => undefined,
+      claimNonce: createNonceClaimer(),
+      invokeAgentA: createLiveTapeVenueReceipt,
+      invokeAgentB: createLiveTapeVenueReceipt,
+    });
+
+    const record = await recorder.record(checkpointAt(12), 10_000);
+
+    expect(record.recordedAt).toBe(new Date(10_000).toISOString());
+    expect(record.agentA.callbackInvokedAt).toBe(
+      new Date(10_001).toISOString(),
+    );
+    expect(record.agentA.callbackReceiptHash).toMatch(/^0x[0-9a-f]{64}$/);
   });
 
   it("drops overflow beyond a fixed queue bound and reports it once", async () => {
