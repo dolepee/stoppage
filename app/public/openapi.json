@@ -429,9 +429,13 @@
         "properties": {
           "version": { "const": 1 },
           "status": { "const": "AVAILABLE" },
-          "evidenceType": { "const": "RECORDED_TXLINE_DECISION_TAPE" },
+          "evidenceType": {
+            "const": "RECORDED_BUILDER_ATTESTED_TXLINE_DECISION_TAPE"
+          },
           "network": { "const": "solana-mainnet" },
-          "source": { "const": "TXLINE_WORLD_CUP_SERVICE_LEVEL_12" },
+          "source": {
+            "const": "TXLINE_CAPTURE_PROVENANCE_NOT_INDEPENDENTLY_VERIFIED"
+          },
           "operation": { "const": "BUILDER_OPERATED_CAPTURE" },
           "hostingClaim": { "const": "RECORDED_CAPTURE_NOT_HOSTED_UPTIME" },
           "dataBoundary": { "type": "string" },

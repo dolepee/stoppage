@@ -16,14 +16,14 @@ import type {
 
 export const LIVE_TAPE_APPROVAL_PREFIX = "APPROVE STOPPAGE LIVE DECISION TAPE";
 export const LIVE_TAPE_DATA_BOUNDARY =
-  "Sanitized derived enforcement results only. No raw fixture IDs, quote vectors, feed records, source timestamps, API tokens, wallet keys, or venue credentials.";
+  "Sanitized derived enforcement results only. Replay provenance is builder-attested and not independently verified. No raw fixture IDs, quote vectors, feed records, source timestamps, API tokens, wallet keys, or venue credentials.";
 
 export interface PublicLiveDecisionTapePayload {
   version: 1;
   status: "AVAILABLE";
-  evidenceType: "RECORDED_TXLINE_DECISION_TAPE";
+  evidenceType: "RECORDED_BUILDER_ATTESTED_TXLINE_DECISION_TAPE";
   network: "solana-mainnet";
-  source: "TXLINE_WORLD_CUP_SERVICE_LEVEL_12";
+  source: "TXLINE_CAPTURE_PROVENANCE_NOT_INDEPENDENTLY_VERIFIED";
   operation: "BUILDER_OPERATED_CAPTURE";
   hostingClaim: "RECORDED_CAPTURE_NOT_HOSTED_UPTIME";
   dataBoundary: string;
@@ -146,9 +146,9 @@ export function buildLiveDecisionTapeCandidate(
   const payload: PublicLiveDecisionTapePayload = {
     version: 1,
     status: "AVAILABLE",
-    evidenceType: "RECORDED_TXLINE_DECISION_TAPE",
+    evidenceType: "RECORDED_BUILDER_ATTESTED_TXLINE_DECISION_TAPE",
     network: "solana-mainnet",
-    source: "TXLINE_WORLD_CUP_SERVICE_LEVEL_12",
+    source: "TXLINE_CAPTURE_PROVENANCE_NOT_INDEPENDENTLY_VERIFIED",
     operation: "BUILDER_OPERATED_CAPTURE",
     hostingClaim: "RECORDED_CAPTURE_NOT_HOSTED_UPTIME",
     dataBoundary: LIVE_TAPE_DATA_BOUNDARY,
@@ -512,7 +512,10 @@ function validateCandidate(candidate: LiveDecisionTapeCandidate) {
     candidate.requiredApproval !==
       `${LIVE_TAPE_APPROVAL_PREFIX} ${candidate.payload.signer.kid} ${hash}` ||
     candidate.payload.status !== "AVAILABLE" ||
-    candidate.payload.evidenceType !== "RECORDED_TXLINE_DECISION_TAPE" ||
+    candidate.payload.evidenceType !==
+      "RECORDED_BUILDER_ATTESTED_TXLINE_DECISION_TAPE" ||
+    candidate.payload.source !==
+      "TXLINE_CAPTURE_PROVENANCE_NOT_INDEPENDENTLY_VERIFIED" ||
     candidate.payload.timingDisclosure !==
       "PERMIT_ISSUED_AT_IS_ENFORCEMENT_EXECUTION_TIME_NOT_FEED_TIME" ||
     candidate.payload.counters.capturedRequests < 1 ||

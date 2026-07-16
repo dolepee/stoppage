@@ -44,7 +44,7 @@ describe("public live decision-tape evidence", () => {
 
     expect(approved).toMatchObject({
       status: "AVAILABLE",
-      evidenceType: "RECORDED_TXLINE_DECISION_TAPE",
+      evidenceType: "RECORDED_BUILDER_ATTESTED_TXLINE_DECISION_TAPE",
       operation: "BUILDER_OPERATED_CAPTURE",
       hostingClaim: "RECORDED_CAPTURE_NOT_HOSTED_UPTIME",
       timingDisclosure:

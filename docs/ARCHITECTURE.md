@@ -37,7 +37,10 @@
    recording, and superseded work is withheld with a stale-snapshot diagnostic.
 9. **Approval boundary** aggregates private tape records, re-verifies the signed
    sample, enforces both zero-callback invariants, strips licensed fields, and
-   requires an exact human approval before writing public evidence.
+   requires an exact human approval before writing public evidence. Legacy
+   replay rows are labeled builder-attested with provenance not independently
+   verified; their schema is never treated as proof of competition or service
+   level.
 10. **Operator API** publishes synthetic judge snapshots and approved
     projections of derived lifecycle and enforcement evidence. It never
     publishes TxLINE records, odds vectors, source identifiers, or credentials.

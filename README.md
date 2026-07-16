@@ -165,6 +165,10 @@ preparation step can replay an existing private TxLINE capture through the same
 governor and enforcement harness, explicitly labeled as capture replay rather
 than hosted uptime. Replay permits use the replay execution clock, never a
 licensed feed timestamp, and the public contract discloses that timing basis.
+Because legacy private JSONL rows do not carry authenticated service-level or
+competition metadata, the public proof labels their TxLINE provenance as
+builder-attested and not independently verified; it does not claim that schema
+validation alone proves World Cup service-level-12 origin.
 Every publishable tape must include a signed `ALLOW_CERTIFIED_REOPEN` sample.
 Publication requires an exact human approval over a candidate hash and exposes
 only a frozen aggregate, one sanitized signed permit sample, the verification

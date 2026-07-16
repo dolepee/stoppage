@@ -763,21 +763,22 @@ function LiveDecisionTapePanel({
   ] as const;
   const captureLabel =
     tape.captureModes.privateCaptureReplay === tape.counters.capturedRequests
-      ? "Private TxLINE capture replay"
-      : "Live worker and private capture replay";
+      ? "Builder-attested TxLINE capture replay"
+      : "Builder-attested live and replay capture";
 
   return (
     <section className="live-tape" aria-labelledby="live-tape-title">
       <div className="live-tape-inner">
         <header className="live-tape-heading">
           <div>
-            <span>Approved real-data enforcement proof</span>
+            <span>Approved builder-attested enforcement proof</span>
             <h2 id="live-tape-title">Live Decision Tape</h2>
           </div>
           <p>
-            Real TxLINE World Cup captures entered the same deterministic gate.
-            Agent A executed only after offline Ed25519 verification; the permit
-            was non-transferable to Agent B's audience.
+            Builder-attested TxLINE captures entered the same deterministic
+            gate. Agent A executed only after offline Ed25519 verification; the
+            permit was non-transferable to Agent B's audience. Capture
+            provenance is not independently verified by this public aggregate.
           </p>
           <div className="live-tape-label">
             <Radio size={14} aria-hidden="true" />
@@ -792,7 +793,7 @@ function LiveDecisionTapePanel({
           <div className="tape-route-node source">
             <Radio size={17} aria-hidden="true" />
             <span>
-              <small>Real TxLINE capture</small>
+              <small>Builder-attested TxLINE capture</small>
               <strong>PUBLISH_QUOTE</strong>
             </span>
           </div>

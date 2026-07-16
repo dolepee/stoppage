@@ -157,7 +157,7 @@ console.log(
   JSON.stringify(
     {
       ok: true,
-      dataMode: "TXLINE_PRIVATE_CAPTURE_REPLAY",
+      dataMode: "BUILDER_ATTESTED_PRIVATE_CAPTURE_REPLAY",
       capturesScanned: captures.length,
       scannedRecords,
       normalizedInputs,
@@ -176,7 +176,7 @@ console.log(
         LIVE_DECISION_TAPE_VENUE_ACTIONS_FILE,
       ),
       boundary:
-        "Raw records remained private; only signed enforcement results were selected.",
+        "Raw records remained private; capture provenance is builder-attested, not independently verified; only signed enforcement results were selected.",
     },
     null,
     2,

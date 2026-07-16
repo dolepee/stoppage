@@ -1,8 +1,8 @@
 export interface LiveDecisionTape {
   version: 1;
   status: "AVAILABLE";
-  evidenceType: "RECORDED_TXLINE_DECISION_TAPE";
-  source: "TXLINE_WORLD_CUP_SERVICE_LEVEL_12";
+  evidenceType: "RECORDED_BUILDER_ATTESTED_TXLINE_DECISION_TAPE";
+  source: "TXLINE_CAPTURE_PROVENANCE_NOT_INDEPENDENTLY_VERIFIED";
   operation: "BUILDER_OPERATED_CAPTURE";
   hostingClaim: "RECORDED_CAPTURE_NOT_HOSTED_UPTIME";
   dataBoundary: string;
@@ -93,8 +93,8 @@ export function parseLiveDecisionTape(value: unknown): LiveDecisionTape {
   if (
     value.version !== 1 ||
     value.status !== "AVAILABLE" ||
-    value.evidenceType !== "RECORDED_TXLINE_DECISION_TAPE" ||
-    value.source !== "TXLINE_WORLD_CUP_SERVICE_LEVEL_12" ||
+    value.evidenceType !== "RECORDED_BUILDER_ATTESTED_TXLINE_DECISION_TAPE" ||
+    value.source !== "TXLINE_CAPTURE_PROVENANCE_NOT_INDEPENDENTLY_VERIFIED" ||
     value.operation !== "BUILDER_OPERATED_CAPTURE" ||
     value.hostingClaim !== "RECORDED_CAPTURE_NOT_HOSTED_UPTIME" ||
     value.timingDisclosure !==

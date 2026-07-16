@@ -183,7 +183,7 @@ test.describe("Stoppage release browser gate", () => {
       await expect(tape.json()).resolves.toMatchObject({
         version: 1,
         status: "AVAILABLE",
-        evidenceType: "RECORDED_TXLINE_DECISION_TAPE",
+        evidenceType: "RECORDED_BUILDER_ATTESTED_TXLINE_DECISION_TAPE",
         hostingClaim: "RECORDED_CAPTURE_NOT_HOSTED_UPTIME",
         timingDisclosure:
           "PERMIT_ISSUED_AT_IS_ENFORCEMENT_EXECUTION_TIME_NOT_FEED_TIME",

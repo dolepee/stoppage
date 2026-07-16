@@ -32,8 +32,8 @@ function fixture() {
   return {
     version: 1,
     status: "AVAILABLE",
-    evidenceType: "RECORDED_TXLINE_DECISION_TAPE",
-    source: "TXLINE_WORLD_CUP_SERVICE_LEVEL_12",
+    evidenceType: "RECORDED_BUILDER_ATTESTED_TXLINE_DECISION_TAPE",
+    source: "TXLINE_CAPTURE_PROVENANCE_NOT_INDEPENDENTLY_VERIFIED",
     operation: "BUILDER_OPERATED_CAPTURE",
     hostingClaim: "RECORDED_CAPTURE_NOT_HOSTED_UPTIME",
     timingDisclosure:

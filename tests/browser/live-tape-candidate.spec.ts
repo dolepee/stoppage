@@ -38,7 +38,9 @@ test("renders the exact Live Decision Tape candidate without disclosure or overf
   await expect(
     panel.getByText("AUDIENCE MISMATCH → WITHHELD", { exact: true }),
   ).toBeVisible();
-  await expect(panel.getByText(/Private TxLINE capture replay/)).toBeVisible();
+  await expect(
+    panel.getByText(/Builder-attested TxLINE capture replay/),
+  ).toBeVisible();
   await expect(panel.getByText(/Sample Certified Reopen/)).toBeVisible();
   await expect(
     panel.getByText("Callbacks after BLOCK", { exact: true }),
