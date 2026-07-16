@@ -24,12 +24,15 @@
    `REPRICED`, or `FAILSAFE`.
 8. **Live Decision Tape** converts a real or privately replayed TxLINE quote
    into a Permit V2 request. The intended reference agent verifies it offline
-   before its simulated callback. That adapter durably records a permit-bound
-   venue action and returns its canonical receipt hash before the tape can mark
-   execution. A second audience attempts the same permit and must remain closed.
-   The result proves permit non-transferability, not authenticated caller
-   identity. Optional tape persistence and diagnostics run behind an isolated
-   queue and cannot reject the core feed callback.
+   and atomically claims the one-use nonce in private durable storage before its
+   simulated callback. The claim remains effective across a process restart
+   until permit expiry. That adapter durably records a permit-bound venue action
+   and returns its canonical receipt hash before the tape can mark execution. A
+   second audience attempts the same permit and must remain closed. The result
+   proves permit non-transferability, not authenticated caller identity.
+   Optional tape persistence and coalesced diagnostics run behind an isolated
+   queue capped at 64 pending snapshots; overflow is dropped and reported
+   without rejecting the core feed callback.
 9. **Approval boundary** aggregates private tape records, re-verifies the signed
    sample, enforces both zero-callback invariants, strips licensed fields, and
    requires an exact human approval before writing public evidence.

@@ -31,6 +31,7 @@ export const LIVE_TAPE_AGENT_A = "stoppage-reference-agent";
 export const LIVE_TAPE_AGENT_A_AUDIENCE = "venue:stoppage-reference-agent";
 export const LIVE_TAPE_AGENT_B = "cross-agent-adversary";
 export const LIVE_TAPE_AGENT_B_AUDIENCE = "venue:cross-agent-adversary";
+export const LIVE_TAPE_QUEUE_CAPACITY = 64;
 
 export interface LiveTapeVenueAction {
   version: 1;
@@ -54,6 +55,16 @@ export interface LiveTapeVenueReceipt {
 export type LiveTapeVenueCallback = (
   action: LiveTapeVenueAction,
 ) => LiveTapeVenueReceipt | Promise<LiveTapeVenueReceipt>;
+
+export interface LiveTapeNonceClaim {
+  key: string;
+  expiresAt: number;
+  now: number;
+}
+
+export type LiveTapeNonceClaimer = (
+  claim: LiveTapeNonceClaim,
+) => boolean | Promise<boolean>;
 
 export interface LiveDecisionTapeRecord {
   version: 1;
@@ -119,6 +130,7 @@ interface LiveDecisionTapeRecorderOptions {
   source?: LiveDecisionTapeRecord["source"];
   appendRecord?: (record: LiveDecisionTapeRecord) => Promise<unknown>;
   writeStatus?: (status: LiveDecisionTapeStatus) => Promise<unknown>;
+  claimNonce: LiveTapeNonceClaimer;
   invokeAgentA: LiveTapeVenueCallback;
   invokeAgentB: LiveTapeVenueCallback;
 }
@@ -129,6 +141,7 @@ export class LiveDecisionTapeRecorder {
   readonly #source: LiveDecisionTapeRecord["source"];
   readonly #appendRecord: (record: LiveDecisionTapeRecord) => Promise<unknown>;
   readonly #writeStatus: (status: LiveDecisionTapeStatus) => Promise<unknown>;
+  readonly #claimNonce: LiveTapeNonceClaimer;
   readonly #invokeAgentA: LiveTapeVenueCallback;
   readonly #invokeAgentB: LiveTapeVenueCallback;
   readonly #counters: LiveDecisionTapeCounters = emptyCounters();
@@ -144,6 +157,7 @@ export class LiveDecisionTapeRecorder {
     this.#writeStatus =
       options.writeStatus ??
       ((status) => writeRuntimeState(LIVE_DECISION_TAPE_STATUS_FILE, status));
+    this.#claimNonce = options.claimNonce;
     this.#invokeAgentA = options.invokeAgentA;
     this.#invokeAgentB = options.invokeAgentB;
   }
@@ -200,11 +214,24 @@ export class LiveDecisionTapeRecorder {
         now,
       });
       if (agentAVerification.valid) {
-        const action = venueActionFor(intent, response.result.permit, now);
-        const receipt = await this.#invokeAgentA(action);
-        assertVenueReceipt(receipt, action);
-        agentACallbackInvoked = true;
-        agentACallbackReceiptHash = receipt.actionHash;
+        const claimed = await this.#claimNonce({
+          key: permitNonceKey(response.result.permit),
+          expiresAt: response.result.permit.body.expiresAt,
+          now,
+        });
+        if (!claimed) {
+          agentAVerification = {
+            valid: false,
+            decision: "BLOCK_NONCE_REPLAY",
+            reason: "The one-use request nonce has already been consumed.",
+          };
+        } else {
+          const action = venueActionFor(intent, response.result.permit, now);
+          const receipt = await this.#invokeAgentA(action);
+          assertVenueReceipt(receipt, action);
+          agentACallbackInvoked = true;
+          agentACallbackReceiptHash = receipt.actionHash;
+        }
       }
 
       agentBIntent = {
@@ -289,12 +316,19 @@ export interface LiveDecisionTapeFailure {
   type: "LIVE_DECISION_TAPE_FAILURE";
   failedAt: string;
   failureCount: number;
+  reason: "RECORDER_FAILURE" | "QUEUE_OVERFLOW";
   errorName: string;
+  queue: {
+    pending: number;
+    limit: number;
+    dropped: number;
+  };
 }
 
 interface LiveDecisionTapeQueueOptions {
   recorder: Pick<LiveDecisionTapeRecorder, "record">;
   reportFailure: (failure: LiveDecisionTapeFailure) => Promise<unknown>;
+  maxPending?: number;
 }
 
 export class LiveDecisionTapeQueue {
@@ -302,37 +336,99 @@ export class LiveDecisionTapeQueue {
   readonly #reportFailure: (
     failure: LiveDecisionTapeFailure,
   ) => Promise<unknown>;
+  readonly #maxPending: number;
   #pending: Promise<void> = Promise.resolve();
+  #diagnostic: Promise<void> | null = null;
+  #diagnosticDirty = false;
+  #lastFailure: Omit<
+    LiveDecisionTapeFailure,
+    "failedAt" | "failureCount"
+  > | null = null;
+  #pendingCount = 0;
   #failureCount = 0;
+  #droppedCount = 0;
 
   constructor(options: LiveDecisionTapeQueueOptions) {
     this.#recorder = options.recorder;
     this.#reportFailure = options.reportFailure;
+    this.#maxPending = options.maxPending ?? LIVE_TAPE_QUEUE_CAPACITY;
+    if (!Number.isInteger(this.#maxPending) || this.#maxPending < 1) {
+      throw new Error("Live decision-tape queue capacity must be positive");
+    }
   }
 
-  enqueue(context: PersistedExecutionGateContext): void {
+  enqueue(context: PersistedExecutionGateContext): boolean {
+    if (this.#pendingCount >= this.#maxPending) {
+      this.#droppedCount += 1;
+      this.#recordFailure("QUEUE_OVERFLOW", "TapeQueueOverflow");
+      return false;
+    }
+
+    let snapshot: PersistedExecutionGateContext;
+    try {
+      snapshot = structuredClone(context);
+    } catch (error) {
+      this.#recordFailure("RECORDER_FAILURE", safeErrorName(error));
+      return false;
+    }
+
+    this.#pendingCount += 1;
     const operation = this.#pending.then(async () => {
-      const snapshot = structuredClone(context);
       await this.#recorder.record(snapshot);
     });
-    this.#pending = operation.catch(async (error: unknown) => {
-      this.#failureCount += 1;
+    this.#pending = operation
+      .catch((error: unknown) => {
+        this.#recordFailure("RECORDER_FAILURE", safeErrorName(error));
+      })
+      .finally(() => {
+        this.#pendingCount -= 1;
+      });
+    return true;
+  }
+
+  async drain(): Promise<void> {
+    await this.#pending;
+    while (this.#diagnostic) await this.#diagnostic;
+  }
+
+  #recordFailure(reason: LiveDecisionTapeFailure["reason"], errorName: string) {
+    this.#failureCount += 1;
+    this.#lastFailure = {
+      version: 1,
+      type: "LIVE_DECISION_TAPE_FAILURE",
+      reason,
+      errorName,
+      queue: {
+        pending: this.#pendingCount,
+        limit: this.#maxPending,
+        dropped: this.#droppedCount,
+      },
+    };
+    this.#diagnosticDirty = true;
+    if (!this.#diagnostic) this.#startDiagnosticFlush();
+  }
+
+  #startDiagnosticFlush() {
+    this.#diagnostic = this.#flushDiagnostics().finally(() => {
+      this.#diagnostic = null;
+      if (this.#diagnosticDirty) this.#startDiagnosticFlush();
+    });
+  }
+
+  async #flushDiagnostics() {
+    while (this.#diagnosticDirty && this.#lastFailure) {
+      this.#diagnosticDirty = false;
+      const failure: LiveDecisionTapeFailure = {
+        ...this.#lastFailure,
+        failedAt: new Date().toISOString(),
+        failureCount: this.#failureCount,
+      };
       try {
-        await this.#reportFailure({
-          version: 1,
-          type: "LIVE_DECISION_TAPE_FAILURE",
-          failedAt: new Date().toISOString(),
-          failureCount: this.#failureCount,
-          errorName: safeErrorName(error),
-        });
+        await this.#reportFailure(failure);
       } catch {
         // Optional tape diagnostics never propagate into the core feed loop.
       }
-    });
-  }
-
-  drain(): Promise<void> {
-    return this.#pending;
+    }
   }
 }
 
@@ -387,6 +483,11 @@ function nonceFor(context: PersistedExecutionGateContext): string {
     sequence: context.sequence,
     quote: context.state.quote,
   }).slice(2, 34)}`;
+}
+
+function permitNonceKey(permit: SignedExecutionPermitV2): string {
+  const { issuer, agentId, audience, nonce } = permit.body;
+  return `${issuer}:${agentId}:${audience}:${nonce}`;
 }
 
 function timingFor(

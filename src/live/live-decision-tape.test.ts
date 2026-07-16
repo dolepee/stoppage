@@ -11,6 +11,7 @@ import {
   LiveDecisionTapeRecorder,
   type LiveDecisionTapeRecord,
   type LiveDecisionTapeStatus,
+  type LiveTapeNonceClaimer,
   type LiveTapeVenueCallback,
 } from "./live-decision-tape.js";
 
@@ -28,6 +29,7 @@ describe("live decision tape", () => {
       signer,
       appendRecord: async (record) => records.push(record),
       writeStatus: async (status) => statuses.push(status),
+      claimNonce: createNonceClaimer(),
       invokeAgentA,
       invokeAgentB,
     });
@@ -82,6 +84,7 @@ describe("live decision tape", () => {
       signer,
       appendRecord: async () => undefined,
       writeStatus: async () => undefined,
+      claimNonce: createNonceClaimer(),
       invokeAgentA,
       invokeAgentB,
     });
@@ -116,6 +119,7 @@ describe("live decision tape", () => {
       source: "TXLINE_CAPTURE_REPLAY",
       appendRecord: async () => undefined,
       writeStatus: async () => undefined,
+      claimNonce: createNonceClaimer(),
       invokeAgentA: createLiveTapeVenueReceipt,
       invokeAgentB: createLiveTapeVenueReceipt,
     });
@@ -143,6 +147,7 @@ describe("live decision tape", () => {
       signer,
       appendRecord,
       writeStatus: async () => undefined,
+      claimNonce: createNonceClaimer(),
       invokeAgentA: (async () => undefined) as unknown as LiveTapeVenueCallback,
       invokeAgentB: createLiveTapeVenueReceipt,
     });
@@ -162,6 +167,7 @@ describe("live decision tape", () => {
       signer,
       appendRecord,
       writeStatus: async () => undefined,
+      claimNonce: createNonceClaimer(),
       invokeAgentA: createLiveTapeVenueReceipt,
       invokeAgentB: createLiveTapeVenueReceipt,
     });
@@ -180,11 +186,81 @@ describe("live decision tape", () => {
       expect.objectContaining({
         type: "LIVE_DECISION_TAPE_FAILURE",
         failureCount: 1,
+        reason: "RECORDER_FAILURE",
         errorName: "Error",
       }),
     );
   });
+
+  it("atomically consumes a permit nonce before invoking Agent A", async () => {
+    const invokeAgentA = vi.fn(createLiveTapeVenueReceipt);
+    const recorder = new LiveDecisionTapeRecorder({
+      signer,
+      appendRecord: async () => undefined,
+      writeStatus: async () => undefined,
+      claimNonce: createNonceClaimer(),
+      invokeAgentA,
+      invokeAgentB: createLiveTapeVenueReceipt,
+    });
+    const context = checkpointAt(12);
+
+    const first = await recorder.record(context, 10_000);
+    const retry = await recorder.record(context, 10_000);
+
+    expect(first.agentA.callbackInvoked).toBe(true);
+    expect(retry.agentA).toMatchObject({
+      verification: { valid: false, decision: "BLOCK_NONCE_REPLAY" },
+      callbackInvoked: false,
+      callbackReceiptHash: null,
+    });
+    expect(invokeAgentA).toHaveBeenCalledOnce();
+  });
+
+  it("drops overflow beyond a fixed queue bound and reports it once", async () => {
+    let release!: () => void;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const recorder = {
+      record: vi.fn(async () => {
+        await blocked;
+        return {} as LiveDecisionTapeRecord;
+      }),
+    };
+    const reportFailure = vi.fn(async () => undefined);
+    const queue = new LiveDecisionTapeQueue({
+      recorder,
+      reportFailure,
+      maxPending: 1,
+    });
+
+    expect(queue.enqueue(checkpointAt(3))).toBe(true);
+    expect(queue.enqueue(checkpointAt(12))).toBe(false);
+    release();
+    await queue.drain();
+
+    expect(recorder.record).toHaveBeenCalledOnce();
+    expect(reportFailure).toHaveBeenCalledWith(
+      expect.objectContaining({
+        reason: "QUEUE_OVERFLOW",
+        errorName: "TapeQueueOverflow",
+        queue: { pending: 1, limit: 1, dropped: 1 },
+      }),
+    );
+  });
 });
+
+function createNonceClaimer(): LiveTapeNonceClaimer {
+  const claims = new Map<string, number>();
+  return ({ key, expiresAt, now }) => {
+    for (const [candidate, expiry] of claims) {
+      if (expiry <= now) claims.delete(candidate);
+    }
+    if (claims.has(key)) return false;
+    claims.set(key, expiresAt);
+    return true;
+  };
+}
 
 function checkpointAt(stepCount: number): PersistedExecutionGateContext {
   const governor = new QuoteGovernor();

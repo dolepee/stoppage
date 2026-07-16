@@ -15,6 +15,7 @@ import {
   createLiveTapeVenueReceipt,
   LiveDecisionTapeRecorder,
   type LiveDecisionTapeRecord,
+  type LiveTapeNonceClaimer,
 } from "../live/live-decision-tape.js";
 import { publicJudgeScenario } from "../replay/public-scenario.js";
 import {
@@ -131,6 +132,7 @@ describe("public live decision-tape evidence", () => {
       signer,
       appendRecord: async (record) => records.push(record),
       writeStatus: async () => undefined,
+      claimNonce: createNonceClaimer(),
       invokeAgentA: createLiveTapeVenueReceipt,
       invokeAgentB: createLiveTapeVenueReceipt,
     });
@@ -158,6 +160,7 @@ describe("public live decision-tape evidence", () => {
       source: "TXLINE_CAPTURE_REPLAY",
       appendRecord: async (record) => records.push(record),
       writeStatus: async () => undefined,
+      claimNonce: createNonceClaimer(),
       invokeAgentA: createLiveTapeVenueReceipt,
       invokeAgentB: createLiveTapeVenueReceipt,
     });
@@ -210,12 +213,25 @@ async function completeTape(): Promise<LiveDecisionTapeRecord[]> {
     signer,
     appendRecord: async (record) => records.push(record),
     writeStatus: async () => undefined,
+    claimNonce: createNonceClaimer(),
     invokeAgentA: createLiveTapeVenueReceipt,
     invokeAgentB: createLiveTapeVenueReceipt,
   });
   await recorder.record(checkpointAt(3), 10_000);
   await recorder.record(checkpointAt(12), 20_000);
   return records;
+}
+
+function createNonceClaimer(): LiveTapeNonceClaimer {
+  const claims = new Map<string, number>();
+  return ({ key, expiresAt, now }) => {
+    for (const [candidate, expiry] of claims) {
+      if (expiry <= now) claims.delete(candidate);
+    }
+    if (claims.has(key)) return false;
+    claims.set(key, expiresAt);
+    return true;
+  };
 }
 
 function checkpointAt(stepCount: number): PersistedExecutionGateContext {

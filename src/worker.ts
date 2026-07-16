@@ -13,7 +13,10 @@ import {
   LiveDecisionTapeRecorder,
 } from "./live/live-decision-tape.js";
 import { TxLineLiveWorker } from "./live/txline-live-worker.js";
-import { appendPrivateCapture } from "./private/capture-store.js";
+import {
+  appendPrivateCapture,
+  claimPrivateUse,
+} from "./private/capture-store.js";
 import { writeRuntimeState } from "./private/runtime-store.js";
 import { TxLineClient } from "./txline/client.js";
 
@@ -35,6 +38,8 @@ const executionContexts = new LiveExecutionContextTracker();
 const liveDecisionTape = config.liveDecisionTapeEnabled
   ? new LiveDecisionTapeRecorder({
       signer: loadPermitSigner({ ...process.env, NODE_ENV: "production" }),
+      claimNonce: (claim) =>
+        claimPrivateUse({ namespace: "stoppage-live-tape", ...claim }),
       invokeAgentA: async (action) => {
         await appendPrivateCapture(
           LIVE_DECISION_TAPE_VENUE_ACTIONS_FILE,

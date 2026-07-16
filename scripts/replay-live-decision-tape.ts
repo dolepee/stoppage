@@ -15,6 +15,7 @@ import {
 } from "../src/live/live-decision-tape.js";
 import {
   appendPrivateCapture,
+  claimPrivateUse,
   writePrivateCapture,
 } from "../src/private/capture-store.js";
 import {
@@ -50,6 +51,8 @@ let normalizedInputs = 0;
 const recorder = new LiveDecisionTapeRecorder({
   signer: loadPermitSigner({ ...process.env, NODE_ENV: "production" }),
   source: "TXLINE_CAPTURE_REPLAY",
+  claimNonce: (claim) =>
+    claimPrivateUse({ namespace: "stoppage-live-tape", ...claim }),
   appendRecord: async (record) => {
     if (firstRecord) {
       firstRecord = false;

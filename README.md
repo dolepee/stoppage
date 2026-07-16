@@ -143,15 +143,20 @@ missing or stale; that private route is not advertised on the static judge host.
 
 The optional worker tape turns real TxLINE quote inputs into reference-agent
 `PUBLISH_QUOTE` requests against the same live gate. Agent A verifies each
-allowed Permit V2 offline before its simulated venue callback. The callback
-must durably append its bound action and return a canonical receipt; Stoppage
-marks it executed only after that receipt matches the action. Agent B then
+allowed Permit V2 offline, then atomically claims its nonce in an owner-only
+private store before the simulated venue callback. The claim survives process
+restarts until the five-second permit expires, so a retry fails closed instead
+of invoking the callback twice. The callback must durably append its bound
+action and return a canonical receipt; Stoppage marks it executed only after
+that receipt matches the action. Agent B then
 attempts to reuse that permit for a different audience and agent binding; the
 SDK must reject it and keep the callback closed. This proves permit
 non-transferability, not authenticated real-world identity. Block decisions
 never issue a permit and never delegate to either agent. Tape persistence runs
-on an isolated queue, so an optional tape or diagnostic write failure cannot
-interrupt the core odds callback or trigger a stream reconnect.
+on an isolated queue capped at 64 pending snapshots. Excess snapshots are
+dropped with a coalesced overflow diagnostic, so an optional tape burst or
+write failure cannot grow memory without bound, interrupt the core odds
+callback, or trigger a stream reconnect.
 
 Licensed feed records and full private tape entries remain ignored. A separate
 preparation step can replay an existing private TxLINE capture through the same
