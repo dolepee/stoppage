@@ -143,7 +143,9 @@ missing or stale; that private route is not advertised on the static judge host.
 
 The optional worker tape turns real TxLINE quote inputs into reference-agent
 `PUBLISH_QUOTE` requests against the same live gate. Agent A verifies each
-allowed Permit V2 offline before its simulated venue callback. Agent B then
+allowed Permit V2 offline before its simulated venue callback. The callback
+must durably append its bound action and return a canonical receipt; Stoppage
+marks it executed only after that receipt matches the action. Agent B then
 attempts to reuse that permit for a different audience and agent binding; the
 SDK must reject it and keep the callback closed. This proves permit
 non-transferability, not authenticated real-world identity. Block decisions
@@ -159,7 +161,7 @@ licensed feed timestamp, and the public contract discloses that timing basis.
 Every publishable tape must include a signed `ALLOW_CERTIFIED_REOPEN` sample.
 Publication requires an exact human approval over a candidate hash and exposes
 only a frozen aggregate, one sanitized signed permit sample, the verification
-key, and these counters:
+key, the intended callback receipt hash, and these counters:
 
 - captured requests;
 - blocked requests;

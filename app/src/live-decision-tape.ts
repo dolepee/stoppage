@@ -55,12 +55,14 @@ export interface LiveDecisionTape {
       audience: string;
       verification: "ALLOW";
       callbackInvoked: true;
+      callbackReceiptHash: string;
     };
     crossAgentAttempt: {
       id: string;
       audience: string;
       verification: string;
       callbackInvoked: false;
+      callbackReceiptHash: null;
     };
   };
   candidateHash: string;
@@ -97,6 +99,8 @@ export function parseLiveDecisionTape(value: unknown): LiveDecisionTape {
     intendedAgent.verification !== "ALLOW" ||
     intendedAgent.callbackInvoked !== true ||
     crossAgentAttempt.callbackInvoked !== false ||
+    !isHash(intendedAgent.callbackReceiptHash) ||
+    crossAgentAttempt.callbackReceiptHash !== null ||
     (sampleProof.decision !== "ALLOW_HEALTHY_QUOTE" &&
       sampleProof.decision !== "ALLOW_CERTIFIED_REOPEN") ||
     !isHash(value.candidateHash) ||

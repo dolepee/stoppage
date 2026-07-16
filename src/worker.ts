@@ -7,6 +7,8 @@ import {
 } from "./execution-gate/live-context.js";
 import { loadPermitSigner } from "./execution-gate/permit-v2.js";
 import {
+  createLiveTapeVenueReceipt,
+  LIVE_DECISION_TAPE_VENUE_ACTIONS_FILE,
   LiveDecisionTapeQueue,
   LiveDecisionTapeRecorder,
 } from "./live/live-decision-tape.js";
@@ -33,6 +35,16 @@ const executionContexts = new LiveExecutionContextTracker();
 const liveDecisionTape = config.liveDecisionTapeEnabled
   ? new LiveDecisionTapeRecorder({
       signer: loadPermitSigner({ ...process.env, NODE_ENV: "production" }),
+      invokeAgentA: async (action) => {
+        await appendPrivateCapture(
+          LIVE_DECISION_TAPE_VENUE_ACTIONS_FILE,
+          action,
+        );
+        return createLiveTapeVenueReceipt(action);
+      },
+      invokeAgentB: async () => {
+        throw new Error("The adversary venue callback must remain closed");
+      },
     })
   : null;
 const liveDecisionTapeQueue = liveDecisionTape

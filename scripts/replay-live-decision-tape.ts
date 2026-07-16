@@ -8,7 +8,9 @@ import type { GovernorInput } from "../src/domain/types.js";
 import { LiveExecutionContextTracker } from "../src/execution-gate/live-context.js";
 import { loadPermitSigner } from "../src/execution-gate/permit-v2.js";
 import {
+  createLiveTapeVenueReceipt,
   LIVE_DECISION_TAPE_PRIVATE_FILE,
+  LIVE_DECISION_TAPE_VENUE_ACTIONS_FILE,
   LiveDecisionTapeRecorder,
 } from "../src/live/live-decision-tape.js";
 import {
@@ -37,6 +39,8 @@ const captures = await capturePaths();
 const governor = new QuoteGovernor();
 const contexts = new LiveExecutionContextTracker();
 let firstRecord = true;
+let firstVenueAction = true;
+let simulatedVenueCallbacks = 0;
 let healthyAllowRecords = 0;
 let certifiedReopenRecords = 0;
 let blockRecords = 0;
@@ -54,6 +58,19 @@ const recorder = new LiveDecisionTapeRecorder({
     return appendPrivateCapture(LIVE_DECISION_TAPE_PRIVATE_FILE, record);
   },
   writeStatus: async () => undefined,
+  invokeAgentA: async (action) => {
+    if (firstVenueAction) {
+      firstVenueAction = false;
+      await writePrivateCapture(LIVE_DECISION_TAPE_VENUE_ACTIONS_FILE, action);
+    } else {
+      await appendPrivateCapture(LIVE_DECISION_TAPE_VENUE_ACTIONS_FILE, action);
+    }
+    simulatedVenueCallbacks += 1;
+    return createLiveTapeVenueReceipt(action);
+  },
+  invokeAgentB: async () => {
+    throw new Error("The adversary venue callback must remain closed");
+  },
 });
 
 captureLoop: for (const path of captures) {
@@ -124,6 +141,14 @@ if (certifiedReopenRecords < 1 || blockRecords < 1 || firstRecord) {
     "Recorded TxLINE captures did not contain both a signed Certified Reopen and blocked quote request",
   );
 }
+if (
+  simulatedVenueCallbacks !== healthyAllowRecords + certifiedReopenRecords ||
+  firstVenueAction
+) {
+  throw new Error(
+    "Every allowed request must produce one durable simulated venue action",
+  );
+}
 
 console.log(
   JSON.stringify(
@@ -138,9 +163,14 @@ console.log(
       healthyAllowRecords,
       certifiedReopenRecords,
       blockRecords,
+      simulatedVenueCallbacks,
       privateTape: resolve(
         process.env.STOPPAGE_PRIVATE_ROOT ?? "data/private",
         LIVE_DECISION_TAPE_PRIVATE_FILE,
+      ),
+      privateVenueActions: resolve(
+        process.env.STOPPAGE_PRIVATE_ROOT ?? "data/private",
+        LIVE_DECISION_TAPE_VENUE_ACTIONS_FILE,
       ),
       boundary:
         "Raw records remained private; only signed enforcement results were selected.",

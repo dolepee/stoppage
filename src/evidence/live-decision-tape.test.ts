@@ -12,6 +12,7 @@ import {
   publicKeySetFor,
 } from "../execution-gate/permit-v2.js";
 import {
+  createLiveTapeVenueReceipt,
   LiveDecisionTapeRecorder,
   type LiveDecisionTapeRecord,
 } from "../live/live-decision-tape.js";
@@ -60,10 +61,12 @@ describe("public live decision-tape evidence", () => {
         intendedAgent: {
           verification: "ALLOW",
           callbackInvoked: true,
+          callbackReceiptHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
         },
         crossAgentAttempt: {
           verification: "BLOCK_AUDIENCE_MISMATCH",
           callbackInvoked: false,
+          callbackReceiptHash: null,
         },
       },
     });
@@ -76,6 +79,13 @@ describe("public live decision-tape evidence", () => {
       JSON.stringify(approved),
     );
     await expect(loadPublicLiveDecisionTape(root)).resolves.toEqual(approved);
+
+    approved.sampleProof.intendedAgent.callbackReceiptHash = `0x${"f".repeat(64)}`;
+    await writeFile(
+      join(root, "live-decision-tape.json"),
+      JSON.stringify(approved),
+    );
+    await expect(loadPublicLiveDecisionTape(root)).resolves.toBeNull();
   });
 
   it("requires one real block and rejects unapproved or tampered publication", async () => {
@@ -121,6 +131,8 @@ describe("public live decision-tape evidence", () => {
       signer,
       appendRecord: async (record) => records.push(record),
       writeStatus: async () => undefined,
+      invokeAgentA: createLiveTapeVenueReceipt,
+      invokeAgentB: createLiveTapeVenueReceipt,
     });
     await recorder.record(checkpointAt(3), 10_000);
     await recorder.record(checkpointAt(1), 20_000);
@@ -130,6 +142,15 @@ describe("public live decision-tape evidence", () => {
     ).toThrow(/signed Certified Reopen/);
   });
 
+  it("rejects a callback receipt that is not bound to the venue action", async () => {
+    const records = await completeTape();
+    records[1]!.agentA.callbackReceiptHash = `0x${"f".repeat(64)}`;
+
+    expect(() =>
+      buildLiveDecisionTapeCandidate(records, publicKeySetFor(signer)),
+    ).toThrow(/callback receipt is not bound/);
+  });
+
   it("rejects replay capture time at both the private and public boundaries", async () => {
     const records: LiveDecisionTapeRecord[] = [];
     const recorder = new LiveDecisionTapeRecorder({
@@ -137,6 +158,8 @@ describe("public live decision-tape evidence", () => {
       source: "TXLINE_CAPTURE_REPLAY",
       appendRecord: async (record) => records.push(record),
       writeStatus: async () => undefined,
+      invokeAgentA: createLiveTapeVenueReceipt,
+      invokeAgentB: createLiveTapeVenueReceipt,
     });
     await recorder.record(checkpointAt(3), 30_000, 10_000);
     await recorder.record(checkpointAt(12), 40_000, 20_000);
@@ -187,6 +210,8 @@ async function completeTape(): Promise<LiveDecisionTapeRecord[]> {
     signer,
     appendRecord: async (record) => records.push(record),
     writeStatus: async () => undefined,
+    invokeAgentA: createLiveTapeVenueReceipt,
+    invokeAgentB: createLiveTapeVenueReceipt,
   });
   await recorder.record(checkpointAt(3), 10_000);
   await recorder.record(checkpointAt(12), 20_000);

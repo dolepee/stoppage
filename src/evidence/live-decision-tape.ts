@@ -11,6 +11,7 @@ import {
 import type {
   LiveDecisionTapeCounters,
   LiveDecisionTapeRecord,
+  LiveTapeVenueAction,
 } from "../live/live-decision-tape.js";
 
 export const LIVE_TAPE_APPROVAL_PREFIX = "APPROVE STOPPAGE LIVE DECISION TAPE";
@@ -58,12 +59,14 @@ export interface PublicLiveDecisionTapePayload {
       audience: string;
       verification: "ALLOW";
       callbackInvoked: true;
+      callbackReceiptHash: string;
     };
     crossAgentAttempt: {
       id: string;
       audience: string;
       verification: string;
       callbackInvoked: false;
+      callbackReceiptHash: null;
     };
   };
 }
@@ -114,6 +117,7 @@ export function buildLiveDecisionTapeCandidate(
       record.agentA.gateDecision === "ALLOW_CERTIFIED_REOPEN" &&
       record.agentA.signedPermit &&
       record.agentA.verification.valid &&
+      isHash(record.agentA.callbackReceiptHash) &&
       record.agentB.intent &&
       record.agentB.verification &&
       !record.agentB.verification.valid,
@@ -178,12 +182,14 @@ export function buildLiveDecisionTapeCandidate(
         audience: sample.agentA.intent.audience,
         verification: "ALLOW",
         callbackInvoked: true,
+        callbackReceiptHash: sample.agentA.callbackReceiptHash!,
       },
       crossAgentAttempt: {
         id: adversaryAgent,
         audience: sample.agentB.intent.audience,
         verification: sample.agentB.verification.decision,
         callbackInvoked: false,
+        callbackReceiptHash: null,
       },
     },
   };
@@ -344,6 +350,7 @@ function validateRecord(
       !permit ||
       !record.agentA.permitIssued ||
       !record.agentA.callbackInvoked ||
+      !isHash(record.agentA.callbackReceiptHash) ||
       !record.agentA.verification.valid ||
       permit.body.issuedAt !== recordedAt
     ) {
@@ -359,11 +366,28 @@ function validateRecord(
       throw new Error("The recorded intended-agent permit is not verifiable");
     }
     if (
+      record.agentA.callbackReceiptHash !==
+      sha256(
+        venueActionForEvidence({
+          agentId: record.agentA.intent.agentId,
+          audience: record.agentA.intent.audience,
+          subjectHash: record.agentA.intent.subjectHash,
+          quoteHash: record.agentA.intent.quoteHash,
+          sequence: record.agentA.intent.sequence,
+          permitHash: permit.hash,
+          invokedAt: record.recordedAt,
+        }),
+      )
+    ) {
+      throw new Error("The recorded venue callback receipt is not bound");
+    }
+    if (
       !record.agentB.attemptedPermitTheft ||
       !record.agentB.intent ||
       !record.agentB.verification ||
       record.agentB.verification.valid ||
-      record.agentB.callbackInvoked
+      record.agentB.callbackInvoked ||
+      record.agentB.callbackReceiptHash !== null
     ) {
       throw new Error("An allowed tape record lacks rejected permit theft");
     }
@@ -383,8 +407,10 @@ function validateRecord(
     record.agentA.signedPermit ||
     record.agentA.permitIssued ||
     record.agentA.callbackInvoked ||
+    record.agentA.callbackReceiptHash !== null ||
     record.agentB.attemptedPermitTheft ||
-    record.agentB.callbackInvoked
+    record.agentB.callbackInvoked ||
+    record.agentB.callbackReceiptHash !== null
   ) {
     throw new Error("A blocked tape record invoked or delegated a callback");
   }
@@ -548,7 +574,21 @@ function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
     permit.body.decision !== payload.sampleProof.decision ||
     payload.sampleProof.intendedAgent.verification !== "ALLOW" ||
     !payload.sampleProof.intendedAgent.callbackInvoked ||
-    payload.sampleProof.crossAgentAttempt.callbackInvoked
+    !isHash(payload.sampleProof.intendedAgent.callbackReceiptHash) ||
+    payload.sampleProof.intendedAgent.callbackReceiptHash !==
+      sha256(
+        venueActionForEvidence({
+          agentId: payload.sampleProof.intendedAgent.id,
+          audience: payload.sampleProof.intendedAgent.audience,
+          subjectHash: permit.body.subjectHash,
+          quoteHash: permit.body.quoteHash,
+          sequence: permit.body.sequence,
+          permitHash: permit.hash,
+          invokedAt: new Date(permit.body.issuedAt).toISOString(),
+        }),
+      ) ||
+    payload.sampleProof.crossAgentAttempt.callbackInvoked ||
+    payload.sampleProof.crossAgentAttempt.callbackReceiptHash !== null
   ) {
     throw new Error("The public signed permit sample is invalid");
   }
@@ -583,4 +623,34 @@ async function safeParseJson(path: string): Promise<unknown | null> {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
     return null;
   }
+}
+
+function isHash(value: unknown): value is string {
+  return typeof value === "string" && /^0x[0-9a-f]{64}$/.test(value);
+}
+
+function venueActionForEvidence({
+  agentId,
+  audience,
+  subjectHash,
+  quoteHash,
+  sequence,
+  permitHash,
+  invokedAt,
+}: Omit<
+  LiveTapeVenueAction,
+  "version" | "type" | "command"
+>): LiveTapeVenueAction {
+  return {
+    version: 1,
+    type: "SIMULATED_VENUE_PUBLISH",
+    invokedAt,
+    agentId,
+    audience,
+    command: "PUBLISH_QUOTE",
+    subjectHash,
+    quoteHash,
+    sequence,
+    permitHash,
+  };
 }

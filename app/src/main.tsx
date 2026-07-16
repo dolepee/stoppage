@@ -842,6 +842,13 @@ function LiveDecisionTapePanel({
             {tape.sampleProof.decision === "ALLOW_CERTIFIED_REOPEN"
               ? "Certified Reopen"
               : formatDecisionLabel(tape.sampleProof.decision)}{" "}
+            · callback{" "}
+            <code>
+              {shortHash(
+                tape.sampleProof.intendedAgent.callbackReceiptHash,
+                10,
+              )}
+            </code>{" "}
             · signer <code>{tape.signer.kid}</code>
           </span>
           <span>

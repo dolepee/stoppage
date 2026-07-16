@@ -6,10 +6,12 @@ import type { PersistedExecutionGateContext } from "../execution-gate/live-conte
 import { createPermitSigner } from "../execution-gate/permit-v2.js";
 import { publicJudgeScenario } from "../replay/public-scenario.js";
 import {
+  createLiveTapeVenueReceipt,
   LiveDecisionTapeQueue,
   LiveDecisionTapeRecorder,
   type LiveDecisionTapeRecord,
   type LiveDecisionTapeStatus,
+  type LiveTapeVenueCallback,
 } from "./live-decision-tape.js";
 
 const signer = createPermitSigner(
@@ -20,8 +22,8 @@ describe("live decision tape", () => {
   it("executes only the intended verified agent and rejects permit theft", async () => {
     const records: LiveDecisionTapeRecord[] = [];
     const statuses: LiveDecisionTapeStatus[] = [];
-    const invokeAgentA = vi.fn();
-    const invokeAgentB = vi.fn();
+    const invokeAgentA = vi.fn(createLiveTapeVenueReceipt);
+    const invokeAgentB = vi.fn(createLiveTapeVenueReceipt);
     const recorder = new LiveDecisionTapeRecorder({
       signer,
       appendRecord: async (record) => records.push(record),
@@ -43,6 +45,7 @@ describe("live decision tape", () => {
         permitIssued: true,
         verification: { valid: true, decision: "ALLOW" },
         callbackInvoked: true,
+        callbackReceiptHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
       },
       agentB: {
         attemptedPermitTheft: true,
@@ -51,6 +54,7 @@ describe("live decision tape", () => {
           decision: "BLOCK_AUDIENCE_MISMATCH",
         },
         callbackInvoked: false,
+        callbackReceiptHash: null,
       },
       invariants: {
         callbacksAfterBlock: 0,
@@ -72,8 +76,8 @@ describe("live decision tape", () => {
   });
 
   it("withholds every callback while the governor is uncertain", async () => {
-    const invokeAgentA = vi.fn();
-    const invokeAgentB = vi.fn();
+    const invokeAgentA = vi.fn(createLiveTapeVenueReceipt);
+    const invokeAgentB = vi.fn(createLiveTapeVenueReceipt);
     const recorder = new LiveDecisionTapeRecorder({
       signer,
       appendRecord: async () => undefined,
@@ -90,10 +94,12 @@ describe("live decision tape", () => {
         permitIssued: false,
         verification: { valid: false, decision: "BLOCK_GATE_DECISION" },
         callbackInvoked: false,
+        callbackReceiptHash: null,
       },
       agentB: {
         attemptedPermitTheft: false,
         callbackInvoked: false,
+        callbackReceiptHash: null,
       },
       invariants: {
         callbacksAfterBlock: 0,
@@ -110,6 +116,8 @@ describe("live decision tape", () => {
       source: "TXLINE_CAPTURE_REPLAY",
       appendRecord: async () => undefined,
       writeStatus: async () => undefined,
+      invokeAgentA: createLiveTapeVenueReceipt,
+      invokeAgentB: createLiveTapeVenueReceipt,
     });
 
     const record = await recorder.record(checkpointAt(12), 20_000, 10_000);
@@ -129,6 +137,22 @@ describe("live decision tape", () => {
     ).rejects.toThrow(/independent execution clock/);
   });
 
+  it("refuses to record execution when the venue returns no action receipt", async () => {
+    const appendRecord = vi.fn();
+    const recorder = new LiveDecisionTapeRecorder({
+      signer,
+      appendRecord,
+      writeStatus: async () => undefined,
+      invokeAgentA: (async () => undefined) as unknown as LiveTapeVenueCallback,
+      invokeAgentB: createLiveTapeVenueReceipt,
+    });
+
+    await expect(recorder.record(checkpointAt(12), 10_000)).rejects.toThrow(
+      /invalid action receipt/,
+    );
+    expect(appendRecord).not.toHaveBeenCalled();
+  });
+
   it("isolates tape and diagnostic failures from later feed work", async () => {
     const appendRecord = vi
       .fn()
@@ -138,6 +162,8 @@ describe("live decision tape", () => {
       signer,
       appendRecord,
       writeStatus: async () => undefined,
+      invokeAgentA: createLiveTapeVenueReceipt,
+      invokeAgentB: createLiveTapeVenueReceipt,
     });
     const reportFailure = vi.fn(async () => {
       throw new Error("diagnostic unavailable");

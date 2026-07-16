@@ -47,7 +47,8 @@ state used for evaluation. A stale, missing, or malformed context returns
 `BLOCK_STREAM_UNHEALTHY` with no permit.
 
 Private Live Decision Tape records may contain hashed execution bindings and
-signed permits, but never enter the repository. The public tape projection
+signed permits, while the simulated venue adapter records permit-bound action
+receipts; neither enters the repository. The public tape projection
 forbids fixture IDs, quote vectors, feed payloads, source/receive/observe
 timestamps, message/event IDs, tokens, private keys, and venue credentials. It
 also refuses publication unless at least one uncertainty block, one verified

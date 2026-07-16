@@ -551,12 +551,24 @@
       "TapeAgentOutcome": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["id", "audience", "verification", "callbackInvoked"],
+        "required": [
+          "id",
+          "audience",
+          "verification",
+          "callbackInvoked",
+          "callbackReceiptHash"
+        ],
         "properties": {
           "id": { "$ref": "#/components/schemas/AgentId" },
           "audience": { "$ref": "#/components/schemas/Audience" },
           "verification": { "type": "string" },
-          "callbackInvoked": { "type": "boolean" }
+          "callbackInvoked": { "type": "boolean" },
+          "callbackReceiptHash": {
+            "oneOf": [
+              { "$ref": "#/components/schemas/Hash" },
+              { "type": "null" }
+            ]
+          }
         }
       },
       "VerificationKeySet": {

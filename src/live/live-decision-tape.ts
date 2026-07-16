@@ -25,10 +25,35 @@ import { writeRuntimeState } from "../private/runtime-store.js";
 
 export const LIVE_DECISION_TAPE_PRIVATE_FILE = "live-decision-tape.jsonl";
 export const LIVE_DECISION_TAPE_STATUS_FILE = "live-decision-tape-status.json";
+export const LIVE_DECISION_TAPE_VENUE_ACTIONS_FILE =
+  "live-decision-tape-venue-actions.jsonl";
 export const LIVE_TAPE_AGENT_A = "stoppage-reference-agent";
 export const LIVE_TAPE_AGENT_A_AUDIENCE = "venue:stoppage-reference-agent";
 export const LIVE_TAPE_AGENT_B = "cross-agent-adversary";
 export const LIVE_TAPE_AGENT_B_AUDIENCE = "venue:cross-agent-adversary";
+
+export interface LiveTapeVenueAction {
+  version: 1;
+  type: "SIMULATED_VENUE_PUBLISH";
+  invokedAt: string;
+  agentId: string;
+  audience: string;
+  command: "PUBLISH_QUOTE";
+  subjectHash: string;
+  quoteHash: string;
+  sequence: number;
+  permitHash: string;
+}
+
+export interface LiveTapeVenueReceipt {
+  version: 1;
+  type: "SIMULATED_VENUE_RECEIPT";
+  actionHash: string;
+}
+
+export type LiveTapeVenueCallback = (
+  action: LiveTapeVenueAction,
+) => LiveTapeVenueReceipt | Promise<LiveTapeVenueReceipt>;
 
 export interface LiveDecisionTapeRecord {
   version: 1;
@@ -58,12 +83,14 @@ export interface LiveDecisionTapeRecord {
     signedPermit: SignedExecutionPermitV2 | null;
     verification: PermitVerificationResult;
     callbackInvoked: boolean;
+    callbackReceiptHash: string | null;
   };
   agentB: {
     attemptedPermitTheft: boolean;
     intent: ExecutionIntent | null;
     verification: PermitVerificationResult | null;
     callbackInvoked: boolean;
+    callbackReceiptHash: string | null;
   };
   invariants: {
     callbacksAfterBlock: 0 | 1;
@@ -92,8 +119,8 @@ interface LiveDecisionTapeRecorderOptions {
   source?: LiveDecisionTapeRecord["source"];
   appendRecord?: (record: LiveDecisionTapeRecord) => Promise<unknown>;
   writeStatus?: (status: LiveDecisionTapeStatus) => Promise<unknown>;
-  invokeAgentA?: () => void | Promise<void>;
-  invokeAgentB?: () => void | Promise<void>;
+  invokeAgentA: LiveTapeVenueCallback;
+  invokeAgentB: LiveTapeVenueCallback;
 }
 
 export class LiveDecisionTapeRecorder {
@@ -102,8 +129,8 @@ export class LiveDecisionTapeRecorder {
   readonly #source: LiveDecisionTapeRecord["source"];
   readonly #appendRecord: (record: LiveDecisionTapeRecord) => Promise<unknown>;
   readonly #writeStatus: (status: LiveDecisionTapeStatus) => Promise<unknown>;
-  readonly #invokeAgentA: () => void | Promise<void>;
-  readonly #invokeAgentB: () => void | Promise<void>;
+  readonly #invokeAgentA: LiveTapeVenueCallback;
+  readonly #invokeAgentB: LiveTapeVenueCallback;
   readonly #counters: LiveDecisionTapeCounters = emptyCounters();
 
   constructor(options: LiveDecisionTapeRecorderOptions) {
@@ -117,8 +144,8 @@ export class LiveDecisionTapeRecorder {
     this.#writeStatus =
       options.writeStatus ??
       ((status) => writeRuntimeState(LIVE_DECISION_TAPE_STATUS_FILE, status));
-    this.#invokeAgentA = options.invokeAgentA ?? (() => undefined);
-    this.#invokeAgentB = options.invokeAgentB ?? (() => undefined);
+    this.#invokeAgentA = options.invokeAgentA;
+    this.#invokeAgentB = options.invokeAgentB;
   }
 
   async record(
@@ -156,9 +183,11 @@ export class LiveDecisionTapeRecorder {
       reason: response.result.reason,
     };
     let agentACallbackInvoked = false;
+    let agentACallbackReceiptHash: string | null = null;
     let agentBIntent: ExecutionIntent | null = null;
     let agentBVerification: PermitVerificationResult | null = null;
     let agentBCallbackInvoked = false;
+    let agentBCallbackReceiptHash: string | null = null;
 
     if (
       response.result.decision.startsWith("ALLOW_") &&
@@ -171,8 +200,11 @@ export class LiveDecisionTapeRecorder {
         now,
       });
       if (agentAVerification.valid) {
-        await this.#invokeAgentA();
+        const action = venueActionFor(intent, response.result.permit, now);
+        const receipt = await this.#invokeAgentA(action);
+        assertVenueReceipt(receipt, action);
         agentACallbackInvoked = true;
+        agentACallbackReceiptHash = receipt.actionHash;
       }
 
       agentBIntent = {
@@ -187,8 +219,15 @@ export class LiveDecisionTapeRecorder {
         now,
       });
       if (agentBVerification.valid) {
-        await this.#invokeAgentB();
+        const action = venueActionFor(
+          agentBIntent,
+          response.result.permit,
+          now,
+        );
+        const receipt = await this.#invokeAgentB(action);
+        assertVenueReceipt(receipt, action);
         agentBCallbackInvoked = true;
+        agentBCallbackReceiptHash = receipt.actionHash;
       }
     }
 
@@ -213,12 +252,14 @@ export class LiveDecisionTapeRecorder {
         signedPermit: response.result.permit,
         verification: agentAVerification,
         callbackInvoked: agentACallbackInvoked,
+        callbackReceiptHash: agentACallbackReceiptHash,
       },
       agentB: {
         attemptedPermitTheft: agentBIntent !== null,
         intent: agentBIntent,
         verification: agentBVerification,
         callbackInvoked: agentBCallbackInvoked,
+        callbackReceiptHash: agentBCallbackReceiptHash,
       },
       invariants: {
         callbacksAfterBlock:
@@ -292,6 +333,49 @@ export class LiveDecisionTapeQueue {
 
   drain(): Promise<void> {
     return this.#pending;
+  }
+}
+
+export function createLiveTapeVenueReceipt(
+  action: LiveTapeVenueAction,
+): LiveTapeVenueReceipt {
+  return {
+    version: 1,
+    type: "SIMULATED_VENUE_RECEIPT",
+    actionHash: sha256(action),
+  };
+}
+
+function venueActionFor(
+  intent: ExecutionIntent,
+  permit: SignedExecutionPermitV2,
+  now: number,
+): LiveTapeVenueAction {
+  return {
+    version: 1,
+    type: "SIMULATED_VENUE_PUBLISH",
+    invokedAt: new Date(now).toISOString(),
+    agentId: intent.agentId,
+    audience: intent.audience,
+    command: intent.command,
+    subjectHash: intent.subjectHash,
+    quoteHash: intent.quoteHash,
+    sequence: intent.sequence,
+    permitHash: permit.hash,
+  };
+}
+
+function assertVenueReceipt(
+  receipt: LiveTapeVenueReceipt,
+  action: LiveTapeVenueAction,
+) {
+  if (
+    !receipt ||
+    receipt.version !== 1 ||
+    receipt.type !== "SIMULATED_VENUE_RECEIPT" ||
+    receipt.actionHash !== sha256(action)
+  ) {
+    throw new Error("The simulated venue returned an invalid action receipt");
   }
 }
 

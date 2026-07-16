@@ -47,7 +47,9 @@ test("renders the exact Live Decision Tape candidate without disclosure or overf
     scrollWidth: document.documentElement.scrollWidth,
   }));
   expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth + 1);
-  expect(await panel.textContent()).not.toMatch(/source timestamp|receivedTs/i);
+  const panelText = await panel.textContent();
+  expect(panelText).toContain("callback 0x");
+  expect(panelText).not.toMatch(/source timestamp|receivedTs/i);
 
   await panel.evaluate((element) => {
     document.documentElement.style.scrollBehavior = "auto";
