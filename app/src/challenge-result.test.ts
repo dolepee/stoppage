@@ -3,19 +3,19 @@ import { describe, expect, it } from "vitest";
 import { getChallengeResultDisplay } from "./challenge-result";
 
 describe("challenge result display", () => {
-  it("reports success only for a server-side rejection", () => {
+  it("reports success only for an SDK-verifier rejection", () => {
     expect(
       getChallengeResultDisplay({
         challenge: "QUOTE_TAMPER",
         expected: "REJECT",
         valid: false,
-        decision: "BLOCK_INVALIDATED_BRANCH",
+        decision: "BLOCK_SIGNATURE_INVALID",
         reason: "Rejected",
       }),
     ).toEqual({
       passed: true,
       title: "REJECTED AS EXPECTED",
-      detail: "BLOCK INVALIDATED BRANCH",
+      detail: "BLOCK SIGNATURE INVALID",
     });
   });
 
@@ -25,13 +25,13 @@ describe("challenge result display", () => {
         challenge: "QUOTE_TAMPER",
         expected: "REJECT",
         valid: true,
-        decision: "ALLOW_CERTIFIED_REOPEN",
+        decision: "ALLOW",
         reason: "Regression",
       }),
     ).toEqual({
       passed: false,
       title: "SECURITY CHECK FAILED",
-      detail: "UNSAFE ALLOW CERTIFIED REOPEN",
+      detail: "UNSAFE ALLOW",
     });
   });
 });

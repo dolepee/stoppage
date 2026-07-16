@@ -411,6 +411,21 @@ describe("operator API", () => {
       ],
     });
 
+    const context = await application.app.inject({
+      method: "GET",
+      url: "/api/agent-context",
+    });
+    expect(context.statusCode).toBe(200);
+    expect(context.headers["cache-control"]).toBe("no-store");
+    expect(context.json()).toMatchObject({
+      version: 2,
+      dataMode: "SYNTHETIC",
+      sequence: snapshot.execution.sequence,
+      subjectHash: snapshot.execution.subjectHash,
+      market: "1X2",
+      quoteHash: snapshot.execution.agent.requestedQuoteHash,
+    });
+
     const response = await application.app.inject({
       method: "POST",
       url: "/api/agent-gate",

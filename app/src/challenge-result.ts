@@ -1,4 +1,4 @@
-import type { PublicAgentChallengeResult } from "../../src/execution-gate/public-agent-lab";
+import type { BenchLiteResult } from "@stoppage/sdk";
 
 export interface ChallengeResultDisplay {
   passed: boolean;
@@ -7,7 +7,7 @@ export interface ChallengeResultDisplay {
 }
 
 export function getChallengeResultDisplay(
-  result: PublicAgentChallengeResult,
+  result: BenchLiteResult,
 ): ChallengeResultDisplay {
   const passed =
     result.expected === "REJECT" &&

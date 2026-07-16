@@ -79,6 +79,9 @@ test.describe("Stoppage release browser gate", () => {
     await expect(
       page.getByText("6/6 EXECUTION ATTACKS REJECTED", { exact: true }),
     ).toBeVisible();
+    await expect(
+      page.getByText(/Verified locally by @stoppage\/sdk/),
+    ).toBeVisible();
 
     await primaryNavigation
       .getByRole("link", { name: "Evidence", exact: true })
@@ -108,9 +111,21 @@ test.describe("Stoppage release browser gate", () => {
       paths?: Record<string, unknown>;
     };
     expect(Object.keys(contract.paths ?? {}).sort()).toEqual([
+      "/api/agent-context",
       "/api/agent-gate",
       "/api/permit-keys",
     ]);
+
+    const context = await request.get("/api/agent-context");
+    expect(context.status()).toBe(200);
+    await expect(context.json()).resolves.toMatchObject({
+      version: 2,
+      dataMode: "SYNTHETIC",
+      sequence: 12,
+      market: "1X2",
+      subjectHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
+      quoteHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
+    });
 
     const keys = await request.get("/api/permit-keys");
     expect(keys.status()).toBe(200);

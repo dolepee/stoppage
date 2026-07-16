@@ -6,6 +6,7 @@ import nacl from "tweetnacl";
 import {
   STOPPAGE_PERMIT_MAX_CLOCK_SKEW_MS,
   StoppageClient,
+  runBenchLite,
   verifyPermit,
   type ExecutionIntent,
   type PermitVerificationKeySet,
@@ -155,6 +156,74 @@ describe("@stoppage/sdk enforcement adapter", () => {
       outcomes.find((outcome) => outcome.status === "VENUE_CALL_WITHHELD")
         ?.verification.decision,
     ).toBe("BLOCK_NONCE_REPLAY");
+  });
+
+  it("prunes consumed nonces after their five-second permit lifetime", async () => {
+    const now = Date.now();
+    const intent = makeIntent("expiring-replay-nonce-0001");
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockResolvedValueOnce(jsonResponse(makeResponse(intent, now)))
+      .mockResolvedValueOnce(jsonResponse(makeResponse(intent, now + 5_001)));
+    const callback = vi.fn(() => "venue-receipt");
+    const client = new StoppageClient({ fetch, keySet: keys });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+
+    try {
+      await expect(client.guardAction(intent, callback)).resolves.toMatchObject(
+        {
+          status: "VENUE_CALL_EXECUTED",
+        },
+      );
+      clock.mockReturnValue(now + 5_001);
+      await expect(client.guardAction(intent, callback)).resolves.toMatchObject(
+        {
+          status: "VENUE_CALL_EXECUTED",
+        },
+      );
+      expect(callback).toHaveBeenCalledTimes(2);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
+  it("runs all six Bench Lite attacks through the offline SDK verifier", () => {
+    const now = Date.now();
+    const intent = makeIntent("bench-lite-nonce-0001");
+    const permit = makePermit(intent, now);
+
+    expect(runBenchLite({ permit, intent, keys })).toMatchObject([
+      {
+        challenge: "QUOTE_TAMPER",
+        valid: false,
+        decision: "BLOCK_SIGNATURE_INVALID",
+      },
+      {
+        challenge: "RECEIPT_TAMPER",
+        valid: false,
+        decision: "BLOCK_SIGNATURE_INVALID",
+      },
+      {
+        challenge: "EXPIRED_REPLAY",
+        valid: false,
+        decision: "BLOCK_PERMIT_EXPIRED",
+      },
+      {
+        challenge: "WRONG_AUDIENCE",
+        valid: false,
+        decision: "BLOCK_AUDIENCE_MISMATCH",
+      },
+      {
+        challenge: "UNKNOWN_SIGNING_KEY",
+        valid: false,
+        decision: "BLOCK_UNKNOWN_SIGNING_KEY",
+      },
+      {
+        challenge: "REUSED_NONCE",
+        valid: false,
+        decision: "BLOCK_NONCE_REPLAY",
+      },
+    ]);
   });
 
   it("bypasses cached key discovery when the signer rotates", async () => {

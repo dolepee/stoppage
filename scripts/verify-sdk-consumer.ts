@@ -122,51 +122,46 @@ async function waitForHealth(
 }
 
 function cleanConsumerSource(): string {
-  return `import { StoppageClient } from "@stoppage/sdk";
+  return `import { StoppageClient, runBenchLite } from "@stoppage/sdk";
 
 const baseUrl = process.env.STOPPAGE_URL;
 if (!baseUrl) throw new Error("STOPPAGE_URL is required");
 
-await fetch(\`\${baseUrl}/api/replay/start\`, {
-  method: "POST",
-  headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ speed: 16 }),
-});
-
-let snapshot;
-for (let attempt = 0; attempt < 200; attempt += 1) {
-  const response = await fetch(\`\${baseUrl}/api/status\`);
-  snapshot = await response.json();
-  if (snapshot.replayStatus === "COMPLETE") break;
-  await new Promise((resolve) => setTimeout(resolve, 25));
-}
-if (snapshot?.replayStatus !== "COMPLETE") {
-  throw new Error("Public replay did not reach Certified Reopen");
-}
-
+const client = new StoppageClient({ baseUrl });
+const context = await client.discoverContext();
 const intent = {
   version: 2,
   agentId: "clean-consumer-agent",
   audience: "venue:clean-consumer-agent",
   nonce: "clean-consumer-nonce-0001",
   command: "PUBLISH_QUOTE",
-  sequence: snapshot.execution.sequence,
-  subjectHash: snapshot.execution.subjectHash,
-  market: "1X2",
-  quoteHash: snapshot.execution.agent.requestedQuoteHash,
+  sequence: context.sequence,
+  subjectHash: context.subjectHash,
+  market: context.market,
+  quoteHash: context.quoteHash,
 };
-const client = new StoppageClient({ baseUrl });
 let venueCalls = 0;
 const execute = () => {
   venueCalls += 1;
   return "simulated-venue-receipt";
 };
 const first = await client.guardAction(intent, execute);
-const replay = await client.guardAction(intent, execute);
 
 if (first.status !== "VENUE_CALL_EXECUTED") {
   throw new Error(\`Expected execution, received \${first.verification.decision}\`);
 }
+const permit = first.response.result.permit;
+if (!permit) throw new Error("The allowed response did not include Permit V2");
+const keys = await client.discoverKeys();
+const attacks = runBenchLite({ permit, intent, keys });
+if (
+  attacks.length !== 6 ||
+  attacks.some((attack) => attack.valid || !attack.decision.startsWith("BLOCK_"))
+) {
+  throw new Error("The packaged SDK did not reject all six Bench Lite attacks");
+}
+
+const replay = await client.guardAction(intent, execute);
 if (
   replay.status !== "VENUE_CALL_WITHHELD" ||
   replay.verification.decision !== "BLOCK_NONCE_REPLAY"
@@ -175,6 +170,6 @@ if (
 }
 if (venueCalls !== 1) throw new Error(\`Venue callback ran \${venueCalls} times\`);
 
-console.log("clean consumer: Permit V2 verified; venue callback executed once; replay withheld");
+console.log("clean consumer: public context discovered; Permit V2 verified; 6/6 SDK attacks and replay rejected; venue callback executed once");
 `;
 }

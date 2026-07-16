@@ -4,6 +4,7 @@ import { publicJudgeScenario } from "../replay/public-scenario.js";
 import { hashExecutionSubject, hashQuote } from "./execution-gate.js";
 import {
   evaluatePublicAgentHandshake,
+  getPublicAgentContext,
   type PublicAgentChallenge,
 } from "./public-agent-lab.js";
 import {
@@ -19,6 +20,18 @@ const signer = createPermitSigner(
 );
 
 describe("public agent lab", () => {
+  it("publishes a complete synthetic context for an external SDK consumer", () => {
+    expect(getPublicAgentContext()).toEqual({
+      version: 2,
+      dataMode: "SYNTHETIC",
+      scenario: publicJudgeScenario.id,
+      sequence: publicJudgeScenario.steps.length,
+      subjectHash,
+      market: "1X2",
+      quoteHash: quoteHashAt(publicJudgeScenario.steps.length),
+    });
+  });
+
   it("reproduces the blocked external-agent request during the VAR hold", () => {
     const result = evaluatePublicAgentHandshake(requestAt(2));
 

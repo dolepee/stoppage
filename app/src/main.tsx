@@ -34,7 +34,9 @@ import {
 import { createRoot } from "react-dom/client";
 import {
   StoppageClient,
+  runBenchLite as runSdkBenchLite,
   type BenchLiteAttack,
+  type BenchLiteResult,
   type ExecutionIntent,
   type GuardActionResult,
   type PublicAgentResponseV2,
@@ -42,8 +44,6 @@ import {
 
 import { publicJudgeScenario } from "../../src/replay/public-scenario";
 import { StoppageRuntime } from "../../src/runtime/stoppage-runtime";
-import type { PublicAgentChallengeResult } from "../../src/execution-gate/public-agent-lab";
-
 import { getChallengeResultDisplay } from "./challenge-result";
 import type {
   GovernorMode,
@@ -1549,9 +1549,7 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [benchPending, setBenchPending] = useState(false);
-  const [benchResults, setBenchResults] = useState<
-    PublicAgentChallengeResult[]
-  >([]);
+  const [benchResults, setBenchResults] = useState<BenchLiteResult[]>([]);
   const agent = snapshot.execution.agent;
   const handshakeKey =
     agent.decisionCode && agent.requestedQuoteHash
@@ -1635,20 +1633,18 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
     setIdentity({ agentId: agentDraft, audience: audienceDraft });
   }
 
-  async function runBenchLite() {
+  async function runBenchLiteInBrowser() {
     if (!handshake?.result.permit) return;
     setBenchPending(true);
     setBenchResults([]);
     setError(null);
     try {
-      const responses = await Promise.all(
-        benchLiteAttacks.map((challenge) =>
-          client.runBenchLiteCheck(handshake.request, challenge),
-        ),
-      );
-      const results = responses.flatMap((response) =>
-        response.challenge ? [response.challenge] : [],
-      ) as PublicAgentChallengeResult[];
+      const keys = await client.discoverKeys();
+      const results = runSdkBenchLite({
+        permit: handshake.result.permit,
+        intent: handshake.request,
+        keys,
+      });
       setBenchResults(results);
       if (results.length !== benchLiteAttacks.length) {
         setError("Bench Lite did not return all six enforcement checks.");
@@ -1812,13 +1808,15 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
       {challengeReady ? (
         <div className="permit-challenge-lab">
           <div>
-            <span>Bench Lite</span>
-            <small>Six attacks must fail before the venue callback.</small>
+            <span>Bench Lite · browser SDK verifier</span>
+            <small>
+              Six local permit mutations must fail before the venue callback.
+            </small>
           </div>
           <div className="permit-challenge-actions">
             <button
               type="button"
-              onClick={() => void runBenchLite()}
+              onClick={() => void runBenchLiteInBrowser()}
               disabled={benchPending}
             >
               {benchPending ? "Running 6 checks…" : "Run 6 execution attacks"}
@@ -1840,6 +1838,7 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
           <span>
             <strong>{passedBench}/6 EXECUTION ATTACKS REJECTED</strong>
             <small>
+              Verified locally by @stoppage/sdk ·{" "}
               {benchResults
                 .map((result) => challengeLabels[result.challenge])
                 .join(" · ")}

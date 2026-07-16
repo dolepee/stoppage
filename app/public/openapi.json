@@ -15,7 +15,7 @@
     "/api/agent-gate": {
       "post": {
         "summary": "Evaluate an external agent action",
-        "description": "Rebuilds a deterministic public World Cup checkpoint and evaluates the exact quote action. Version 2 returns an Ed25519-signed permit only for an ALLOW decision. Optional Bench Lite challenges prove six execution attacks fail closed. The endpoint is synthetic and contains no private live match data.",
+        "description": "Rebuilds a deterministic public World Cup checkpoint and evaluates the exact quote action. Version 2 returns an Ed25519-signed permit only for an ALLOW decision. Optional challenge fields expose compatibility diagnostics from the server verifier; the browser Bench Lite instead mutates the permit and runs all six attacks through @stoppage/sdk locally. The endpoint is synthetic and contains no private live match data.",
         "operationId": "evaluateAgentAction",
         "requestBody": {
           "required": true,
@@ -50,10 +50,28 @@
         }
       }
     },
+    "/api/agent-context": {
+      "get": {
+        "summary": "Discover the public synthetic integration context",
+        "description": "Returns the complete deterministic Judge Lab checkpoint required to construct a Permit V2 request. It contains no private fixture identifier, feed record, or licensed payload.",
+        "operationId": "discoverAgentContext",
+        "responses": {
+          "200": {
+            "description": "Public synthetic action context",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PublicAgentContext" }
+              }
+            }
+          },
+          "405": { "description": "Only GET is supported" }
+        }
+      }
+    },
     "/api/permit-keys": {
       "get": {
         "summary": "Discover Permit V2 verification keys",
-        "description": "Returns active and retained retired Ed25519 public keys. Private signing material is never returned.",
+        "description": "Returns the current active Ed25519 public verification key. The schema reserves RETIRED for a future rotation-retention configuration, which is not enabled in this deployment. Private signing material is never returned.",
         "operationId": "discoverPermitKeys",
         "responses": {
           "200": {
@@ -87,6 +105,28 @@
       "Nonce": {
         "type": "string",
         "pattern": "^[a-zA-Z0-9][a-zA-Z0-9:._-]{7,127}$"
+      },
+      "PublicAgentContext": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "dataMode",
+          "scenario",
+          "sequence",
+          "subjectHash",
+          "market",
+          "quoteHash"
+        ],
+        "properties": {
+          "version": { "const": 2 },
+          "dataMode": { "const": "SYNTHETIC" },
+          "scenario": { "type": "string" },
+          "sequence": { "type": "integer", "minimum": 1 },
+          "subjectHash": { "$ref": "#/components/schemas/Hash" },
+          "market": { "const": "1X2" },
+          "quoteHash": { "$ref": "#/components/schemas/Hash" }
+        }
       },
       "HandshakeRequestV1": {
         "type": "object",
