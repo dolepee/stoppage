@@ -16,6 +16,7 @@ COPY packages/sdk/package.json ./packages/sdk/package.json
 RUN pnpm install --prod --frozen-lockfile && pnpm store prune
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/packages/sdk/dist ./packages/sdk/dist
+COPY --from=build /app/data/public ./data/public
 RUN mkdir -p data/private data/runtime && chown -R node:node data
 USER node
 EXPOSE 4173
