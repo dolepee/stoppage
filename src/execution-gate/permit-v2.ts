@@ -1,4 +1,10 @@
-import { readFileSync } from "node:fs";
+import {
+  closeSync,
+  constants,
+  fstatSync,
+  openSync,
+  readFileSync,
+} from "node:fs";
 import { resolve } from "node:path";
 
 import nacl from "tweetnacl";
@@ -144,7 +150,7 @@ export function loadPermitSigner(
   const seedFile = environment.STOPPAGE_PERMIT_SIGNING_SEED_FILE;
   if (seedFile) {
     return createPermitSigner(
-      new Uint8Array(readFileSync(resolve(seedFile))),
+      readOwnerOnlySeedFile(resolve(seedFile)),
       environment.STOPPAGE_PERMIT_ISSUER ?? STOPPAGE_PERMIT_ISSUER,
     );
   }
@@ -152,6 +158,31 @@ export function loadPermitSigner(
     throw new Error("STOPPAGE_PERMIT_SIGNING_SEED is required in production");
   }
   return createPermitSigner(developmentSeed);
+}
+
+function readOwnerOnlySeedFile(path: string): Uint8Array {
+  const descriptor = openSync(
+    path,
+    constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0),
+  );
+  try {
+    const metadata = fstatSync(descriptor);
+    if (!metadata.isFile()) {
+      throw new Error("Stoppage signing seed must be a regular file");
+    }
+    if ((metadata.mode & 0o777) !== 0o600) {
+      throw new Error("Stoppage signing seed file permissions must be 0600");
+    }
+    if (
+      typeof process.getuid === "function" &&
+      metadata.uid !== process.getuid()
+    ) {
+      throw new Error("Stoppage signing seed file must be owned by this user");
+    }
+    return new Uint8Array(readFileSync(descriptor));
+  } finally {
+    closeSync(descriptor);
+  }
 }
 
 export function publicKeySetFor(

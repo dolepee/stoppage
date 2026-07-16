@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -27,12 +27,34 @@ describe("authenticated execution permit v2", () => {
         path,
         Uint8Array.from({ length: 32 }, (_, index) => index),
       );
+      chmodSync(path, 0o600);
       expect(
         loadPermitSigner({
           NODE_ENV: "production",
           STOPPAGE_PERMIT_SIGNING_SEED_FILE: path,
         }).kid,
       ).toBe(signer.kid);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects signing seed files readable by another user", () => {
+    const root = mkdtempSync(join(tmpdir(), "stoppage-permit-seed-"));
+    const path = join(root, "permit.seed");
+    try {
+      writeFileSync(
+        path,
+        Uint8Array.from({ length: 32 }, (_, index) => index),
+      );
+      chmodSync(path, 0o644);
+
+      expect(() =>
+        loadPermitSigner({
+          NODE_ENV: "production",
+          STOPPAGE_PERMIT_SIGNING_SEED_FILE: path,
+        }),
+      ).toThrow("Stoppage signing seed file permissions must be 0600");
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
