@@ -88,6 +88,16 @@ export interface PermitVerificationKeySet {
   keys: PermitVerificationKey[];
 }
 
+export interface PublicAgentContext {
+  version: 2;
+  dataMode: "SYNTHETIC";
+  scenario: string;
+  sequence: number;
+  subjectHash: string;
+  market: "1X2";
+  quoteHash: string;
+}
+
 export interface ExecutionGateResultV2 {
   version: 2;
   command: "PUBLISH_QUOTE";
@@ -126,12 +136,21 @@ export interface PermitVerificationResult {
   reason: string;
 }
 
+export interface BenchLiteResult extends PermitVerificationResult {
+  challenge: BenchLiteAttack;
+  expected: "REJECT";
+}
+
+export interface NonceRegistry {
+  has(value: string): boolean;
+}
+
 export interface VerifyPermitOptions {
   permit: SignedExecutionPermitV2;
   intent: ExecutionIntent;
   keys: PermitVerificationKeySet;
   now?: number;
-  usedNonces?: ReadonlySet<string>;
+  usedNonces?: NonceRegistry;
 }
 
 export type GuardActionResult<T> =
@@ -156,7 +175,7 @@ export interface StoppageClientOptions {
 export class StoppageClient {
   readonly #baseUrl: string;
   readonly #fetch: typeof fetch;
-  readonly #usedNonces = new Set<string>();
+  readonly #usedNonces = new Map<string, number>();
   #keySet: PermitVerificationKeySet | null;
 
   constructor(options: StoppageClientOptions = {}) {
@@ -188,6 +207,14 @@ export class StoppageClient {
     );
   }
 
+  discoverContext(signal?: AbortSignal): Promise<PublicAgentContext> {
+    return this.#request<PublicAgentContext>(
+      "/api/agent-context",
+      { method: "GET", cache: "no-store" },
+      signal,
+    );
+  }
+
   async discoverKeys(signal?: AbortSignal): Promise<PermitVerificationKeySet> {
     const keys = await this.#request<PermitVerificationKeySet>(
       "/api/permit-keys",
@@ -204,6 +231,7 @@ export class StoppageClient {
     keys: PermitVerificationKeySet,
     now = Date.now(),
   ): PermitVerificationResult {
+    this.#pruneUsedNonces(now);
     return verifyPermit({
       permit,
       intent,
@@ -289,7 +317,10 @@ export class StoppageClient {
 
     // Claim the nonce synchronously before callback invocation. This makes the
     // process-local guard at-most-once even when concurrent promises race.
-    this.#usedNonces.add(nonceKey(response.result.permit.body));
+    this.#usedNonces.set(
+      nonceKey(response.result.permit.body),
+      response.result.permit.body.expiresAt,
+    );
     const value = await callback();
     return {
       status: "VENUE_CALL_EXECUTED",
@@ -297,6 +328,12 @@ export class StoppageClient {
       verification: { ...verification, valid: true },
       value,
     };
+  }
+
+  #pruneUsedNonces(now: number): void {
+    for (const [key, expiresAt] of this.#usedNonces) {
+      if (expiresAt <= now) this.#usedNonces.delete(key);
+    }
   }
 
   async #request<T>(
@@ -323,6 +360,60 @@ export class StoppageClient {
     }
     return (await response.json()) as T;
   }
+}
+
+export function runBenchLite({
+  permit,
+  intent,
+  keys,
+  now = permit.body.issuedAt,
+}: Omit<VerifyPermitOptions, "usedNonces">): BenchLiteResult[] {
+  const attacks: BenchLiteAttack[] = [
+    "QUOTE_TAMPER",
+    "RECEIPT_TAMPER",
+    "EXPIRED_REPLAY",
+    "WRONG_AUDIENCE",
+    "UNKNOWN_SIGNING_KEY",
+    "REUSED_NONCE",
+  ];
+
+  return attacks.map((challenge) => {
+    const candidate: SignedExecutionPermitV2 = {
+      ...permit,
+      body: { ...permit.body },
+    };
+    const expected: ExecutionIntent = { ...intent };
+    const usedNonces = new Set<string>();
+    let verificationTime = now;
+
+    if (challenge === "QUOTE_TAMPER") {
+      candidate.body.quoteHash = differentHash(candidate.body.quoteHash);
+    } else if (challenge === "RECEIPT_TAMPER") {
+      candidate.body.stateReceiptHash = differentHash(
+        candidate.body.stateReceiptHash ?? candidate.hash,
+      );
+    } else if (challenge === "EXPIRED_REPLAY") {
+      verificationTime = candidate.body.expiresAt;
+    } else if (challenge === "WRONG_AUDIENCE") {
+      expected.audience = differentAudience(expected.audience);
+    } else if (challenge === "UNKNOWN_SIGNING_KEY") {
+      candidate.body.kid = "stp_unknown000000";
+    } else {
+      usedNonces.add(nonceKey(candidate.body));
+    }
+
+    return {
+      challenge,
+      expected: "REJECT",
+      ...verifyPermit({
+        permit: candidate,
+        intent: expected,
+        keys,
+        now: verificationTime,
+        usedNonces,
+      }),
+    };
+  });
 }
 
 export function verifyPermit({
@@ -468,6 +559,17 @@ function validIntentShape(intent: ExecutionIntent): boolean {
     intent.market === "1X2" &&
     isHash(intent.quoteHash)
   );
+}
+
+function differentHash(value: string): string {
+  const replacement = value.endsWith("0") ? "1" : "0";
+  return `${value.slice(0, -1)}${replacement}`;
+}
+
+function differentAudience(value: string): string {
+  return value === "venue:bench-lite-other"
+    ? "venue:bench-lite-alternate"
+    : "venue:bench-lite-other";
 }
 
 function blocked(

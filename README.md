@@ -108,13 +108,16 @@ five-second expiry. Public verification keys are discovered from
 `GET /api/permit-keys`, so an agent can verify the permit offline immediately
 before calling its venue adapter.
 
-The installable `@stoppage/sdk` workspace artifact exposes `evaluate()`,
-`verifyPermit()` and `guardAction()`. `guardAction()` keeps the callback closed
-on every BLOCK or verification failure and claims the nonce synchronously before
-callback invocation. Its replay memory is intentionally process-local in this
-release: production multi-instance replay protection remains outside the
-submission scope. Permit V1 remains available for compatibility, but the
-enforcement adapter never accepts V1 as authority to execute.
+The installable `@stoppage/sdk` release artifact exposes `discoverContext()`,
+`evaluate()`, `verifyPermit()`, `runBenchLite()` and `guardAction()`. The public
+synthetic context endpoint supplies every field needed for the runnable external
+quickstart. `guardAction()` keeps the callback closed on every BLOCK or
+verification failure and claims the nonce synchronously before callback
+invocation. Its replay memory is intentionally process-local in this release;
+entries carry the five-second permit expiry and are pruned after it. Production
+multi-instance replay protection remains outside the submission scope. Permit
+V1 remains available for compatibility, but the enforcement adapter never
+accepts V1 as authority to execute.
 
 Production deployments must provide `STOPPAGE_PERMIT_SIGNING_SEED` as a
 base64url-encoded 32-byte Ed25519 seed. Development and tests use an explicitly
@@ -123,19 +126,24 @@ Signing material is never returned by the key-discovery endpoint or included in
 the browser bundle.
 
 Bench Lite exercises quote and receipt tampering, expiry, wrong audience,
-unknown signing key and reused nonce. The public endpoint remains visibly
+unknown signing key and reused nonce inside the browser-side SDK verifier. The
+UI fetches a public key set, mutates the signed permit locally, and does not
+trust server-returned attack grades. The public endpoint remains visibly
 synthetic. The persistent live-worker integration still uses
 `POST /api/execution-gate/evaluate` and fails closed when its private context is
 missing or stale; that private route is not advertised on the static judge host.
 
 - Machine-readable contract: [`/openapi.json`](https://stoppage-txline.vercel.app/openapi.json)
-- Packaged enforcement SDK: [`packages/sdk`](packages/sdk)
+- Public integration context: [`/api/agent-context`](https://stoppage-txline.vercel.app/api/agent-context)
+- Installable SDK artifact: [`@stoppage/sdk v0.2.1`](https://github.com/dolepee/stoppage/releases/download/sdk-v0.2.1/stoppage-sdk-0.2.1.tgz)
+- SDK source and quickstart: [`packages/sdk`](packages/sdk)
 - Callback-enforced example: [`examples/enforced-market-maker.ts`](examples/enforced-market-maker.ts)
 - Legacy Permit V1 client: [`src/integration/stoppage-agent-client.ts`](src/integration/stoppage-agent-client.ts)
 
 The CI clean-consumer gate packs the SDK, installs it in a temporary project,
-starts Stoppage, completes Certified Reopen through public HTTP endpoints and
-proves the venue callback runs once while a nonce replay is withheld:
+starts Stoppage, discovers the public context through the packaged client, and
+proves the venue callback runs once while all six SDK attacks plus a nonce
+replay are withheld:
 
 ```bash
 pnpm build
@@ -237,6 +245,7 @@ Stoppage uses the TxLINE mainnet deployment:
 | Historical odds       | `/api/odds/updates/{epochDay}/{hour}/{interval}` |
 | Score proof           | `/api/scores/stat-validation`                    |
 | Public claim          | `/api/public-claim`                              |
+| Public agent context  | `/api/agent-context`                             |
 | Public agent gate     | `/api/agent-gate`                                |
 | Self-hosted live gate | `/api/execution-gate/evaluate`                   |
 

@@ -8,6 +8,7 @@ import {
   DEFAULT_EXECUTION_GATE_CONFIG,
   evaluateExecutionGate,
   hashExecutionSubject,
+  hashQuote,
   inspectExecutionPermit,
 } from "./execution-gate.js";
 import {
@@ -132,6 +133,36 @@ export interface PublicAgentHandshakeResponseV2 extends PublicAgentResponseBase 
 
 export type PublicAgentHandshakeResponse =
   PublicAgentHandshakeResponseV1 | PublicAgentHandshakeResponseV2;
+
+export interface PublicAgentContext {
+  version: 2;
+  dataMode: "SYNTHETIC";
+  scenario: string;
+  sequence: number;
+  subjectHash: string;
+  market: "1X2";
+  quoteHash: string;
+}
+
+export function getPublicAgentContext(): PublicAgentContext {
+  const sequence = publicJudgeScenario.steps.length;
+  const context = buildPublicCheckpoint(sequence);
+  const quote = [...publicJudgeScenario.steps]
+    .reverse()
+    .find((step) => step.input.kind === "quote")?.input;
+  if (!quote || quote.kind !== "quote") {
+    throw new Error("The public agent context has no proposed quote");
+  }
+  return {
+    version: 2,
+    dataMode: "SYNTHETIC",
+    scenario: publicJudgeScenario.id,
+    sequence,
+    subjectHash: context.subjectHash,
+    market: "1X2",
+    quoteHash: hashQuote(quote),
+  };
+}
 
 export function evaluatePublicAgentHandshake(
   value: PublicAgentHandshakeRequestV1,

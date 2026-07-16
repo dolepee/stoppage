@@ -13,7 +13,10 @@ import { publicJudgeScenario } from "./replay/public-scenario.js";
 import { StoppageRuntime } from "./runtime/stoppage-runtime.js";
 import { loadLatestPublicClaim } from "./evidence/public-claim.js";
 import { evaluateExecutionGate } from "./execution-gate/execution-gate.js";
-import { evaluatePublicAgentHandshake } from "./execution-gate/public-agent-lab.js";
+import {
+  evaluatePublicAgentHandshake,
+  getPublicAgentContext,
+} from "./execution-gate/public-agent-lab.js";
 import {
   loadPermitSigner,
   publicKeySetFor,
@@ -168,6 +171,12 @@ export async function createApplication(options: ApplicationOptions = {}) {
     return reply
       .header("Cache-Control", "no-store")
       .send(evaluatePublicAgentHandshake(value, signer));
+  });
+
+  app.get("/api/agent-context", async (_request, reply) => {
+    return reply
+      .header("Cache-Control", "no-store")
+      .send(getPublicAgentContext());
   });
 
   app.get("/api/permit-keys", async (_request, reply) => {
