@@ -26,5 +26,23 @@ jobs:
       - run: pnpm sdk:consumer:verify
       - run: pnpm gate:verify
       - run: pnpm reopen:verify
+      - name: Verify the runtime container serves approved public evidence
+        run: |
+          docker build --tag stoppage:ci .
+          container_id="$(docker run --detach --publish 4173:4173 stoppage:ci)"
+          cleanup() {
+            docker rm --force "$container_id" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/api/health >/dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          expected_hash="$(jq -r .candidateHash data/public/live-decision-tape.json)"
+          actual_hash="$(curl --fail --silent http://127.0.0.1:4173/api/live-decision-tape | jq -r .candidateHash)"
+          test "$actual_hash" = "$expected_hash"
+          curl --fail --silent http://127.0.0.1:4173/api/public-claim >/dev/null
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm browser:smoke

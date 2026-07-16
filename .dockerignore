@@ -6,7 +6,9 @@ dist
 .env
 .env.*
 .secrets
-data
+data/*
+!data/public/
+!data/public/**
 *.log
 .DS_Store
 

@@ -26,8 +26,14 @@ const requiredDockerIgnores = [
   ".env",
   ".env.*",
   ".secrets",
-  "data",
+  "data/*",
+  "!data/public/",
+  "!data/public/**",
   "TXODDS_STOPPAGE_MASTER_PLAN.md",
+];
+
+const requiredDockerfileLines = [
+  "COPY --from=build /app/data/public ./data/public",
 ];
 
 const secretPatterns: Array<[string, RegExp]> = [
@@ -41,12 +47,21 @@ const secretPatterns: Array<[string, RegExp]> = [
 const failures: string[] = [];
 
 if (listed.includes("Dockerfile")) {
+  const dockerfile = await readFile(
+    new URL("Dockerfile", repositoryRoot),
+    "utf8",
+  );
   const dockerIgnore = listed.includes(".dockerignore")
     ? await readFile(new URL(".dockerignore", repositoryRoot), "utf8")
     : "";
   for (const required of requiredDockerIgnores) {
     if (!dockerIgnore.split(/\r?\n/).includes(required)) {
       failures.push(`.dockerignore is missing: ${required}`);
+    }
+  }
+  for (const required of requiredDockerfileLines) {
+    if (!dockerfile.split(/\r?\n/).includes(required)) {
+      failures.push(`Dockerfile is missing: ${required}`);
     }
   }
 }
