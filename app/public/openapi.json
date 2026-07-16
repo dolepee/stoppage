@@ -556,6 +556,7 @@
           "audience",
           "verification",
           "callbackInvoked",
+          "callbackInvokedAt",
           "callbackReceiptHash"
         ],
         "properties": {
@@ -563,6 +564,12 @@
           "audience": { "$ref": "#/components/schemas/Audience" },
           "verification": { "type": "string" },
           "callbackInvoked": { "type": "boolean" },
+          "callbackInvokedAt": {
+            "oneOf": [
+              { "type": "string", "format": "date-time" },
+              { "type": "null" }
+            ]
+          },
           "callbackReceiptHash": {
             "oneOf": [
               { "$ref": "#/components/schemas/Hash" },

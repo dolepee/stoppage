@@ -55,6 +55,7 @@ export interface LiveDecisionTape {
       audience: string;
       verification: "ALLOW";
       callbackInvoked: true;
+      callbackInvokedAt: string;
       callbackReceiptHash: string;
     };
     crossAgentAttempt: {
@@ -62,6 +63,7 @@ export interface LiveDecisionTape {
       audience: string;
       verification: string;
       callbackInvoked: false;
+      callbackInvokedAt: null;
       callbackReceiptHash: null;
     };
   };
@@ -105,6 +107,7 @@ export function parseLiveDecisionTape(value: unknown): LiveDecisionTape {
     intendedAgent.verification !== "ALLOW" ||
     intendedAgent.callbackInvoked !== true ||
     crossAgentAttempt.callbackInvoked !== false ||
+    crossAgentAttempt.callbackInvokedAt !== null ||
     !isHash(intendedAgent.callbackReceiptHash) ||
     crossAgentAttempt.callbackReceiptHash !== null ||
     (sampleProof.decision !== "ALLOW_HEALTHY_QUOTE" &&
@@ -141,8 +144,11 @@ export function parseLiveDecisionTape(value: unknown): LiveDecisionTape {
   );
   const blockedUncertainty = asNonNegativeInteger(decisions.blockedUncertainty);
   const blockedOther = asNonNegativeInteger(decisions.blockedOther);
-  asNonNegativeInteger(permitBody.issuedAt);
-  asNonNegativeInteger(permitBody.expiresAt);
+  const permitIssuedAt = asNonNegativeInteger(permitBody.issuedAt);
+  const permitExpiresAt = asNonNegativeInteger(permitBody.expiresAt);
+  const callbackInvokedAt = Date.parse(
+    asString(intendedAgent.callbackInvokedAt),
+  );
   if (
     capturedRequests < 1 ||
     blockedRequests < 1 ||
@@ -152,6 +158,9 @@ export function parseLiveDecisionTape(value: unknown): LiveDecisionTape {
     callbacksWithoutPermit !== 0 ||
     allowCertifiedReopen < 1 ||
     sampleProof.decision !== "ALLOW_CERTIFIED_REOPEN" ||
+    !Number.isFinite(callbackInvokedAt) ||
+    callbackInvokedAt < permitIssuedAt ||
+    callbackInvokedAt >= permitExpiresAt ||
     liveCaptureCount + replayCaptureCount !== capturedRequests ||
     allowHealthyQuote +
       allowCertifiedReopen +

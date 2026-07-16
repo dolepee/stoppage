@@ -84,6 +84,7 @@ function fixture() {
         audience: "venue:stoppage-reference-agent",
         verification: "ALLOW",
         callbackInvoked: true,
+        callbackInvokedAt: new Date(10_000).toISOString(),
         callbackReceiptHash: `0x${"3".repeat(64)}`,
       },
       crossAgentAttempt: {
@@ -91,6 +92,7 @@ function fixture() {
         audience: "venue:cross-agent-adversary",
         verification: "BLOCK_AUDIENCE_MISMATCH",
         callbackInvoked: false,
+        callbackInvokedAt: null,
         callbackReceiptHash: null,
       },
     },

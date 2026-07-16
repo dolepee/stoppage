@@ -59,6 +59,7 @@ export interface PublicLiveDecisionTapePayload {
       audience: string;
       verification: "ALLOW";
       callbackInvoked: true;
+      callbackInvokedAt: string;
       callbackReceiptHash: string;
     };
     crossAgentAttempt: {
@@ -66,6 +67,7 @@ export interface PublicLiveDecisionTapePayload {
       audience: string;
       verification: string;
       callbackInvoked: false;
+      callbackInvokedAt: null;
       callbackReceiptHash: null;
     };
   };
@@ -182,6 +184,7 @@ export function buildLiveDecisionTapeCandidate(
         audience: sample.agentA.intent.audience,
         verification: "ALLOW",
         callbackInvoked: true,
+        callbackInvokedAt: sample.agentA.callbackInvokedAt!,
         callbackReceiptHash: sample.agentA.callbackReceiptHash!,
       },
       crossAgentAttempt: {
@@ -189,6 +192,7 @@ export function buildLiveDecisionTapeCandidate(
         audience: sample.agentB.intent.audience,
         verification: sample.agentB.verification.decision,
         callbackInvoked: false,
+        callbackInvokedAt: null,
         callbackReceiptHash: null,
       },
     },
@@ -573,6 +577,9 @@ function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
     keys,
     now: permit.body.issuedAt,
   });
+  const callbackInvokedAt = Date.parse(
+    payload.sampleProof.intendedAgent.callbackInvokedAt,
+  );
   if (
     !intended.valid ||
     stolen.valid ||
@@ -581,6 +588,9 @@ function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
     permit.body.decision !== payload.sampleProof.decision ||
     payload.sampleProof.intendedAgent.verification !== "ALLOW" ||
     !payload.sampleProof.intendedAgent.callbackInvoked ||
+    !Number.isFinite(callbackInvokedAt) ||
+    callbackInvokedAt < permit.body.issuedAt ||
+    callbackInvokedAt >= permit.body.expiresAt ||
     !isHash(payload.sampleProof.intendedAgent.callbackReceiptHash) ||
     payload.sampleProof.intendedAgent.callbackReceiptHash !==
       sha256(
@@ -591,10 +601,11 @@ function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
           quoteHash: permit.body.quoteHash,
           sequence: permit.body.sequence,
           permitHash: permit.hash,
-          invokedAt: new Date(permit.body.issuedAt).toISOString(),
+          invokedAt: payload.sampleProof.intendedAgent.callbackInvokedAt,
         }),
       ) ||
     payload.sampleProof.crossAgentAttempt.callbackInvoked ||
+    payload.sampleProof.crossAgentAttempt.callbackInvokedAt !== null ||
     payload.sampleProof.crossAgentAttempt.callbackReceiptHash !== null
   ) {
     throw new Error("The public signed permit sample is invalid");

@@ -62,11 +62,13 @@ describe("public live decision-tape evidence", () => {
         intendedAgent: {
           verification: "ALLOW",
           callbackInvoked: true,
+          callbackInvokedAt: expect.any(String),
           callbackReceiptHash: expect.stringMatching(/^0x[0-9a-f]{64}$/),
         },
         crossAgentAttempt: {
           verification: "BLOCK_AUDIENCE_MISMATCH",
           callbackInvoked: false,
+          callbackInvokedAt: null,
           callbackReceiptHash: null,
         },
       },
@@ -168,8 +170,16 @@ describe("public live decision-tape evidence", () => {
     await recorder.record(checkpointAt(12), 10_000);
     await recorder.record(checkpointAt(3), 20_000);
 
+    const candidate = buildLiveDecisionTapeCandidate(
+      records,
+      publicKeySetFor(signer),
+    );
     expect(() =>
-      buildLiveDecisionTapeCandidate(records, publicKeySetFor(signer)),
+      buildApprovedLiveDecisionTape({
+        candidate,
+        approvalStatement: candidate.requiredApproval,
+        approvedAt: "2026-07-16T16:00:00.000Z",
+      }),
     ).not.toThrow();
   });
 
