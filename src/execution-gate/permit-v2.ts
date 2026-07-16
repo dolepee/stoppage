@@ -1,7 +1,16 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+
 import nacl from "tweetnacl";
 
 import { canonicalJson, sha256 } from "../domain/canonical.js";
 import type { ExecutionGateDecision, ExecutionGateResult } from "./types.js";
+
+try {
+  process.loadEnvFile();
+} catch (error) {
+  if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+}
 
 export const STOPPAGE_PERMIT_ISSUER = "stoppage";
 export const STOPPAGE_PERMIT_TTL_MS = 5_000;
@@ -129,6 +138,13 @@ export function loadPermitSigner(
   if (encodedSeed) {
     return createPermitSigner(
       decodeBase64Url(encodedSeed),
+      environment.STOPPAGE_PERMIT_ISSUER ?? STOPPAGE_PERMIT_ISSUER,
+    );
+  }
+  const seedFile = environment.STOPPAGE_PERMIT_SIGNING_SEED_FILE;
+  if (seedFile) {
+    return createPermitSigner(
+      new Uint8Array(readFileSync(resolve(seedFile))),
       environment.STOPPAGE_PERMIT_ISSUER ?? STOPPAGE_PERMIT_ISSUER,
     );
   }

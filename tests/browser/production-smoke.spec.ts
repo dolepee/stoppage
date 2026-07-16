@@ -59,6 +59,18 @@ test.describe("Stoppage release browser gate", () => {
     await expect(page).toHaveURL(/\/demo$/);
     await expect(page).toHaveTitle("Demo · Stoppage");
     await expectNoHorizontalOverflow(page);
+    await expect(
+      page.getByRole("heading", { name: "Live Decision Tape", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("VERIFIED → CALLBACK EXECUTED", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("AUDIENCE MISMATCH → WITHHELD", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Callbacks after BLOCK", { exact: true }),
+    ).toBeVisible();
 
     await page
       .getByRole("button", { name: /Test the firewall|Test again/ })
@@ -113,6 +125,7 @@ test.describe("Stoppage release browser gate", () => {
     expect(Object.keys(contract.paths ?? {}).sort()).toEqual([
       "/api/agent-context",
       "/api/agent-gate",
+      "/api/live-decision-tape",
       "/api/permit-keys",
     ]);
 
@@ -141,6 +154,25 @@ test.describe("Stoppage release browser gate", () => {
       version: 3,
       status: "AVAILABLE",
       holdout: { fixtures: 4, completeProtectedWindows: 18 },
+    });
+
+    const tape = await request.get("/api/live-decision-tape");
+    expect(tape.status()).toBe(200);
+    await expect(tape.json()).resolves.toMatchObject({
+      version: 1,
+      status: "AVAILABLE",
+      evidenceType: "RECORDED_TXLINE_DECISION_TAPE",
+      hostingClaim: "RECORDED_CAPTURE_NOT_HOSTED_UPTIME",
+      timingDisclosure:
+        "PERMIT_ISSUED_AT_IS_ENFORCEMENT_EXECUTION_TIME_NOT_FEED_TIME",
+      counters: {
+        capturedRequests: 20,
+        blockedRequests: 10,
+        verifiedPermits: 10,
+        callbacksAfterBlock: 0,
+        callbacksWithoutVerifiedPermit: 0,
+        crossAgentPermitTheftsRejected: 10,
+      },
     });
 
     expect(browserErrors).toEqual([]);

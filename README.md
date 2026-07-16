@@ -93,10 +93,14 @@ persistent application runtime. The live worker writes a private per-fixture
 context after every processed input; the API resolves it by subject hash and
 returns only the gate result. A context older than five seconds fails closed,
 and fixture IDs, quote vectors, source IDs, and feed records never enter the
-response. A downstream agent that already consumes TxLINE computes the subject
-and quote hashes with the exported helpers before requesting authorization. The
-public static console runs the evaluator locally over the synthetic fixture so
-judges need no token or login.
+response. The route preserves Permit V1 compatibility and accepts a strict
+Permit V2 request that additionally binds agent ID, audience, one-use nonce and
+the exact live sequence. V2 never falls through to the synthetic fixture and
+never signs a stale or sequence-mismatched context. A downstream agent that
+already consumes TxLINE computes the subject and quote hashes with the exported
+helpers before requesting authorization. Verification keys are origin-specific:
+the persistent live origin exposes its live signer, while the static judge
+origin retains its separate synthetic production signer.
 
 ### External agent enforcement
 
@@ -120,10 +124,12 @@ V1 remains available for compatibility, but the enforcement adapter never
 accepts V1 as authority to execute.
 
 Production deployments must provide `STOPPAGE_PERMIT_SIGNING_SEED` as a
-base64url-encoded 32-byte Ed25519 seed. Development and tests use an explicitly
-non-production signer; production fails closed rather than falling back to it.
-Signing material is never returned by the key-discovery endpoint or included in
-the browser bundle.
+base64url-encoded 32-byte Ed25519 seed. A local persistent worker may instead
+use `STOPPAGE_PERMIT_SIGNING_SEED_FILE` pointing to an ignored mode-0600 raw
+32-byte seed file. Development and tests use an explicitly non-production
+signer; production fails closed rather than falling back to it. Signing material
+is never returned by the key-discovery endpoint or included in the browser
+bundle.
 
 Bench Lite exercises quote and receipt tampering, expiry, wrong audience,
 unknown signing key and reused nonce inside the browser-side SDK verifier. The
@@ -132,6 +138,40 @@ trust server-returned attack grades. The public endpoint remains visibly
 synthetic. The persistent live-worker integration still uses
 `POST /api/execution-gate/evaluate` and fails closed when its private context is
 missing or stale; that private route is not advertised on the static judge host.
+
+### Live Decision Tape
+
+The optional worker tape turns real TxLINE quote inputs into reference-agent
+`PUBLISH_QUOTE` requests against the same live gate. Agent A verifies each
+allowed Permit V2 offline before its simulated venue callback. Agent B then
+attempts to reuse that permit for a different audience and agent binding; the
+SDK must reject it and keep the callback closed. This proves permit
+non-transferability, not authenticated real-world identity. Block decisions
+never issue a permit and never delegate to either agent. Tape persistence runs
+on an isolated queue, so an optional tape or diagnostic write failure cannot
+interrupt the core odds callback or trigger a stream reconnect.
+
+Licensed feed records and full private tape entries remain ignored. A separate
+preparation step can replay an existing private TxLINE capture through the same
+governor and enforcement harness, explicitly labeled as capture replay rather
+than hosted uptime. Replay permits use the replay execution clock, never a
+licensed feed timestamp, and the public contract discloses that timing basis.
+Every publishable tape must include a signed `ALLOW_CERTIFIED_REOPEN` sample.
+Publication requires an exact human approval over a candidate hash and exposes
+only a frozen aggregate, one sanitized signed permit sample, the verification
+key, and these counters:
+
+- captured requests;
+- blocked requests;
+- verified permits;
+- callbacks after `BLOCK` (must be zero);
+- callbacks without a verified permit (must be zero);
+- cross-agent permit thefts rejected.
+
+The public `/api/live-decision-tape` response says
+`RECORDED_CAPTURE_NOT_HOSTED_UPTIME`; it is evidence of builder-operated TxLINE
+capture, not a claim that the Vercel static deployment runs the persistent
+worker.
 
 - Machine-readable contract: [`/openapi.json`](https://stoppage-txline.vercel.app/openapi.json)
 - Public integration context: [`/api/agent-context`](https://stoppage-txline.vercel.app/api/agent-context)
@@ -245,6 +285,7 @@ Stoppage uses the TxLINE mainnet deployment:
 | Historical odds       | `/api/odds/updates/{epochDay}/{hour}/{interval}` |
 | Score proof           | `/api/scores/stat-validation`                    |
 | Public claim          | `/api/public-claim`                              |
+| Live Decision Tape    | `/api/live-decision-tape`                        |
 | Public agent context  | `/api/agent-context`                             |
 | Public agent gate     | `/api/agent-gate`                                |
 | Self-hosted live gate | `/api/execution-gate/evaluate`                   |

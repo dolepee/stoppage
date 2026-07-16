@@ -1,3 +1,7 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
 import { describe, expect, it } from "vitest";
 
 import { sha256 } from "../domain/canonical.js";
@@ -6,6 +10,7 @@ import {
   createPermitSigner,
   inspectExecutionPermitV2,
   issueExecutionPermitV2,
+  loadPermitSigner,
   nonceKey,
   publicKeySetFor,
   type PermitV2RequestBinding,
@@ -14,6 +19,25 @@ import {
 const signer = createPermitSigner(Uint8Array.from({ length: 32 }, (_, i) => i));
 
 describe("authenticated execution permit v2", () => {
+  it("loads a dedicated raw signing seed from an ignored file", () => {
+    const root = mkdtempSync(join(tmpdir(), "stoppage-permit-seed-"));
+    const path = join(root, "permit.seed");
+    try {
+      writeFileSync(
+        path,
+        Uint8Array.from({ length: 32 }, (_, index) => index),
+      );
+      expect(
+        loadPermitSigner({
+          NODE_ENV: "production",
+          STOPPAGE_PERMIT_SIGNING_SEED_FILE: path,
+        }).kid,
+      ).toBe(signer.kid);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
   it("verifies a signed permit offline against discovered public keys", () => {
     const { result, request } = allowedResult();
     const signed = issueExecutionPermitV2(result, request, signer, 10_000);

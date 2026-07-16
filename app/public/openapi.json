@@ -86,6 +86,29 @@
           "503": { "description": "Verification keys unavailable" }
         }
       }
+    },
+    "/api/live-decision-tape": {
+      "get": {
+        "summary": "Inspect the approved Live Decision Tape",
+        "description": "Returns a human-approved frozen aggregate derived from builder-operated TxLINE World Cup capture. It includes one sanitized signed Certified Reopen Permit V2 sample and public verification key. Replay permit time is enforcement execution time, never feed time; no fixture IDs, quote vectors, feed records, source timestamps, credentials, or hosted-worker uptime claim are exposed.",
+        "operationId": "getLiveDecisionTape",
+        "responses": {
+          "200": {
+            "description": "Approved recorded agent-enforcement evidence",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LiveDecisionTape"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No human-approved tape has been published"
+          },
+          "405": { "description": "Only GET is supported" }
+        }
+      }
     }
   },
   "components": {
@@ -378,6 +401,162 @@
               { "type": "null" }
             ]
           }
+        }
+      },
+      "LiveDecisionTape": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "version",
+          "status",
+          "evidenceType",
+          "network",
+          "source",
+          "operation",
+          "hostingClaim",
+          "dataBoundary",
+          "timingDisclosure",
+          "captureModes",
+          "contract",
+          "signer",
+          "counters",
+          "decisions",
+          "sampleProof",
+          "candidateHash",
+          "approvedAt",
+          "approval"
+        ],
+        "properties": {
+          "version": { "const": 1 },
+          "status": { "const": "AVAILABLE" },
+          "evidenceType": { "const": "RECORDED_TXLINE_DECISION_TAPE" },
+          "network": { "const": "solana-mainnet" },
+          "source": { "const": "TXLINE_WORLD_CUP_SERVICE_LEVEL_12" },
+          "operation": { "const": "BUILDER_OPERATED_CAPTURE" },
+          "hostingClaim": { "const": "RECORDED_CAPTURE_NOT_HOSTED_UPTIME" },
+          "dataBoundary": { "type": "string" },
+          "timingDisclosure": {
+            "const": "PERMIT_ISSUED_AT_IS_ENFORCEMENT_EXECUTION_TIME_NOT_FEED_TIME"
+          },
+          "captureModes": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["live", "privateCaptureReplay"],
+            "properties": {
+              "live": { "type": "integer", "minimum": 0 },
+              "privateCaptureReplay": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "contract": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "command",
+              "enforcement",
+              "intendedAgent",
+              "adversaryAgent"
+            ],
+            "properties": {
+              "command": { "const": "PUBLISH_QUOTE" },
+              "enforcement": {
+                "const": "CALLBACK_AFTER_OFFLINE_ED25519_VERIFICATION_ONLY"
+              },
+              "intendedAgent": { "$ref": "#/components/schemas/AgentId" },
+              "adversaryAgent": { "$ref": "#/components/schemas/AgentId" }
+            }
+          },
+          "signer": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["issuer", "kid", "alg", "publicKey"],
+            "properties": {
+              "issuer": { "const": "stoppage" },
+              "kid": { "type": "string" },
+              "alg": { "const": "Ed25519" },
+              "publicKey": { "type": "string" }
+            }
+          },
+          "counters": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "capturedRequests",
+              "blockedRequests",
+              "verifiedPermits",
+              "callbacksAfterBlock",
+              "callbacksWithoutVerifiedPermit",
+              "crossAgentPermitTheftsRejected"
+            ],
+            "properties": {
+              "capturedRequests": { "type": "integer", "minimum": 1 },
+              "blockedRequests": { "type": "integer", "minimum": 1 },
+              "verifiedPermits": { "type": "integer", "minimum": 1 },
+              "callbacksAfterBlock": { "const": 0 },
+              "callbacksWithoutVerifiedPermit": { "const": 0 },
+              "crossAgentPermitTheftsRejected": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          },
+          "decisions": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "allowHealthyQuote",
+              "allowCertifiedReopen",
+              "blockedUncertainty",
+              "blockedOther"
+            ],
+            "properties": {
+              "allowHealthyQuote": { "type": "integer", "minimum": 0 },
+              "allowCertifiedReopen": { "type": "integer", "minimum": 1 },
+              "blockedUncertainty": { "type": "integer", "minimum": 0 },
+              "blockedOther": { "type": "integer", "minimum": 0 }
+            }
+          },
+          "sampleProof": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "decision",
+              "permit",
+              "intendedAgent",
+              "crossAgentAttempt"
+            ],
+            "properties": {
+              "decision": {
+                "type": "string",
+                "const": "ALLOW_CERTIFIED_REOPEN"
+              },
+              "permit": { "$ref": "#/components/schemas/PermitV2" },
+              "intendedAgent": {
+                "$ref": "#/components/schemas/TapeAgentOutcome"
+              },
+              "crossAgentAttempt": {
+                "$ref": "#/components/schemas/TapeAgentOutcome"
+              }
+            }
+          },
+          "candidateHash": { "$ref": "#/components/schemas/Hash" },
+          "approvedAt": { "type": "string", "format": "date-time" },
+          "approval": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["statement"],
+            "properties": { "statement": { "type": "string" } }
+          }
+        }
+      },
+      "TapeAgentOutcome": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "audience", "verification", "callbackInvoked"],
+        "properties": {
+          "id": { "$ref": "#/components/schemas/AgentId" },
+          "audience": { "$ref": "#/components/schemas/Audience" },
+          "verification": { "type": "string" },
+          "callbackInvoked": { "type": "boolean" }
         }
       },
       "VerificationKeySet": {
