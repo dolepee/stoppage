@@ -13,12 +13,14 @@ test("renders the exact Live Decision Tape candidate without disclosure or overf
 }) => {
   const candidate = JSON.parse(await readFile(candidatePath!, "utf8")) as {
     candidateHash: string;
+    requiredApproval: string;
     payload: Record<string, unknown>;
   };
   const preview = {
     ...candidate.payload,
     candidateHash: candidate.candidateHash,
     approvedAt: new Date().toISOString(),
+    approval: { statement: candidate.requiredApproval },
   };
   await page.route("**/api/live-decision-tape", (route) =>
     route.fulfill({

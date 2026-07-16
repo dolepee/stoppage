@@ -67,7 +67,12 @@ export interface LiveDecisionTape {
   };
   candidateHash: string;
   approvedAt: string;
+  approval: {
+    statement: string;
+  };
 }
+
+const LIVE_TAPE_APPROVAL_PREFIX = "APPROVE STOPPAGE LIVE DECISION TAPE";
 
 export function parseLiveDecisionTape(value: unknown): LiveDecisionTape {
   if (!isRecord(value)) throw new Error("Live decision tape is malformed");
@@ -81,6 +86,7 @@ export function parseLiveDecisionTape(value: unknown): LiveDecisionTape {
   const permitBody = requiredRecord(permit, "body");
   const intendedAgent = requiredRecord(sampleProof, "intendedAgent");
   const crossAgentAttempt = requiredRecord(sampleProof, "crossAgentAttempt");
+  const approval = requiredRecord(value, "approval");
 
   if (
     value.version !== 1 ||
@@ -104,6 +110,10 @@ export function parseLiveDecisionTape(value: unknown): LiveDecisionTape {
     (sampleProof.decision !== "ALLOW_HEALTHY_QUOTE" &&
       sampleProof.decision !== "ALLOW_CERTIFIED_REOPEN") ||
     !isHash(value.candidateHash) ||
+    typeof signer.kid !== "string" ||
+    signer.kid.length === 0 ||
+    approval.statement !==
+      `${LIVE_TAPE_APPROVAL_PREFIX} ${signer.kid} ${value.candidateHash}` ||
     !Number.isFinite(Date.parse(asString(value.approvedAt)))
   ) {
     throw new Error("Live decision tape failed contract validation");

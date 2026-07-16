@@ -16,6 +16,16 @@ describe("live decision tape parser", () => {
     incomplete.counters.blockedRequests = 0;
     expect(() => parseLiveDecisionTape(incomplete)).toThrow(/invariants/);
   });
+
+  it("rejects tape evidence without its exact human approval", () => {
+    const missingApproval = { ...fixture(), approval: undefined };
+    expect(() => parseLiveDecisionTape(missingApproval)).toThrow(/approval/);
+
+    const wrongApproval = fixture();
+    wrongApproval.approval.statement =
+      "APPROVE STOPPAGE LIVE DECISION TAPE stp_wrong 0xwrong";
+    expect(() => parseLiveDecisionTape(wrongApproval)).toThrow(/contract/);
+  });
 });
 
 function fixture() {
@@ -86,5 +96,8 @@ function fixture() {
     },
     candidateHash: `0x${"2".repeat(64)}`,
     approvedAt: "2026-07-16T16:00:00.000Z",
+    approval: {
+      statement: `APPROVE STOPPAGE LIVE DECISION TAPE stp_1234567890abcdef 0x${"2".repeat(64)}`,
+    },
   };
 }
