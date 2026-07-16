@@ -27,6 +27,7 @@ describe("live decision tape", () => {
     const invokeAgentB = vi.fn(createLiveTapeVenueReceipt);
     const recorder = new LiveDecisionTapeRecorder({
       signer,
+      clock: () => 0,
       appendRecord: async (record) => records.push(record),
       writeStatus: async (status) => statuses.push(status),
       claimNonce: createNonceClaimer(),
@@ -82,6 +83,7 @@ describe("live decision tape", () => {
     const invokeAgentB = vi.fn(createLiveTapeVenueReceipt);
     const recorder = new LiveDecisionTapeRecorder({
       signer,
+      clock: () => 0,
       appendRecord: async () => undefined,
       writeStatus: async () => undefined,
       claimNonce: createNonceClaimer(),
@@ -117,6 +119,7 @@ describe("live decision tape", () => {
     const recorder = new LiveDecisionTapeRecorder({
       signer,
       source: "TXLINE_CAPTURE_REPLAY",
+      clock: () => 0,
       appendRecord: async () => undefined,
       writeStatus: async () => undefined,
       claimNonce: createNonceClaimer(),
@@ -145,6 +148,7 @@ describe("live decision tape", () => {
     const appendRecord = vi.fn();
     const recorder = new LiveDecisionTapeRecorder({
       signer,
+      clock: () => 0,
       appendRecord,
       writeStatus: async () => undefined,
       claimNonce: createNonceClaimer(),
@@ -165,6 +169,7 @@ describe("live decision tape", () => {
       .mockResolvedValue(undefined);
     const recorder = new LiveDecisionTapeRecorder({
       signer,
+      clock: () => 0,
       appendRecord,
       writeStatus: async () => undefined,
       claimNonce: createNonceClaimer(),
@@ -200,6 +205,7 @@ describe("live decision tape", () => {
     const invokeAgentA = vi.fn(createLiveTapeVenueReceipt);
     const recorder = new LiveDecisionTapeRecorder({
       signer,
+      clock: () => 0,
       appendRecord: async () => undefined,
       writeStatus: async () => undefined,
       claimNonce: createNonceClaimer(),
@@ -218,6 +224,32 @@ describe("live decision tape", () => {
       callbackReceiptHash: null,
     });
     expect(invokeAgentA).toHaveBeenCalledOnce();
+  });
+
+  it("reverifies expiry after the durable nonce claim", async () => {
+    let clock = 10_000;
+    const invokeAgentA = vi.fn(createLiveTapeVenueReceipt);
+    const recorder = new LiveDecisionTapeRecorder({
+      signer,
+      clock: () => clock,
+      appendRecord: async () => undefined,
+      writeStatus: async () => undefined,
+      claimNonce: () => {
+        clock = 15_000;
+        return true;
+      },
+      invokeAgentA,
+      invokeAgentB: createLiveTapeVenueReceipt,
+    });
+
+    const record = await recorder.record(checkpointAt(12), 10_000);
+
+    expect(record.agentA).toMatchObject({
+      verification: { valid: false, decision: "BLOCK_PERMIT_EXPIRED" },
+      callbackInvoked: false,
+      callbackReceiptHash: null,
+    });
+    expect(invokeAgentA).not.toHaveBeenCalled();
   });
 
   it("drops overflow beyond a fixed queue bound and reports it once", async () => {

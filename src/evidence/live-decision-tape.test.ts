@@ -130,6 +130,7 @@ describe("public live decision-tape evidence", () => {
     const records: LiveDecisionTapeRecord[] = [];
     const recorder = new LiveDecisionTapeRecorder({
       signer,
+      clock: () => 0,
       appendRecord: async (record) => records.push(record),
       writeStatus: async () => undefined,
       claimNonce: createNonceClaimer(),
@@ -158,6 +159,7 @@ describe("public live decision-tape evidence", () => {
     const recorder = new LiveDecisionTapeRecorder({
       signer,
       source: "TXLINE_CAPTURE_REPLAY",
+      clock: () => 0,
       appendRecord: async (record) => records.push(record),
       writeStatus: async () => undefined,
       claimNonce: createNonceClaimer(),
@@ -211,6 +213,7 @@ async function completeTape(): Promise<LiveDecisionTapeRecord[]> {
   const records: LiveDecisionTapeRecord[] = [];
   const recorder = new LiveDecisionTapeRecorder({
     signer,
+    clock: () => 0,
     appendRecord: async (record) => records.push(record),
     writeStatus: async () => undefined,
     claimNonce: createNonceClaimer(),

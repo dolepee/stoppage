@@ -128,6 +128,7 @@ export interface LiveDecisionTapeStatus {
 interface LiveDecisionTapeRecorderOptions {
   signer: PermitSigner;
   source?: LiveDecisionTapeRecord["source"];
+  clock?: () => number;
   appendRecord?: (record: LiveDecisionTapeRecord) => Promise<unknown>;
   writeStatus?: (status: LiveDecisionTapeStatus) => Promise<unknown>;
   claimNonce: LiveTapeNonceClaimer;
@@ -139,6 +140,7 @@ export class LiveDecisionTapeRecorder {
   readonly #signer: PermitSigner;
   readonly #keys: PermitVerificationKeySet;
   readonly #source: LiveDecisionTapeRecord["source"];
+  readonly #clock: () => number;
   readonly #appendRecord: (record: LiveDecisionTapeRecord) => Promise<unknown>;
   readonly #writeStatus: (status: LiveDecisionTapeStatus) => Promise<unknown>;
   readonly #claimNonce: LiveTapeNonceClaimer;
@@ -150,6 +152,7 @@ export class LiveDecisionTapeRecorder {
     this.#signer = options.signer;
     this.#keys = publicKeySetFor(options.signer);
     this.#source = options.source ?? "TXLINE_LIVE_QUOTE";
+    this.#clock = options.clock ?? Date.now;
     this.#appendRecord =
       options.appendRecord ??
       ((record) =>
@@ -226,11 +229,24 @@ export class LiveDecisionTapeRecorder {
             reason: "The one-use request nonce has already been consumed.",
           };
         } else {
-          const action = venueActionFor(intent, response.result.permit, now);
-          const receipt = await this.#invokeAgentA(action);
-          assertVenueReceipt(receipt, action);
-          agentACallbackInvoked = true;
-          agentACallbackReceiptHash = receipt.actionHash;
+          const invocationNow = Math.max(now, this.#clock());
+          agentAVerification = verifyPermit({
+            permit: response.result.permit,
+            intent,
+            keys: this.#keys,
+            now: invocationNow,
+          });
+          if (agentAVerification.valid) {
+            const action = venueActionFor(
+              intent,
+              response.result.permit,
+              invocationNow,
+            );
+            const receipt = await this.#invokeAgentA(action);
+            assertVenueReceipt(receipt, action);
+            agentACallbackInvoked = true;
+            agentACallbackReceiptHash = receipt.actionHash;
+          }
         }
       }
 
