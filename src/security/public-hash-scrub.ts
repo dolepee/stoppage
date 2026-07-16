@@ -32,6 +32,8 @@ export function scrubApprovedLiveDecisionTapeHashes(content: string) {
           reopenProofHash?: string | null;
         };
       };
+      intendedAgent?: { callbackReceiptHash?: string | null };
+      crossAgentAttempt?: { callbackReceiptHash?: string | null };
     };
   };
   const body = tape.sampleProof?.permit?.body;
@@ -43,6 +45,8 @@ export function scrubApprovedLiveDecisionTapeHashes(content: string) {
     body?.configHash,
     body?.stateReceiptHash,
     body?.reopenProofHash,
+    tape.sampleProof?.intendedAgent?.callbackReceiptHash,
+    tape.sampleProof?.crossAgentAttempt?.callbackReceiptHash,
   ].filter((value): value is string => Boolean(value));
 
   return approvedHashes.reduce(

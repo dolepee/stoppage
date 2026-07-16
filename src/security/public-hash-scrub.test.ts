@@ -9,6 +9,7 @@ const unknownHash = `0x${"b".repeat(64)}`;
 const permitHash = `0x${"c".repeat(64)}`;
 const subjectHash = `0x${"d".repeat(64)}`;
 const quoteHash = `0x${"e".repeat(64)}`;
+const callbackReceiptHash = `0x${"f".repeat(64)}`;
 
 describe("scrubApprovedPublicClaimHashes", () => {
   it("scrubs explicitly labeled candidate hashes", () => {
@@ -45,6 +46,9 @@ describe("scrubApprovedLiveDecisionTapeHashes", () => {
             quoteHash,
           },
         },
+        intendedAgent: {
+          callbackReceiptHash,
+        },
       },
       unrelated: unknownHash,
     });
@@ -52,6 +56,7 @@ describe("scrubApprovedLiveDecisionTapeHashes", () => {
     const scrubbed = scrubApprovedLiveDecisionTapeHashes(content);
     expect(scrubbed).not.toContain(digest);
     expect(scrubbed).not.toContain(subjectHash);
+    expect(scrubbed).not.toContain(callbackReceiptHash);
     expect(scrubbed).toContain(unknownHash);
   });
 });
