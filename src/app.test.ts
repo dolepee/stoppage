@@ -468,6 +468,53 @@ describe("operator API", () => {
     });
   }, 5_000);
 
+  it("serves retired permit verification keys alongside active keys", async () => {
+    const activeSigner = createPermitSigner(
+      Uint8Array.from({ length: 32 }, (_, index) => 11 + index),
+    );
+    const retiredSigner = createPermitSigner(
+      Uint8Array.from({ length: 32 }, (_, index) => 33 + index),
+    );
+    const application = await createApplication({
+      logger: false,
+      serveStatic: false,
+      loadPermitSigner: () => activeSigner,
+      loadRetiredPermitVerificationKeys: () => [
+        {
+          kid: retiredSigner.kid,
+          alg: "Ed25519",
+          use: "sig",
+          publicKey: Buffer.from(retiredSigner.publicKey).toString("base64url"),
+          status: "RETIRED",
+        },
+      ],
+    });
+    applications.push(application);
+    await application.runtime.start(16);
+
+    const keys = await application.app.inject({
+      method: "GET",
+      url: "/api/permit-keys",
+    });
+    expect(keys.statusCode).toBe(200);
+    const payload = keys.json();
+    expect(payload.keys).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          alg: "Ed25519",
+          use: "sig",
+          status: "ACTIVE",
+          publicKey: Buffer.from(activeSigner.publicKey).toString("base64url"),
+        }),
+        expect.objectContaining({
+          kid: retiredSigner.kid,
+          status: "RETIRED",
+          publicKey: Buffer.from(retiredSigner.publicKey).toString("base64url"),
+        }),
+      ]),
+    );
+  }, 5_000);
+
   it("evaluates a fresh private live-worker context without exposing its fixture", async () => {
     const live = liveExecutionFixture();
     const application = await createApplication({

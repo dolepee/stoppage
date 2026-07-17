@@ -1,5 +1,6 @@
 import {
   loadPermitSigner,
+  loadRetiredPermitVerificationKeys,
   publicKeySetFor,
 } from "../src/execution-gate/permit-v2.js";
 
@@ -13,7 +14,9 @@ export default {
     }
 
     try {
-      return Response.json(publicKeySetFor(loadPermitSigner()), {
+      const signer = loadPermitSigner();
+      const retiredKeys = loadRetiredPermitVerificationKeys();
+      return Response.json(publicKeySetFor(signer, retiredKeys), {
         headers: {
           "Cache-Control": "no-store",
           "X-Content-Type-Options": "nosniff",

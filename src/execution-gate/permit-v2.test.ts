@@ -11,6 +11,7 @@ import {
   inspectExecutionPermitV2,
   issueExecutionPermitV2,
   loadPermitSigner,
+  loadRetiredPermitVerificationKeys,
   nonceKey,
   publicKeySetFor,
   type PermitV2RequestBinding,
@@ -19,6 +20,40 @@ import {
 const signer = createPermitSigner(Uint8Array.from({ length: 32 }, (_, i) => i));
 
 describe("authenticated execution permit v2", () => {
+  it("loads retired verification keys from JSON configuration", () => {
+    const retiredSigner = createPermitSigner(
+      Uint8Array.from({ length: 32 }, (_, index) => 64 + index),
+    );
+    expect(
+      loadRetiredPermitVerificationKeys({
+        STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS: JSON.stringify([
+          {
+            kid: retiredSigner.kid,
+            publicKey: Buffer.from(retiredSigner.publicKey).toString(
+              "base64url",
+            ),
+          },
+        ]),
+      }),
+    ).toEqual([
+      {
+        kid: retiredSigner.kid,
+        alg: "Ed25519",
+        use: "sig",
+        status: "RETIRED",
+        publicKey: Buffer.from(retiredSigner.publicKey).toString("base64url"),
+      },
+    ]);
+  });
+
+  it("rejects malformed retired key configuration", () => {
+    expect(() =>
+      loadRetiredPermitVerificationKeys({
+        STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS: "not-json",
+      }),
+    ).toThrow("must be JSON");
+  });
+
   it("loads a dedicated raw signing seed from an ignored file", () => {
     const root = mkdtempSync(join(tmpdir(), "stoppage-permit-seed-"));
     const path = join(root, "permit.seed");
