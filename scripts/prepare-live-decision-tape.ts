@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { buildLiveDecisionTapeCandidate } from "../src/evidence/live-decision-tape.js";
 import {
   loadPermitSigner,
+  loadRetiredPermitVerificationKeys,
   publicKeySetFor,
 } from "../src/execution-gate/permit-v2.js";
 import type { LiveDecisionTapeRecord } from "../src/live/live-decision-tape.js";
@@ -16,9 +17,10 @@ const records = await readJsonLines(
   resolve(privateRoot, "live-decision-tape.jsonl"),
 );
 const signer = loadPermitSigner({ ...process.env, NODE_ENV: "production" });
+const retiredKeys = loadRetiredPermitVerificationKeys(process.env);
 const candidate = buildLiveDecisionTapeCandidate(
   records,
-  publicKeySetFor(signer),
+  publicKeySetFor(signer, retiredKeys),
 );
 const path = await writePrivateCapture(
   `live-decision-tape-candidate-${new Date()
