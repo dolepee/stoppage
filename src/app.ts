@@ -190,6 +190,58 @@ export async function createApplication(options: ApplicationOptions = {}) {
       .send(getPublicAgentContext());
   });
 
+  app.get("/api/judge-bundle", async (_request, reply) => {
+    const query = z
+      .object({
+        approvedConfigHash: z
+          .string()
+          .regex(/^0x[0-9a-fA-F]{64}$/)
+          .optional(),
+      })
+      .passthrough()
+      .default({})
+      .parse(_request.query);
+
+    const [publicClaim, liveDecisionTape] = await Promise.all([
+      loadLatestPublicClaim(publicClaimRoot, query.approvedConfigHash),
+      loadPublicLiveDecisionTape(publicClaimRoot),
+    ]);
+
+    if (!publicClaim && !liveDecisionTape) {
+      return reply.code(404).send({
+        error: "Judge evidence bundle not available",
+      });
+    }
+
+    return reply
+      .header("Cache-Control", "public, max-age=30, s-maxage=120")
+      .send({
+        version: 1,
+        status: "AVAILABLE",
+        network: "solana-mainnet",
+        generatedAt: new Date().toISOString(),
+        dataBoundary:
+          "Judge evidence is restricted to public, synthetic checkpoints and derived execution artifacts; no raw feed vectors, source ids, source timestamps, API tokens, wallet keys, or venue credentials are included.",
+        publicClaim: publicClaim
+          ? {
+              available: true,
+              payload: publicClaim,
+            }
+          : {
+              available: false,
+              reason: query.approvedConfigHash
+                ? `No approved public claim found for ${query.approvedConfigHash}`
+                : "No approved public claim is available",
+            },
+        liveDecisionTape: liveDecisionTape
+          ? {
+              available: true,
+              payload: liveDecisionTape,
+            }
+          : { available: false, reason: "No approved live decision tape is available" },
+      });
+  });
+
   app.get("/api/permit-keys", async (_request, reply) => {
     const signer = resolvePermitSigner();
     const retiredKeys = resolveRetiredPermitKeys();

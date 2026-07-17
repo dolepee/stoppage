@@ -87,6 +87,94 @@
         }
       }
     },
+    "/api/public-claim": {
+      "get": {
+        "summary": "Read the published Stoppage public claim",
+        "description": "Returns the latest judge-facing claim candidate after the second human approval gate. The response contains only derived lifecycle and holdout summaries, no raw TxLINE vectors or secrets. A missing or unapproved candidate returns 404.",
+        "operationId": "getPublicClaim",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "approvedConfigHash",
+            "required": false,
+            "schema": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Approved public claim",
+            "content": {
+              "application/json": {
+                "schema": { "type": "object" }
+              }
+            }
+          },
+          "404": {
+            "description": "No approved public claim is available"
+          },
+          "400": { "description": "Invalid request" },
+          "405": { "description": "Only GET is supported" }
+        }
+      }
+    },
+    "/api/judge-bundle": {
+      "get": {
+        "summary": "Read all judge-facing public evidence",
+        "description": "Returns a one-shot bundle containing the approved public claim and live decision tape availability together. Used to satisfy the public-judge checklist quickly in front of a reviewer.",
+        "operationId": "getJudgeBundle",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "approvedConfigHash",
+            "required": false,
+            "schema": { "type": "string", "pattern": "^0x[0-9a-fA-F]{64}$" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Judge-facing evidence bundle",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["version", "status", "network", "generatedAt", "dataBoundary", "publicClaim", "liveDecisionTape"],
+                  "properties": {
+                    "version": { "type": "integer", "example": 1 },
+                    "status": { "type": "string", "example": "AVAILABLE" },
+                    "network": { "type": "string", "example": "solana-mainnet" },
+                    "generatedAt": { "type": "string", "format": "date-time" },
+                    "dataBoundary": { "type": "string" },
+                    "publicClaim": {
+                      "type": "object",
+                      "required": ["available"],
+                      "properties": {
+                        "available": { "type": "boolean" },
+                        "reason": { "type": "string" },
+                        "payload": { "type": "object" }
+                      }
+                    },
+                    "liveDecisionTape": {
+                      "type": "object",
+                      "required": ["available"],
+                      "properties": {
+                        "available": { "type": "boolean" },
+                        "reason": { "type": "string" },
+                        "payload": { "type": "object" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No public judge evidence is available"
+          },
+          "400": { "description": "Invalid request" },
+          "405": { "description": "Only GET is supported" }
+        }
+      }
+    },
     "/api/live-decision-tape": {
       "get": {
         "summary": "Inspect the approved Live Decision Tape",
