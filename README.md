@@ -129,8 +129,9 @@ Permit V1 remains available for compatibility, but the enforcement adapter
 never accepts V1 as authority to execute.
 
 The Integration Lab and packaged example are repo-owned reference consumers.
-They prove the integration contract and callback boundary; this submission does
-not claim an independent third-party SDK deployment.
+They prove the integration contract and callback boundary. A separate invited
+builder-run compatibility check is documented below; it establishes clean
+external installation and callback enforcement, not production adoption.
 
 Production deployments must provide `STOPPAGE_PERMIT_SIGNING_SEED` as a
 base64url-encoded 32-byte Ed25519 seed. A local persistent worker may instead
@@ -154,6 +155,26 @@ trust server-returned attack grades. The public endpoint remains visibly
 synthetic. The persistent live-worker integration still uses
 `POST /api/execution-gate/evaluate` and fails closed when its private context is
 missing or stale; that private route is not advertised on the static judge host.
+
+### External builder-run compatibility
+
+Invited builder
+[`@Ridwannurudeen`](https://github.com/Ridwannurudeen) installed the published
+`@stoppage/sdk` v0.2.3 artifact in a separate public, non-fork repository and
+ran the supplied compatibility check in GitHub Actions. The hosted run verified
+the release checksum, called Stoppage's public synthetic gate, rejected 6/6
+modified-permit attacks, confirmed future-time verification could not evict a
+live nonce claim, blocked cross-client replay, and executed the simulated venue
+callback exactly once.
+
+- [External repository](https://github.com/Ridwannurudeen/stoppage-sdk-external-check)
+- [Successful hosted run](https://github.com/Ridwannurudeen/stoppage-sdk-external-check/actions/runs/29603337409)
+- [Pinned external commit `335e087`](https://github.com/Ridwannurudeen/stoppage-sdk-external-check/commit/335e087eb099877cc9e6816bd8fef8b1c7d9daea)
+
+Stoppage supplied the guide and the endpoint is synthetic. This is invited
+external builder-run compatibility evidence, not an independent security audit,
+production adoption, real trading activity, or verification of private
+real-match metrics.
 
 ### Live Decision Tape
 
@@ -222,6 +243,8 @@ scenario instead of exposing private worker uptime.
 - Permit keys for public synthetic verification: [`/api/permit-keys`](https://stoppage-txline.vercel.app/api/permit-keys)
 - Installable SDK artifact: [`@stoppage/sdk v0.2.3`](https://github.com/dolepee/stoppage/releases/download/sdk-v0.2.3/stoppage-sdk-0.2.3.tgz)
 - SDK source and quickstart: [`packages/sdk`](packages/sdk)
+- External builder-run check: [`@Ridwannurudeen/stoppage-sdk-external-check`](https://github.com/Ridwannurudeen/stoppage-sdk-external-check)
+- Hosted external check: [GitHub Actions run `29603337409`](https://github.com/Ridwannurudeen/stoppage-sdk-external-check/actions/runs/29603337409)
 - Callback-enforced example: [`examples/enforced-market-maker.ts`](examples/enforced-market-maker.ts)
 - Legacy Permit V1 client: [`src/integration/stoppage-agent-client.ts`](src/integration/stoppage-agent-client.ts)
 
@@ -245,6 +268,9 @@ pnpm sdk:consumer:verify
   compatibility plus Ed25519-signed Permit V2, offline verification, exact
   action/audience/nonce bindings, expiry, sequence revocation and adversarial
   enforcement tests.
+- Invited external builder-run compatibility: passed from a separate public,
+  non-fork repository against the v0.2.3 release artifact, with 6/6 mutation
+  attacks and cross-client replay rejected before a second callback.
 - Live gate bridge: the persistent worker projects private governor state into a
   shared runtime context, and the application API fails closed if that context
   is missing, invalid, or more than five seconds old.

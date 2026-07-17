@@ -87,7 +87,7 @@ const routeMetadata: Record<AppRoute, { title: string; description: string }> =
     "/evidence": {
       title: "Evidence · Stoppage",
       description:
-        "Inspect approved Stoppage holdout aggregates, receipt-bound lifecycle evidence, public JSON, and separate TxLINE Solana validation proof.",
+        "Inspect approved Stoppage holdout aggregates, receipt-bound lifecycle evidence, separate TxLINE Solana validation, and an invited external builder-run SDK check.",
     },
     "/system": {
       title: "System · Stoppage",
@@ -911,9 +911,9 @@ function EvidencePage({
     <>
       <PageIntro
         index="03"
-        eyebrow="Independent verification"
+        eyebrow="Public verification"
         title="Evidence"
-        description="Approved holdout aggregates and receipt-bound lifecycle decisions, plus a separate TxLINE finalized-score validation path on Solana."
+        description="Approved holdout aggregates and receipt-bound lifecycle decisions, a separate TxLINE finalized-score validation path on Solana, and an invited external builder-run SDK compatibility check."
       >
         <div className="page-status-block">
           <span>Public claim</span>
@@ -931,8 +931,103 @@ function EvidencePage({
           <ProofPanel snapshot={snapshot} />
           <ClaimRegister claim={claim} status={claimStatus} />
         </section>
+
+        <ExternalCompatibilityEvidence />
       </div>
     </>
+  );
+}
+
+function ExternalCompatibilityEvidence() {
+  return (
+    <section
+      className="external-compatibility"
+      aria-labelledby="external-compatibility-title"
+    >
+      <div className="external-compatibility-copy">
+        <div className="section-title-row">
+          <div>
+            <span>Invited external builder run</span>
+            <h2 id="external-compatibility-title">
+              External builder-run SDK check
+            </h2>
+          </div>
+          <Bot size={20} aria-hidden="true" />
+        </div>
+
+        <div className="external-compatibility-verdict">
+          <Check size={14} strokeWidth={2.5} aria-hidden="true" />
+          <strong>Hosted check passed</strong>
+          <code>335e087</code>
+        </div>
+
+        <p className="external-compatibility-summary">
+          Invited builder <strong>@Ridwannurudeen</strong> installed{" "}
+          <code>@stoppage/sdk v0.2.3</code> in a separate public, non-fork
+          repository. GitHub Actions matched the published artifact checksum,
+          called Stoppage&apos;s synthetic gate, rejected every tested attack,
+          and executed the simulated venue callback exactly once.
+        </p>
+
+        <div className="external-compatibility-actions">
+          <a
+            href="https://github.com/Ridwannurudeen/stoppage-sdk-external-check"
+            target="_blank"
+            rel="noreferrer"
+          >
+            External repository <ExternalLink size={13} aria-hidden="true" />
+          </a>
+          <a
+            href="https://github.com/Ridwannurudeen/stoppage-sdk-external-check/actions/runs/29603337409"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Hosted Actions run <ExternalLink size={13} aria-hidden="true" />
+          </a>
+          <a
+            href="https://github.com/Ridwannurudeen/stoppage-sdk-external-check/commit/335e087eb099877cc9e6816bd8fef8b1c7d9daea"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Pinned commit <ExternalLink size={13} aria-hidden="true" />
+          </a>
+        </div>
+
+        <p className="external-compatibility-boundary">
+          Stoppage supplied the guide and the endpoint is synthetic. This is
+          external compatibility evidence, not an independent security audit,
+          production adoption, real trading, or verification of private
+          real-match metrics.
+        </p>
+      </div>
+
+      <dl className="external-compatibility-results">
+        <div>
+          <dt>SDK artifact</dt>
+          <dd>v0.2.3</dd>
+        </div>
+        <div>
+          <dt>Mutation attacks</dt>
+          <dd>6/6 rejected</dd>
+        </div>
+        <div>
+          <dt>Future-time eviction</dt>
+          <dd>Blocked</dd>
+        </div>
+        <div>
+          <dt>Cross-client replay</dt>
+          <dd>Blocked</dd>
+        </div>
+        <div>
+          <dt>Venue callback</dt>
+          <dd>1 execution</dd>
+        </div>
+        <div>
+          <dt>Hosted workflow</dt>
+          <dd>Passed</dd>
+        </div>
+      </dl>
+    </section>
   );
 }
 

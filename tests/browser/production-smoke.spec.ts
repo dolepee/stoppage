@@ -132,6 +132,29 @@ test.describe("Stoppage release browser gate", () => {
     await expect(page).toHaveURL(/\/evidence$/);
     await expect(page).toHaveTitle("Evidence · Stoppage");
     await expectCanonical(page, "/evidence");
+    await expect(
+      page.getByRole("heading", {
+        name: "External builder-run SDK check",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("@Ridwannurudeen", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "External repository", exact: true }),
+    ).toHaveAttribute(
+      "href",
+      "https://github.com/Ridwannurudeen/stoppage-sdk-external-check",
+    );
+    await expect(
+      page.getByRole("link", { name: "Hosted Actions run", exact: true }),
+    ).toHaveAttribute(
+      "href",
+      "https://github.com/Ridwannurudeen/stoppage-sdk-external-check/actions/runs/29603337409",
+    );
+    await expect(page.getByText("6/6 rejected", { exact: true })).toBeVisible();
+    await expect(page.getByText("1 execution", { exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await primaryNavigation
