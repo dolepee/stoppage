@@ -146,8 +146,10 @@ test.describe("Stoppage release browser gate", () => {
     expect(Object.keys(contract.paths ?? {}).sort()).toEqual([
       "/api/agent-context",
       "/api/agent-gate",
+      "/api/judge-bundle",
       "/api/live-decision-tape",
       "/api/permit-keys",
+      "/api/public-claim",
     ]);
 
     const context = await request.get("/api/agent-context");
@@ -198,6 +200,19 @@ test.describe("Stoppage release browser gate", () => {
       });
     } else {
       expect(tape.status()).toBe(404);
+    }
+
+    const judgeBundle = await request.get("/api/judge-bundle");
+    if (approvedTapePublished) {
+      expect(judgeBundle.status()).toBe(200);
+      await expect(judgeBundle.json()).resolves.toMatchObject({
+        version: 1,
+        status: "AVAILABLE",
+        publicClaim: { available: true },
+        liveDecisionTape: { available: true },
+      });
+    } else {
+      expect(judgeBundle.status()).toBe(404);
     }
 
     expect(browserErrors).toEqual(

@@ -321,6 +321,7 @@ Stoppage uses the TxLINE mainnet deployment:
 | Historical odds                          | `/api/odds/updates/{epochDay}/{hour}/{interval}` |
 | Score proof                              | `/api/scores/stat-validation`                    |
 | Public claim                             | `/api/public-claim`                              |
+| Judge bundle (one-shot evidence)         | `/api/judge-bundle`                              |
 | Live Decision Tape                       | `/api/live-decision-tape`                        |
 | Public agent context                     | `/api/agent-context`                             |
 | Public agent gate                        | `/api/agent-gate`                                |
@@ -454,6 +455,7 @@ proof, receipt, or policy binding.
 For a public, no-credential judge pass, run these three checks in order:
 
 ```bash
+curl -sS https://stoppage-txline.vercel.app/api/judge-bundle | jq '.status, .publicClaim.available, .liveDecisionTape.available'
 curl -sS https://stoppage-txline.vercel.app/api/public-claim | jq '.status, .approvedConfigHash, .holdout.completeProtectedWindows, .holdout.preResolutionRepricesInvalidated'
 curl -sS https://stoppage-txline.vercel.app/api/live-decision-tape | jq '.counters.capturedRequests, .counters.callbacksAfterBlock, .counters.callbacksWithoutVerifiedPermit, .sampleProof.decision'
 curl -sS https://stoppage-txline.vercel.app/api/live-decision-tape | jq '.sampleProof.permit.body.kid, .sampleProof.permit.body.audience, .sampleProof.intendedAgent.audience, .signer.kid'

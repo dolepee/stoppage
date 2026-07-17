@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
-import { rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -62,6 +61,7 @@ const TXLINE_SIGNATURE = [
   "11rNwyb1EtDLadn9qQe",
   "GZzuXXwPd",
 ].join("");
+const MISMATCH_HASH = `0x${"0".repeat(64)}`;
 
 afterEach(async () => {
   await Promise.all(applications.splice(0).map(({ app }) => app.close()));
@@ -228,6 +228,188 @@ describe("operator API", () => {
         url: "/api/public-claim",
       });
       expect(response.statusCode).toBe(404);
+    } finally {
+      await rm(dataRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("serves a judge bundle when claim and live tape are both available", async () => {
+    const dataRoot = await mkdtemp(
+      join(tmpdir(), "txodds-public-bundle-" + "XXXXXX"),
+    );
+    try {
+      const publicClaim = await readFile(
+        "data/public/public-claim.json",
+        "utf8",
+      );
+      await writeFile(join(dataRoot, "public-claim.json"), publicClaim);
+
+      const liveDecisionTape = await readFile(
+        "data/public/live-decision-tape.json",
+        "utf8",
+      );
+      await writeFile(
+        join(dataRoot, "live-decision-tape.json"),
+        liveDecisionTape,
+      );
+
+      const application = await createApplication({
+        logger: false,
+        serveStatic: false,
+        publicClaimRoot: dataRoot,
+      });
+      applications.push(application);
+
+      const bundle = await application.app.inject({
+        method: "GET",
+        url: "/api/judge-bundle",
+      });
+      expect(bundle.statusCode).toBe(200);
+      const payload = bundle.json();
+
+      expect(payload).toMatchObject({
+        version: 1,
+        status: "AVAILABLE",
+        network: "solana-mainnet",
+        publicClaim: {
+          available: true,
+          payload: {
+            approvedConfigHash: expect.any(String),
+            status: "AVAILABLE",
+          },
+        },
+        liveDecisionTape: {
+          available: true,
+          payload: {
+            status: "AVAILABLE",
+            evidenceType: "RECORDED_BUILDER_ATTESTED_TXLINE_DECISION_TAPE",
+          },
+        },
+      });
+      expect(payload.dataBoundary).toContain("Judge evidence is restricted");
+    } finally {
+      await rm(dataRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("returns 404 for judge bundle when no evidence is available", async () => {
+    const dataRoot = await mkdtemp(
+      join(tmpdir(), "txodds-judge-bundle-empty-" + "XXXXXX"),
+    );
+    try {
+      const application = await createApplication({
+        logger: false,
+        serveStatic: false,
+        publicClaimRoot: dataRoot,
+      });
+      applications.push(application);
+
+      const bundle = await application.app.inject({
+        method: "GET",
+        url: "/api/judge-bundle",
+      });
+      expect(bundle.statusCode).toBe(404);
+      expect(bundle.json()).toMatchObject({
+        error: "Judge evidence bundle not available",
+      });
+    } finally {
+      await rm(dataRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("returns judge bundle with partial public evidence availability", async () => {
+    const dataRoot = await mkdtemp(
+      join(tmpdir(), "txodds-judge-bundle-partial-" + "XXXXXX"),
+    );
+    try {
+      await writeFile(
+        join(dataRoot, "public-claim.json"),
+        JSON.stringify(approvedClaimFixture()),
+      );
+
+      const application = await createApplication({
+        logger: false,
+        serveStatic: false,
+        publicClaimRoot: dataRoot,
+      });
+      applications.push(application);
+
+      const bundle = await application.app.inject({
+        method: "GET",
+        url: "/api/judge-bundle",
+      });
+      expect(bundle.statusCode).toBe(200);
+      expect(bundle.json()).toMatchObject({
+        version: 1,
+        status: "AVAILABLE",
+        publicClaim: {
+          available: true,
+        },
+        liveDecisionTape: {
+          available: false,
+          reason: "No approved live decision tape is available",
+        },
+      });
+    } finally {
+      await rm(dataRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("filters public claim by approvedConfigHash in judge bundle", async () => {
+    const dataRoot = await mkdtemp(
+      join(tmpdir(), "txodds-judge-bundle-config-hash-" + "XXXXXX"),
+    );
+    try {
+      const expectedClaimFile = await readFile(
+        "data/public/public-claim.json",
+        "utf8",
+      );
+      const expectedClaim = JSON.parse(expectedClaimFile) as {
+        approvedConfigHash: string;
+      };
+      await writeFile(join(dataRoot, "public-claim.json"), expectedClaimFile);
+
+      const liveDecisionTape = await readFile(
+        "data/public/live-decision-tape.json",
+        "utf8",
+      );
+      await writeFile(
+        join(dataRoot, "live-decision-tape.json"),
+        liveDecisionTape,
+      );
+
+      const application = await createApplication({
+        logger: false,
+        serveStatic: false,
+        publicClaimRoot: dataRoot,
+      });
+      applications.push(application);
+
+      const match = await application.app.inject({
+        method: "GET",
+        url: `/api/judge-bundle?approvedConfigHash=${expectedClaim.approvedConfigHash}`,
+      });
+      expect(match.statusCode).toBe(200);
+      expect(match.json()).toMatchObject({
+        version: 1,
+        status: "AVAILABLE",
+        publicClaim: { available: true },
+      });
+
+      const mismatch = await application.app.inject({
+        method: "GET",
+        url: `/api/judge-bundle?approvedConfigHash=${MISMATCH_HASH}`,
+      });
+      expect(mismatch.statusCode).toBe(200);
+      expect(mismatch.json()).toMatchObject({
+        version: 1,
+        status: "AVAILABLE",
+        publicClaim: {
+          available: false,
+          reason: `No approved public claim found for ${MISMATCH_HASH}`,
+        },
+        liveDecisionTape: { available: true },
+      });
     } finally {
       await rm(dataRoot, { recursive: true, force: true });
     }
