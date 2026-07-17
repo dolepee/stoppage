@@ -131,14 +131,17 @@ export function buildLiveDecisionTapeCandidate(
   ) {
     throw new Error("The tape has no independently verifiable permit sample");
   }
-  const activeKey = keys.keys.find(
+  const signingKey = keys.keys.find(
     (key) =>
       key.kid === sample.signer.kid &&
       key.alg === "Ed25519" &&
-      key.status === "ACTIVE",
+      (key.status === "ACTIVE" || key.status === "RETIRED"),
   );
-  if (!activeKey || keys.issuer !== sample.signer.issuer) {
-    throw new Error("The tape signer is absent from the active public key set");
+  if (!signingKey) {
+    throw new Error("The tape signer is absent from the public key set");
+  }
+  if (keys.issuer !== sample.signer.issuer) {
+    throw new Error("The tape signer is from an unknown issuer");
   }
 
   const intendedAgent = sample.agentA.intent.agentId;
@@ -169,9 +172,9 @@ export function buildLiveDecisionTapeCandidate(
     },
     signer: {
       issuer: keys.issuer,
-      kid: activeKey.kid,
-      alg: activeKey.alg,
-      publicKey: activeKey.publicKey,
+      kid: signingKey.kid,
+      alg: signingKey.alg,
+      publicKey: signingKey.publicKey,
     },
     counters,
     decisions,
@@ -201,7 +204,7 @@ export function buildLiveDecisionTapeCandidate(
   const candidateHash = sha256(payload);
   return {
     candidateHash,
-    requiredApproval: `${LIVE_TAPE_APPROVAL_PREFIX} ${activeKey.kid} ${candidateHash}`,
+    requiredApproval: `${LIVE_TAPE_APPROVAL_PREFIX} ${signingKey.kid} ${candidateHash}`,
     payload,
   };
 }
@@ -369,6 +372,7 @@ function validateRecord(
       request: record.agentA.intent,
       keys,
       now: permit.body.issuedAt,
+      allowRetiredSigners: true,
     });
     if (!intended.valid) {
       throw new Error("The recorded intended-agent permit is not verifiable");
@@ -405,6 +409,7 @@ function validateRecord(
       request: record.agentB.intent,
       keys,
       now: permit.body.issuedAt,
+      allowRetiredSigners: true,
     });
     if (
       stolen.valid ||
@@ -435,7 +440,9 @@ function validateRecord(
   if (
     record.signer.issuer !== keys.issuer ||
     !keys.keys.some(
-      (key) => key.kid === record.signer.kid && key.status === "ACTIVE",
+      (key) =>
+        key.kid === record.signer.kid &&
+        (key.status === "ACTIVE" || key.status === "RETIRED"),
     )
   ) {
     throw new Error("A private tape record has an unknown signer");

@@ -77,6 +77,9 @@ export interface PermitVerificationKey {
   status: "ACTIVE" | "RETIRED";
 }
 
+const STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS =
+  "STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS";
+
 export interface PermitVerificationKeySet {
   version: 1;
   issuer: string;
@@ -113,6 +116,7 @@ export interface PermitV2VerificationOptions {
   keys: PermitVerificationKeySet;
   now: number;
   usedNonces?: ReadonlySet<string>;
+  allowRetiredSigners?: boolean;
 }
 
 const developmentSeed = Uint8Array.from([
@@ -160,6 +164,64 @@ export function loadPermitSigner(
   return createPermitSigner(developmentSeed);
 }
 
+export function loadRetiredPermitVerificationKeys(
+  environment: NodeJS.ProcessEnv = process.env,
+): PermitVerificationKey[] {
+  const raw = environment.STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS;
+  if (!raw) return [];
+  let payload: unknown;
+  try {
+    payload = JSON.parse(raw);
+  } catch (error) {
+    throw new Error("STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS must be JSON");
+  }
+  if (!Array.isArray(payload)) {
+    throw new Error(
+      "STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS must be a JSON array",
+    );
+  }
+  return payload.map((entry, index) => {
+    if (
+      !entry ||
+      typeof entry !== "object" ||
+      Object.keys(entry as Record<string, unknown>).length !== 2 ||
+      !("kid" in entry) ||
+      !("publicKey" in entry)
+    ) {
+      throw new Error(
+        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}] must include kid and publicKey`,
+      );
+    }
+    const { kid, publicKey } = entry as {
+      kid: unknown;
+      publicKey: unknown;
+    };
+    if (typeof kid !== "string" || kid.length < 4) {
+      throw new Error(
+        `STOPPAGE_RETIRED_VERIFICATION_KEYS[${index}].kid must be a non-empty string`,
+      );
+    }
+    if (typeof publicKey !== "string" || publicKey.length < 4) {
+      throw new Error(
+        `STOPPAGE_RETIRED_VERIFICATION_KEYS[${index}].publicKey must be a non-empty base64url string`,
+      );
+    }
+    const decoded = decodeBase64Url(publicKey);
+    if (decoded.length !== nacl.sign.publicKeyLength) {
+      throw new Error(
+        `STOPPAGE_RETIRED_VERIFICATION_KEYS[${index}].publicKey must decode to ${nacl.sign.publicKeyLength} bytes`,
+      );
+    }
+    return {
+      kid,
+      alg: "Ed25519",
+      use: "sig",
+      publicKey,
+      status: "RETIRED",
+    } satisfies PermitVerificationKey;
+  });
+}
+
 function readOwnerOnlySeedFile(path: string): Uint8Array {
   const descriptor = openSync(
     path,
@@ -189,6 +251,9 @@ export function publicKeySetFor(
   signer: PermitSigner,
   retiredKeys: readonly PermitVerificationKey[] = [],
 ): PermitVerificationKeySet {
+  if (new Set(retiredKeys.map((key) => key.kid)).has(signer.kid)) {
+    throw new Error("Retired key list must not include the active key");
+  }
   return {
     version: 1,
     issuer: signer.issuer,
@@ -267,6 +332,7 @@ export function inspectExecutionPermitV2({
   keys,
   now,
   usedNonces,
+  allowRetiredSigners,
 }: PermitV2VerificationOptions): PermitV2VerificationResult {
   try {
     if (!validPermitShape(permit) || !validRequestShape(request)) {
@@ -286,7 +352,8 @@ export function inspectExecutionPermitV2({
         candidate.kid === permit.body.kid &&
         candidate.alg === "Ed25519" &&
         candidate.use === "sig" &&
-        candidate.status === "ACTIVE",
+        (candidate.status === "ACTIVE" ||
+          (allowRetiredSigners && candidate.status === "RETIRED")),
     );
     if (!key) {
       return blocked(

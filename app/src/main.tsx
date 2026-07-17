@@ -1473,19 +1473,14 @@ function ApprovedEvidencePanel({
             and confirm: 0 unsafe callbacks and non-zero captured requests.
           </li>
           <li>
-            <strong>Permit and evidence boundaries:</strong> open{" "}
-            <a href="/api/permit-keys" target="_blank" rel="noreferrer">
-              /api/permit-keys
-            </a>
-            and{" "}
-            <a
-              href={claim.lifecycleEvidence.txlineValidation.explorer}
-              target="_blank"
-              rel="noreferrer"
-            >
-              TxLINE on-chain proof
-            </a>
-            ; both are separate records from the synthetic replay layer.
+            <strong>Tape-bound permit sample:</strong> open{" "}
+            <a href="/api/live-decision-tape" target="_blank" rel="noreferrer">
+              /api/live-decision-tape
+            </a>{" "}
+            and confirm the signed sample inside `payload.sampleProof.permit`
+            plus `payload.sampleProof.signer.kid`, then validate it against the
+            embedded `payload.signer` entry. This proves a single tape
+            reconstruction is self-consistent.
           </li>
         </ol>
         <p>
@@ -2017,7 +2012,7 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
           OpenAPI contract <ExternalLink size={11} aria-hidden="true" />
         </a>
         <a href="/api/permit-keys" target="_blank" rel="noreferrer">
-          Verification keys <ExternalLink size={11} aria-hidden="true" />
+          Synthetic verifier keys <ExternalLink size={11} aria-hidden="true" />
         </a>
         <a
           href="https://github.com/dolepee/stoppage/tree/main/packages/sdk"

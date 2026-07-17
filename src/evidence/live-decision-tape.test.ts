@@ -128,6 +128,50 @@ describe("public live decision-tape evidence", () => {
     await expect(loadPublicLiveDecisionTape(root)).resolves.toBeNull();
   });
 
+  it("accepts a retired sample key when it is included in the verification key set", async () => {
+    const currentSigner = createPermitSigner(
+      Uint8Array.from({ length: 32 }, (_, index) => 3),
+    );
+    const retiredSigner = createPermitSigner(
+      Uint8Array.from({ length: 32 }, (_, index) => 33 + index),
+    );
+
+    const records: LiveDecisionTapeRecord[] = [];
+    const recorder = new LiveDecisionTapeRecorder({
+      signer: retiredSigner,
+      clock: () => 10_000,
+      appendRecord: async (record) => records.push(record),
+      writeStatus: async () => undefined,
+      claimNonce: createNonceClaimer(),
+      invokeAgentA: createLiveTapeVenueReceipt,
+      invokeAgentB: createLiveTapeVenueReceipt,
+    });
+
+    await recorder.record(checkpointAt(3), 20_000);
+    await recorder.record(checkpointAt(12), 30_000);
+
+    const candidate = buildLiveDecisionTapeCandidate(
+      records,
+      publicKeySetFor(currentSigner, [
+        {
+          kid: retiredSigner.kid,
+          alg: "Ed25519",
+          use: "sig",
+          publicKey: Buffer.from(retiredSigner.publicKey).toString("base64url"),
+          status: "RETIRED",
+        },
+      ]),
+    );
+
+    expect(candidate.payload.signer.kid).toBe(retiredSigner.kid);
+    const approved = buildApprovedLiveDecisionTape({
+      candidate,
+      approvalStatement: candidate.requiredApproval,
+      approvedAt: "2026-07-16T16:00:00.000Z",
+    });
+    expect(approved.signer.kid).toBe(retiredSigner.kid);
+  });
+
   it("requires Certified Reopen rather than an ordinary healthy allow", async () => {
     const records: LiveDecisionTapeRecord[] = [];
     const recorder = new LiveDecisionTapeRecorder({

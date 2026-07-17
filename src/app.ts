@@ -26,6 +26,7 @@ import {
 } from "./execution-gate/public-agent-lab.js";
 import {
   loadPermitSigner,
+  loadRetiredPermitVerificationKeys,
   publicKeySetFor,
   type PermitSigner,
 } from "./execution-gate/permit-v2.js";
@@ -45,6 +46,9 @@ interface ApplicationOptions {
   readLiveGateState?: LiveGateStateReader;
   publicClaimRoot?: string;
   loadPermitSigner?: () => PermitSigner;
+  loadRetiredPermitVerificationKeys?: () => ReturnType<
+    typeof loadRetiredPermitVerificationKeys
+  >;
 }
 
 type PersistedWorkerStatus = LiveWorkerStatus & { updatedAt: string };
@@ -63,6 +67,9 @@ export async function createApplication(options: ApplicationOptions = {}) {
     options.readLiveGateState ?? (() => readLiveExecutionState());
   const publicClaimRoot = options.publicClaimRoot ?? "data/public";
   const resolvePermitSigner = options.loadPermitSigner ?? loadPermitSigner;
+  const resolveRetiredPermitKeys =
+    options.loadRetiredPermitVerificationKeys ??
+    loadRetiredPermitVerificationKeys;
 
   app.addHook("onRequest", async (_request, reply) => {
     reply
@@ -184,9 +191,11 @@ export async function createApplication(options: ApplicationOptions = {}) {
   });
 
   app.get("/api/permit-keys", async (_request, reply) => {
+    const signer = resolvePermitSigner();
+    const retiredKeys = resolveRetiredPermitKeys();
     return reply
       .header("Cache-Control", "no-store")
-      .send(publicKeySetFor(resolvePermitSigner()));
+      .send(publicKeySetFor(signer, retiredKeys));
   });
 
   app.get("/api/worker-health", async () => {
