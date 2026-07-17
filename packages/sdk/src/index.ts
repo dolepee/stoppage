@@ -247,7 +247,7 @@ export class StoppageClient {
       permit,
       intent,
       keys,
-      now: now ?? wallClockNow,
+      now: now === undefined ? wallClockNow : now,
       usedNonces: this.#usedNonces,
     });
   }

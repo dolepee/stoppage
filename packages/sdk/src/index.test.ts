@@ -107,6 +107,20 @@ describe("@stoppage/sdk enforcement adapter", () => {
     });
   });
 
+  it("fails closed on an explicitly malformed verification timestamp", () => {
+    const now = Date.now();
+    const intent = makeIntent("malformed-time-nonce-0001");
+    const permit = makePermit(intent, now);
+    const client = new StoppageClient({ keySet: keys });
+
+    expect(
+      client.verifyPermit(permit, intent, keys, null as never),
+    ).toMatchObject({
+      valid: false,
+      decision: "BLOCK_PERMIT_EXPIRED",
+    });
+  });
+
   it("never invokes the venue callback on a BLOCK decision", async () => {
     const intent = makeIntent("blocked-nonce-0001");
     const callback = vi.fn();
