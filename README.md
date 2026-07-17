@@ -109,8 +109,8 @@ through `POST /api/agent-gate`. Permit V2 wraps an allowed governor decision in
 an Ed25519 signature bound to the issuer key, agent, audience, one-use request
 nonce, command, quote, policy, receipt, Certified Reopen proof, sequence and
 five-second expiry. Public verification keys are discovered from
-`GET /api/permit-keys`, so an agent can verify the permit offline immediately
-before calling its venue adapter.
+`GET /api/permit-keys`, so an agent can verify the synthetic lab permit envelope
+immediately before calling a venue adapter.
 
 The installable `@stoppage/sdk` release artifact exposes `discoverContext()`,
 `evaluate()`, `verifyPermit()`, `runBenchLite()` and `guardAction()`. The public
@@ -210,7 +210,7 @@ scenario instead of exposing private worker uptime.
 
 - Machine-readable contract: [`/openapi.json`](https://stoppage-txline.vercel.app/openapi.json)
 - Public integration context: [`/api/agent-context`](https://stoppage-txline.vercel.app/api/agent-context)
-- Permit keys for Permit V2: [`/api/permit-keys`](https://stoppage-txline.vercel.app/api/permit-keys)
+- Permit keys for synthetic lab verification: [`/api/permit-keys`](https://stoppage-txline.vercel.app/api/permit-keys)
 - Installable SDK artifact: [`@stoppage/sdk v0.2.1`](https://github.com/dolepee/stoppage/releases/download/sdk-v0.2.1/stoppage-sdk-0.2.1.tgz)
 - SDK source and quickstart: [`packages/sdk`](packages/sdk)
 - Callback-enforced example: [`examples/enforced-market-maker.ts`](examples/enforced-market-maker.ts)
@@ -309,23 +309,23 @@ pnpm dev
 
 Stoppage uses the TxLINE mainnet deployment:
 
-| Item                  | Value                                            |
-| --------------------- | ------------------------------------------------ |
-| Network               | Solana mainnet                                   |
-| TxLINE program        | `9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA`   |
-| Free real-time tier   | Service level `12`                               |
-| API origin            | `https://txline.txodds.com`                      |
-| Odds stream           | `/api/odds/stream`                               |
-| Scores stream         | `/api/scores/stream`                             |
-| Historical scores     | `/api/scores/historical/{fixtureId}`             |
-| Historical odds       | `/api/odds/updates/{epochDay}/{hour}/{interval}` |
-| Score proof           | `/api/scores/stat-validation`                    |
-| Public claim          | `/api/public-claim`                              |
-| Live Decision Tape    | `/api/live-decision-tape`                        |
-| Public agent context  | `/api/agent-context`                             |
-| Public agent gate     | `/api/agent-gate`                                |
-| Permit keys           | `/api/permit-keys`                               |
-| Self-hosted live gate | `/api/execution-gate/evaluate`                   |
+| Item                        | Value                                            |
+| --------------------------- | ------------------------------------------------ |
+| Network                     | Solana mainnet                                   |
+| TxLINE program              | `9ExbZjAapQww1vfcisDmrngPinHTEfpjYRWMunJgcKaA`   |
+| Free real-time tier         | Service level `12`                               |
+| API origin                  | `https://txline.txodds.com`                      |
+| Odds stream                 | `/api/odds/stream`                               |
+| Scores stream               | `/api/scores/stream`                             |
+| Historical scores           | `/api/scores/historical/{fixtureId}`             |
+| Historical odds             | `/api/odds/updates/{epochDay}/{hour}/{interval}` |
+| Score proof                 | `/api/scores/stat-validation`                    |
+| Public claim                | `/api/public-claim`                              |
+| Live Decision Tape          | `/api/live-decision-tape`                        |
+| Public agent context        | `/api/agent-context`                             |
+| Public agent gate           | `/api/agent-gate`                                |
+| Permit keys (synthetic lab) | `/api/permit-keys`                               |
+| Self-hosted live gate       | `/api/execution-gate/evaluate`                   |
 
 The setup scripts deliberately separate wallet operations from the server:
 
@@ -456,7 +456,7 @@ For a public, no-credential judge pass, run these three checks in order:
 ```bash
 curl -sS https://stoppage-txline.vercel.app/api/public-claim | jq '.status, .approvedConfigHash, .holdout.completeProtectedWindows, .holdout.preResolutionRepricesInvalidated'
 curl -sS https://stoppage-txline.vercel.app/api/live-decision-tape | jq '.counters.capturedRequests, .counters.callbacksAfterBlock, .counters.callbacksWithoutVerifiedPermit, .sampleProof.decision'
-curl -sS https://stoppage-txline.vercel.app/api/permit-keys | jq 'keys'
+curl -sS https://stoppage-txline.vercel.app/api/live-decision-tape | jq '.sampleProof.permit.body.kid, .sampleProof.permit.body.audience, .sampleProof.intendedAgent.audience, .signer.kid'
 ```
 
 Expected signatures from the current published release:
@@ -466,6 +466,9 @@ Expected signatures from the current published release:
 - `live-decision-tape.counters.callbacksAfterBlock` is `0`
 - `live-decision-tape.counters.callbacksWithoutVerifiedPermit` is `0`
 - `live-decision-tape.counters.capturedRequests` is greater than `0`
+- `live-decision-tape.sampleProof.permit.body.audience` matches
+  `live-decision-tape.sampleProof.intendedAgent.audience`, and
+  `live-decision-tape.signer.kid` matches `sampleProof.permit.body.kid`.
 
 For final sanity, open the app and verify:
 
