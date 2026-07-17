@@ -42,6 +42,16 @@ test.describe("Stoppage release browser gate", () => {
         exact: true,
       }),
     ).toBeVisible();
+    await expect(
+      page.getByText("Interactive · simulated data", { exact: true }),
+    ).toBeVisible();
+    if (approvedTapePublished) {
+      await expect(
+        page.getByText("20 captured requests · 0 unsafe callbacks", {
+          exact: true,
+        }),
+      ).toBeVisible();
+    }
 
     const primaryNavigation = page.getByRole("navigation", {
       name: "Primary navigation",

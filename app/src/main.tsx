@@ -329,6 +329,8 @@ function App() {
             snapshot={snapshot}
             claim={publicClaim}
             claimStatus={claimStatus}
+            tape={liveTape}
+            tapeStatus={liveTapeStatus}
           />
         ) : route === "/demo" ? (
           <ControlPage
@@ -368,11 +370,20 @@ function HomePage({
   snapshot,
   claim,
   claimStatus,
+  tape,
+  tapeStatus,
 }: {
   snapshot: RuntimeSnapshot;
   claim: PublicClaim | null;
   claimStatus: ClaimStatus;
+  tape: LiveDecisionTape | null;
+  tapeStatus: ClaimStatus;
 }) {
+  const unsafeCallbacks = tape
+    ? tape.counters.callbacksAfterBlock +
+      tape.counters.callbacksWithoutVerifiedPermit
+    : null;
+
   return (
     <>
       <section className="home-hero" aria-labelledby="home-title">
@@ -468,6 +479,20 @@ function HomePage({
                 <span>No valid signed permit, no callback.</span>
               </div>
             </div>
+            <AppLink className="home-tape-proof" to="/demo">
+              <Radio size={16} aria-hidden="true" />
+              <span>
+                <small>Approved Live Decision Tape</small>
+                <strong>
+                  {tape
+                    ? `${tape.counters.capturedRequests} captured requests · ${unsafeCallbacks} unsafe callbacks`
+                    : tapeStatus === "loading"
+                      ? "Reading recorded agent enforcement"
+                      : "Recorded enforcement evidence unavailable"}
+                </strong>
+              </span>
+              <ArrowRight size={15} aria-hidden="true" />
+            </AppLink>
           </section>
         </div>
       </section>
@@ -1642,7 +1667,9 @@ function resolveAppRoute(): AppRoute {
 function DataMode({ mode }: { mode: RuntimeSnapshot["dataMode"] }) {
   return (
     <span className={`data-mode ${mode.toLowerCase()}`}>
-      {mode === "SYNTHETIC" ? "Simulated · not live" : "Recorded TxLINE replay"}
+      {mode === "SYNTHETIC"
+        ? "Interactive · simulated data"
+        : "Recorded TxLINE replay"}
     </span>
   );
 }

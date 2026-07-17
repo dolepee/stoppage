@@ -2,6 +2,13 @@
   "name": "stoppage",
   "version": "0.1.0",
   "private": true,
+  "description": "Pre-trade firewall for autonomous sports agents, driven by TxLINE on Solana",
+  "license": "MIT",
+  "homepage": "https://stoppage-txline.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dolepee/stoppage.git"
+  },
   "type": "module",
   "engines": {
     "node": ">=22"
