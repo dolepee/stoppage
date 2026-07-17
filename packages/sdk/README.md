@@ -8,7 +8,7 @@ The SDK is packaged as a GitHub Release artifact rather than published to the
 npm registry in this submission release:
 
 ```bash
-npm install https://github.com/dolepee/stoppage/releases/download/sdk-v0.2.2/stoppage-sdk-0.2.2.tgz
+npm install https://github.com/dolepee/stoppage/releases/download/sdk-v0.2.3/stoppage-sdk-0.2.3.tgz
 ```
 
 ## Runnable public quickstart
@@ -56,7 +56,8 @@ permit is live, and the request nonce has not already been consumed. Nonce
 protection is shared across `StoppageClient` instances created from one loaded
 SDK module. It remains in-memory, non-durable, and non-distributed. Entries
 retain only the permit expiry and are pruned after the five-second permit
-lifetime.
+lifetime using the runtime wall clock. A caller-supplied timestamp used for
+offline verification cannot evict a live nonce claim.
 
 The exported `runBenchLite()` helper mutates a signed permit six ways and sends
 every candidate through this package's offline verifier. The browser Judge Lab

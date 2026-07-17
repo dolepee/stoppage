@@ -236,7 +236,10 @@ export class StoppageClient {
     keys: PermitVerificationKeySet,
     now = Date.now(),
   ): PermitVerificationResult {
-    this.#pruneUsedNonces(now);
+    // `now` supports deterministic offline verification, but it is caller
+    // controlled. Shared replay state must only be evicted by the runtime
+    // clock so one client cannot remove another client's live nonce claim.
+    this.#pruneUsedNonces();
     return verifyPermit({
       permit,
       intent,
@@ -335,7 +338,8 @@ export class StoppageClient {
     };
   }
 
-  #pruneUsedNonces(now: number): void {
+  #pruneUsedNonces(): void {
+    const now = Date.now();
     for (const [key, expiresAt] of this.#usedNonces) {
       if (expiresAt <= now) this.#usedNonces.delete(key);
     }
