@@ -1487,9 +1487,8 @@ function ApprovedEvidencePanel({
         </ol>
         <p>
           /api/live-decision-tape is the judge evidence for tape authenticity.
-          The "/api/permit-keys" endpoint only serves synthetic lab validation
-          keys used by the in-app Bench Lite challenge flow and is not tape
-          proof.
+          /api/permit-keys serves public synthetic verification keys used by the
+          in-app public challenge flow, and is not tape proof.
         </p>
         <p>
           Candidate hash:{" "}
@@ -2020,7 +2019,7 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
           OpenAPI contract <ExternalLink size={11} aria-hidden="true" />
         </a>
         <a href="/api/permit-keys" target="_blank" rel="noreferrer">
-          Synthetic verifier keys (lab only; not tape proof){" "}
+          Public synthetic verifier keys (not tape proof){" "}
           <ExternalLink size={11} aria-hidden="true" />
         </a>
         <a
