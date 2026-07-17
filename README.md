@@ -186,8 +186,24 @@ The public `/api/live-decision-tape` response says
 capture, not a claim that the Vercel static deployment runs the persistent
 worker.
 
+The static judge-host contract intentionally omits host-only endpoints that are
+available only in the long-running worker runtime:
+
+- `/api/status`
+- `/api/health`
+- `/api/worker-health`
+- `/api/host-health`
+- `/api/events`
+- `/api/replay/start`
+- `/api/replay/stop`
+- `/api/execution-gate` and `/api/execution-gate/evaluate`
+
+On the judge host, missing host-only endpoints fall back to the synthetic public
+scenario instead of exposing private worker uptime.
+
 - Machine-readable contract: [`/openapi.json`](https://stoppage-txline.vercel.app/openapi.json)
 - Public integration context: [`/api/agent-context`](https://stoppage-txline.vercel.app/api/agent-context)
+- Permit keys for Permit V2: [`/api/permit-keys`](https://stoppage-txline.vercel.app/api/permit-keys)
 - Installable SDK artifact: [`@stoppage/sdk v0.2.1`](https://github.com/dolepee/stoppage/releases/download/sdk-v0.2.1/stoppage-sdk-0.2.1.tgz)
 - SDK source and quickstart: [`packages/sdk`](packages/sdk)
 - Callback-enforced example: [`examples/enforced-market-maker.ts`](examples/enforced-market-maker.ts)
@@ -301,6 +317,7 @@ Stoppage uses the TxLINE mainnet deployment:
 | Live Decision Tape    | `/api/live-decision-tape`                        |
 | Public agent context  | `/api/agent-context`                             |
 | Public agent gate     | `/api/agent-gate`                                |
+| Permit keys           | `/api/permit-keys`                               |
 | Self-hosted live gate | `/api/execution-gate/evaluate`                   |
 
 The setup scripts deliberately separate wallet operations from the server:
@@ -426,6 +443,29 @@ tests, and a production build. `pnpm gate:verify` runs the reference agent from
 blocked execution to a verified Certified Reopen permit. `pnpm reopen:verify`
 independently reruns the public normalized lifecycle and rejects a modified
 proof, receipt, or policy binding.
+
+For a public, no-credential judge pass, run these three checks in order:
+
+```bash
+curl -sS https://stoppage-txline.vercel.app/api/public-claim | jq '.status, .approvedConfigHash, .holdout.completeProtectedWindows, .holdout.preResolutionRepricesInvalidated'
+curl -sS https://stoppage-txline.vercel.app/api/live-decision-tape | jq '.counters.capturedRequests, .counters.callbacksAfterBlock, .counters.callbacksWithoutVerifiedPermit, .sampleProof.decision'
+curl -sS https://stoppage-txline.vercel.app/api/permit-keys | jq 'keys'
+```
+
+Expected signatures from the current published release:
+
+- `public-claim.status` is `AVAILABLE`
+- `public-claim.holdout.completeProtectedWindows` is `18`
+- `live-decision-tape.counters.callbacksAfterBlock` is `0`
+- `live-decision-tape.counters.callbacksWithoutVerifiedPermit` is `0`
+- `live-decision-tape.counters.capturedRequests` is greater than `0`
+
+For final sanity, open the app and verify:
+
+- `/evidence` shows the "Judge quick-verify" checklist and approved hashes.
+- `/system` confirms the fail-closed controls and explicit synthetic/live data boundary.
+- `/demo` reaches a full `BLOCK -> ALLOW_CERTIFIED_REOPEN` path on replay.
+- the `/api/public-claim` candidate hash is stable against the approved manifest.
 
 ## License
 
