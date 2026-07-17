@@ -71,7 +71,7 @@
     "/api/permit-keys": {
       "get": {
         "summary": "Discover Permit V2 verification keys",
-        "description": "Returns the current active Ed25519 public verification key. The schema reserves RETIRED for a future rotation-retention configuration, which is not enabled in this deployment. Private signing material is never returned.",
+        "description": "Returns the current Ed25519 public verification key set used to verify Permit V2 signatures, including retired keys supplied for historical-tape verification. Private signing material is never returned.",
         "operationId": "discoverPermitKeys",
         "responses": {
           "200": {

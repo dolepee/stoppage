@@ -1487,8 +1487,8 @@ function ApprovedEvidencePanel({
         <p>
           /api/live-decision-tape is the judge evidence for tape authenticity.
           The "/api/permit-keys" endpoint only serves synthetic lab
-          validation keys used by the in-app Bench Lite challenge flow and is not
-          tape proof.
+          validation keys used by the in-app Bench Lite challenge flow and is
+          not tape proof.
         </p>
         <p>
           Candidate hash:{" "}

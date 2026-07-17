@@ -126,7 +126,14 @@ accepts V1 as authority to execute.
 Production deployments must provide `STOPPAGE_PERMIT_SIGNING_SEED` as a
 base64url-encoded 32-byte Ed25519 seed. A local persistent worker may instead
 use `STOPPAGE_PERMIT_SIGNING_SEED_FILE` pointing to an ignored mode-0600 raw
-32-byte seed file. Development and tests use an explicitly non-production
+32-byte seed file.
+
+For key rotation, add retired verification keys as a JSON array in
+`STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS` using `{"kid":..., "publicKey":...}` entries;
+retired entries are accepted for historical Live Decision Tape verification but
+never become active signing keys.
+
+Development and tests use an explicitly non-production
 signer; production fails closed rather than falling back to it. Signing material
 is never returned by the key-discovery endpoint or included in the browser
 bundle.
