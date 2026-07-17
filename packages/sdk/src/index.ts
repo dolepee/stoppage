@@ -234,17 +234,20 @@ export class StoppageClient {
     permit: SignedExecutionPermitV2,
     intent: ExecutionIntent,
     keys: PermitVerificationKeySet,
-    now = Date.now(),
+    now?: number,
   ): PermitVerificationResult {
+    const wallClockNow = Date.now();
     // `now` supports deterministic offline verification, but it is caller
     // controlled. Shared replay state must only be evicted by the runtime
     // clock so one client cannot remove another client's live nonce claim.
-    this.#pruneUsedNonces();
+    // Reuse this same clock read for default verification to avoid an expiry
+    // boundary race between validation and eviction.
+    this.#pruneUsedNonces(wallClockNow);
     return verifyPermit({
       permit,
       intent,
       keys,
-      now,
+      now: now ?? wallClockNow,
       usedNonces: this.#usedNonces,
     });
   }
@@ -338,8 +341,7 @@ export class StoppageClient {
     };
   }
 
-  #pruneUsedNonces(): void {
-    const now = Date.now();
+  #pruneUsedNonces(now: number): void {
     for (const [key, expiresAt] of this.#usedNonces) {
       if (expiresAt <= now) this.#usedNonces.delete(key);
     }

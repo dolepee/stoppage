@@ -220,6 +220,39 @@ describe("@stoppage/sdk enforcement adapter", () => {
     }
   });
 
+  it("uses one wall-clock reading at the nonce-expiry boundary", async () => {
+    const now = Date.now();
+    const intent = makeIntent("expiry-boundary-nonce-0001");
+    const response = makeResponse(intent, now);
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async () => jsonResponse(response));
+    const callback = vi.fn(() => "venue-receipt");
+    const client = new StoppageClient({ fetch, keySet: keys });
+    const clock = vi.spyOn(Date, "now").mockReturnValue(now);
+
+    try {
+      await expect(client.guardAction(intent, callback)).resolves.toMatchObject(
+        { status: "VENUE_CALL_EXECUTED" },
+      );
+
+      clock.mockClear();
+      clock
+        .mockReturnValueOnce(response.result.evaluatedAt + 4_999)
+        .mockReturnValue(response.result.evaluatedAt + 5_000);
+      await expect(client.guardAction(intent, callback)).resolves.toMatchObject(
+        {
+          status: "VENUE_CALL_WITHHELD",
+          verification: { decision: "BLOCK_NONCE_REPLAY" },
+        },
+      );
+      expect(clock).toHaveBeenCalledTimes(1);
+      expect(callback).toHaveBeenCalledTimes(1);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+
   it("prunes consumed nonces after their five-second permit lifetime", async () => {
     const now = Date.now();
     const intent = makeIntent("expiring-replay-nonce-0001");
