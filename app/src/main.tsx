@@ -1462,9 +1462,9 @@ function ApprovedEvidencePanel({
             <a href="/api/judge-bundle" target="_blank" rel="noreferrer">
               /api/judge-bundle
             </a>{" "}
-            and confirm both <code>publicClaim</code> and <code>liveDecisionTape</code>{" "}
-            are either available with approved payloads or clearly marked
-            unavailable by explicit reason strings.
+            and confirm both <code>publicClaim</code> and{" "}
+            <code>liveDecisionTape</code> are either available with approved
+            payloads or clearly marked unavailable by explicit reason strings.
           </li>
           <li>
             <strong>Approved claim:</strong> open{" "}
@@ -1495,8 +1495,8 @@ function ApprovedEvidencePanel({
           </li>
         </ol>
         <p>
-          /api/judge-bundle is the one-shot judge review endpoint that checks both
-          the public claim and live decision tape together.
+          /api/judge-bundle is the one-shot judge review endpoint that checks
+          both the public claim and live decision tape together.
           <br />
           /api/live-decision-tape is the judge evidence for tape authenticity.
           /api/permit-keys serves public synthetic verification keys used by the

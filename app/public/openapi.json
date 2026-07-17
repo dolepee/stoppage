@@ -137,11 +137,22 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "required": ["version", "status", "network", "generatedAt", "dataBoundary", "publicClaim", "liveDecisionTape"],
+                  "required": [
+                    "version",
+                    "status",
+                    "network",
+                    "generatedAt",
+                    "dataBoundary",
+                    "publicClaim",
+                    "liveDecisionTape"
+                  ],
                   "properties": {
                     "version": { "type": "integer", "example": 1 },
                     "status": { "type": "string", "example": "AVAILABLE" },
-                    "network": { "type": "string", "example": "solana-mainnet" },
+                    "network": {
+                      "type": "string",
+                      "example": "solana-mainnet"
+                    },
                     "generatedAt": { "type": "string", "format": "date-time" },
                     "dataBoundary": { "type": "string" },
                     "publicClaim": {

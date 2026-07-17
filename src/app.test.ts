@@ -61,6 +61,7 @@ const TXLINE_SIGNATURE = [
   "11rNwyb1EtDLadn9qQe",
   "GZzuXXwPd",
 ].join("");
+const MISMATCH_HASH = `0x${"0".repeat(64)}`;
 
 afterEach(async () => {
   await Promise.all(applications.splice(0).map(({ app }) => app.close()));
@@ -247,7 +248,10 @@ describe("operator API", () => {
         "data/public/live-decision-tape.json",
         "utf8",
       );
-      await writeFile(join(dataRoot, "live-decision-tape.json"), liveDecisionTape);
+      await writeFile(
+        join(dataRoot, "live-decision-tape.json"),
+        liveDecisionTape,
+      );
 
       const application = await createApplication({
         logger: false,
@@ -369,7 +373,10 @@ describe("operator API", () => {
         "data/public/live-decision-tape.json",
         "utf8",
       );
-      await writeFile(join(dataRoot, "live-decision-tape.json"), liveDecisionTape);
+      await writeFile(
+        join(dataRoot, "live-decision-tape.json"),
+        liveDecisionTape,
+      );
 
       const application = await createApplication({
         logger: false,
@@ -391,7 +398,7 @@ describe("operator API", () => {
 
       const mismatch = await application.app.inject({
         method: "GET",
-        url: "/api/judge-bundle?approvedConfigHash=0x0000000000000000000000000000000000000000000000000000000000000000",
+        url: `/api/judge-bundle?approvedConfigHash=${MISMATCH_HASH}`,
       });
       expect(mismatch.statusCode).toBe(200);
       expect(mismatch.json()).toMatchObject({
@@ -399,7 +406,7 @@ describe("operator API", () => {
         status: "AVAILABLE",
         publicClaim: {
           available: false,
-          reason: "No approved public claim found for 0x0000000000000000000000000000000000000000000000000000000000000000",
+          reason: `No approved public claim found for ${MISMATCH_HASH}`,
         },
         liveDecisionTape: { available: true },
       });

@@ -238,7 +238,10 @@ export async function createApplication(options: ApplicationOptions = {}) {
               available: true,
               payload: liveDecisionTape,
             }
-          : { available: false, reason: "No approved live decision tape is available" },
+          : {
+              available: false,
+              reason: "No approved live decision tape is available",
+            },
       });
   });
 
