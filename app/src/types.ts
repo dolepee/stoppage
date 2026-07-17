@@ -87,7 +87,7 @@ export interface RuntimeSnapshot {
     permitTtlMs: number;
     agent: {
       version: 1;
-      name: "External market-maker";
+      name: "Reference market-maker";
       command: "PUBLISH_QUOTE";
       decision: "WAITING" | "BLOCK" | "ALLOW";
       decisionCode:

@@ -14,7 +14,7 @@
   "paths": {
     "/api/agent-gate": {
       "post": {
-        "summary": "Evaluate an external agent action",
+        "summary": "Evaluate an agent action",
         "description": "Rebuilds a deterministic public World Cup checkpoint and evaluates the exact quote action. Version 2 returns an Ed25519-signed permit only for an ALLOW decision. Optional challenge fields expose compatibility diagnostics from the server verifier; the browser Bench Lite instead mutates the permit and runs all six attacks through @stoppage/sdk locally. The endpoint is synthetic and contains no private live match data.",
         "operationId": "evaluateAgentAction",
         "requestBody": {

@@ -107,7 +107,11 @@ export function evaluateHoldout(
         !stableReference ||
         !reopenQuote
       ) {
-        throw new Error("Complete holdout window lacks a quote-backed reprice");
+        // REOPEN is reachable only from REPRICED. Silently dropping this window
+        // would hide either a governor invariant violation or evaluator drift.
+        throw new Error(
+          "Governor invariant violated: REOPEN lacks a quote-backed REPRICE",
+        );
       }
       if (receipt.body.observedTs > activeWindow.segmentStartedAt) {
         activeWindow.segments.push({

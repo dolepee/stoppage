@@ -383,6 +383,13 @@ function HomePage({
     ? tape.counters.callbacksAfterBlock +
       tape.counters.callbacksWithoutVerifiedPermit
     : null;
+  const captureRequestLabel = tape
+    ? tape.captureModes.privateCaptureReplay === tape.counters.capturedRequests
+      ? "capture replays"
+      : tape.captureModes.live === tape.counters.capturedRequests
+        ? "live captures"
+        : "captured requests"
+    : null;
 
   return (
     <>
@@ -447,7 +454,7 @@ function HomePage({
               <li>
                 <span>01</span>
                 <div>
-                  <small>External market-maker</small>
+                  <small>Reference market-maker</small>
                   <strong>Requests quote publication</strong>
                 </div>
                 <code>REQUEST</code>
@@ -485,7 +492,7 @@ function HomePage({
                 <small>Approved Live Decision Tape</small>
                 <strong>
                   {tape
-                    ? `${tape.counters.capturedRequests} captured requests · ${unsafeCallbacks} unsafe callbacks`
+                    ? `${tape.counters.capturedRequests} ${captureRequestLabel} · ${unsafeCallbacks} unsafe callbacks`
                     : tapeStatus === "loading"
                       ? "Reading recorded agent enforcement"
                       : "Recorded enforcement evidence unavailable"}
@@ -607,7 +614,7 @@ function ControlPage({
               Agent gate test
             </h1>
             <p className="product-lede">
-              An external market-maker chooses a quote, then asks Stoppage for
+              A reference market-maker chooses a quote, then asks Stoppage for
               permission to publish it. This synthetic France–Spain VAR what-if
               shows the independent gate block the dead branch and issue a
               receipt-bound permit only after fresh consensus.
@@ -628,8 +635,9 @@ function ControlPage({
               <div>
                 <strong>Risk under test</strong>
                 <span>
-                  The external agent would remain executable after VAR voids the
-                  price branch. Stoppage must reject its request independently.
+                  The reference agent would remain executable after VAR voids
+                  the price branch. Stoppage must reject its request
+                  independently.
                 </span>
               </div>
             </div>
@@ -730,7 +738,7 @@ function ControlPage({
             governed
           />
           <MarketBook
-            title="Unprotected baseline"
+            title="Naive-open baseline"
             subtitle="Always open · follows consensus"
             mode="OPEN"
             probabilities={snapshot.baselineProbability}
@@ -1351,7 +1359,7 @@ function ApprovedEvidenceBand({
               value={String(claim.holdout.preResolutionRepricesInvalidated)}
             />
             <EvidenceStat
-              label="Baseline open · gate closed"
+              label="Naive baseline open · gate closed"
               value={formatDuration(claim.holdout.staleQuoteSeconds)}
             />
             <AppLink className="evidence-jump" to="/evidence">
@@ -1689,11 +1697,11 @@ function ExecutionStage({ snapshot }: { snapshot: RuntimeSnapshot }) {
   return (
     <section
       className={`execution-stage ${stateClass}`}
-      aria-label="External agent permission request evaluated by Stoppage"
+      aria-label="Reference agent permission request evaluated by Stoppage"
       aria-live="polite"
     >
       <div className="agent-request-route" aria-label="Agent request route">
-        <span>Independent client</span>
+        <span>Reference client</span>
         <ArrowRight size={13} aria-hidden="true" />
         <code>PUBLISH_QUOTE</code>
         <ArrowRight size={13} aria-hidden="true" />
@@ -1705,7 +1713,7 @@ function ExecutionStage({ snapshot }: { snapshot: RuntimeSnapshot }) {
             <Bot size={18} />
           </span>
           <span>
-            <small>External agent · {agent.name}</small>
+            <small>Reference agent · {agent.name}</small>
             <strong>{agent.command}</strong>
           </span>
         </div>
@@ -1725,7 +1733,7 @@ function ExecutionStage({ snapshot }: { snapshot: RuntimeSnapshot }) {
 
       <div className="consequence-grid">
         <div className="consequence-cell governed-agent">
-          <span>External agent via Stoppage</span>
+          <span>Reference agent via Stoppage</span>
           <strong>
             {blocked ? "CLOSED" : allowed ? "PUBLISHED" : "WAITING"}
           </strong>
@@ -1740,7 +1748,7 @@ function ExecutionStage({ snapshot }: { snapshot: RuntimeSnapshot }) {
         <div
           className={`consequence-cell baseline-agent ${blocked ? "exposed" : ""}`}
         >
-          <span>Ungoverned baseline</span>
+          <span>Naive-open baseline</span>
           <strong>{baselineExecutable ? "EXECUTABLE" : "WAITING"}</strong>
           <small>
             {blocked
