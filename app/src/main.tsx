@@ -1477,10 +1477,12 @@ function ApprovedEvidencePanel({
             <a href="/api/live-decision-tape" target="_blank" rel="noreferrer">
               /api/live-decision-tape
             </a>{" "}
-            and confirm the signed sample inside `payload.sampleProof.permit`
-            plus `payload.sampleProof.signer.kid`, then validate it against the
-            embedded `payload.signer` entry. This proves a single tape
-            reconstruction is self-consistent.
+            and confirm the signed sample inside `payload.sampleProof.permit`:
+            `payload.sampleProof.permit.body.kid` and
+            `payload.sampleProof.permit.body.audience` should align with the
+            top-level `payload.signer.kid` and
+            `payload.sampleProof.intendedAgent.audience`. This proves a single
+            tape reconstruction is self-consistent.
           </li>
         </ol>
         <p>
