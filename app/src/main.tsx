@@ -1485,6 +1485,11 @@ function ApprovedEvidencePanel({
           </li>
         </ol>
         <p>
+          /api/live-decision-tape is the judge evidence for tape authenticity.
+          The "/api/permit-keys" endpoint only serves synthetic lab validation
+          keys for `/api/permit` challenge flows and is not tape proof.
+        </p>
+        <p>
           Candidate hash:{" "}
           {claim.candidateHash ? shortHash(claim.candidateHash, 16) : "pending"}
           · Approved config: {shortHash(claim.approvedConfigHash, 10)}
@@ -2013,7 +2018,8 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
           OpenAPI contract <ExternalLink size={11} aria-hidden="true" />
         </a>
         <a href="/api/permit-keys" target="_blank" rel="noreferrer">
-          Synthetic verifier keys <ExternalLink size={11} aria-hidden="true" />
+          Synthetic verifier keys (lab only; not tape proof){" "}
+          <ExternalLink size={11} aria-hidden="true" />
         </a>
         <a
           href="https://github.com/dolepee/stoppage/tree/main/packages/sdk"
