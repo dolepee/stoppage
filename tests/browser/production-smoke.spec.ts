@@ -47,7 +47,7 @@ test.describe("Stoppage release browser gate", () => {
     ).toBeVisible();
     if (approvedTapePublished) {
       await expect(
-        page.getByText("20 captured requests · 0 unsafe callbacks", {
+        page.getByText("20 capture replays · 0 unsafe callbacks", {
           exact: true,
         }),
       ).toBeVisible();

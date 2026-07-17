@@ -8,7 +8,7 @@ The SDK is packaged as a GitHub Release artifact rather than published to the
 npm registry in this submission release:
 
 ```bash
-npm install https://github.com/dolepee/stoppage/releases/download/sdk-v0.2.1/stoppage-sdk-0.2.1.tgz
+npm install https://github.com/dolepee/stoppage/releases/download/sdk-v0.2.2/stoppage-sdk-0.2.2.tgz
 ```
 
 ## Runnable public quickstart
@@ -53,9 +53,10 @@ subject hash, and quote hash from its own authorized feed before calling
 `guardAction()` invokes its callback only after an Ed25519 Permit V2 verifies
 against a discovered Stoppage public key, the exact action bindings match, the
 permit is live, and the request nonce has not already been consumed. Nonce
-protection is in-memory and therefore process-local in this release artifact.
-Entries retain only the permit expiry and are pruned after the five-second
-permit lifetime.
+protection is shared across `StoppageClient` instances created from one loaded
+SDK module. It remains in-memory, non-durable, and non-distributed. Entries
+retain only the permit expiry and are pruned after the five-second permit
+lifetime.
 
 The exported `runBenchLite()` helper mutates a signed permit six ways and sends
 every candidate through this package's offline verifier. The browser Judge Lab

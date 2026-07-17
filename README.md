@@ -6,12 +6,12 @@
 
 Live judge console: <https://stoppage-txline.vercel.app>
 
-**Approved agent evidence:** 20 builder-attested TxLINE capture requests, 10
-blocked requests, 10 verified permits, 10 cross-agent permit thefts rejected,
-and 0 unsafe callbacks. [Inspect the frozen Live Decision Tape](https://stoppage-txline.vercel.app/api/live-decision-tape).
+**Verify without credentials:** run `pnpm gate:verify` and
+`pnpm reopen:verify`, then inspect the successful TxODDS mainnet
+[`validateStat` transaction](https://solscan.io/tx/61UyrsHoqMeAAjJHPvnoo4L6F91oiFH4aFe2WQg6LHuLA5sZvQ7wdEoFPndhnPjaWHzkB1bfzZ3r8PSeRJQXDs8E).
 
 Other agents decide what to trade. Stoppage independently decides whether they
-are allowed to execute it. An external reference market-maker must ask Stoppage
+are allowed to execute it. A repo-owned reference market-maker must ask Stoppage
 before publishing a simulated quote. When a provisional goal or VAR incident
 moves the market, Stoppage
 returns `BLOCK`, invalidates any branch formed before the incident resolves,
@@ -106,7 +106,7 @@ helpers before requesting authorization. Verification keys are origin-specific:
 the persistent live origin exposes its live signer, while the static judge
 origin retains its separate synthetic production signer.
 
-### External agent enforcement
+### Agent enforcement SDK
 
 The public Judge Integration Lab sends each meaningful reference-agent decision
 through `POST /api/agent-gate`. Permit V2 wraps an allowed governor decision in
@@ -121,11 +121,16 @@ The installable `@stoppage/sdk` release artifact exposes `discoverContext()`,
 synthetic context endpoint supplies every field needed for the runnable external
 quickstart. `guardAction()` keeps the callback closed on every BLOCK or
 verification failure and claims the nonce synchronously before callback
-invocation. Its replay memory is intentionally process-local in this release;
-entries carry the five-second permit expiry and are pruned after it. Production
-multi-instance replay protection remains outside the submission scope. Permit
-V1 remains available for compatibility, but the enforcement adapter never
-accepts V1 as authority to execute.
+invocation. Replay memory is shared across `StoppageClient` instances created
+from one loaded SDK module. It is in-memory, non-durable, and non-distributed;
+production multi-process replay protection remains outside the submission
+scope. Entries carry the five-second permit expiry and are pruned after it.
+Permit V1 remains available for compatibility, but the enforcement adapter
+never accepts V1 as authority to execute.
+
+The Integration Lab and packaged example are repo-owned reference consumers.
+They prove the integration contract and callback boundary; this submission does
+not claim an independent third-party SDK deployment.
 
 Production deployments must provide `STOPPAGE_PERMIT_SIGNING_SEED` as a
 base64url-encoded 32-byte Ed25519 seed. A local persistent worker may instead
@@ -215,7 +220,7 @@ scenario instead of exposing private worker uptime.
 - Machine-readable contract: [`/openapi.json`](https://stoppage-txline.vercel.app/openapi.json)
 - Public integration context: [`/api/agent-context`](https://stoppage-txline.vercel.app/api/agent-context)
 - Permit keys for public synthetic verification: [`/api/permit-keys`](https://stoppage-txline.vercel.app/api/permit-keys)
-- Installable SDK artifact: [`@stoppage/sdk v0.2.1`](https://github.com/dolepee/stoppage/releases/download/sdk-v0.2.1/stoppage-sdk-0.2.1.tgz)
+- Installable SDK artifact: [`@stoppage/sdk v0.2.2`](https://github.com/dolepee/stoppage/releases/download/sdk-v0.2.2/stoppage-sdk-0.2.2.tgz)
 - SDK source and quickstart: [`packages/sdk`](packages/sdk)
 - Callback-enforced example: [`examples/enforced-market-maker.ts`](examples/enforced-market-maker.ts)
 - Legacy Permit V1 client: [`src/integration/stoppage-agent-client.ts`](src/integration/stoppage-agent-client.ts)
@@ -385,7 +390,13 @@ decisions.
 - `UNBACKED_MOVE`: a configured probability jump arrives without a supporting
   high-impact event inside the confirmation window. This path is implemented
   and adversarially tested, but all 18 real holdout windows were event-led; the
-  odds-led path is not presented as real-data proof.
+  odds-led path is not presented as real-data proof. It can reopen after a
+  stable quote sequence without an incident-resolution record, so it protects
+  against transient unbacked movement but does not prove that a persistent bad
+  consensus is correct.
+- Event support is temporal in this MVP, not causal: any configured high-impact
+  fixture event inside the 30-second window suppresses `UNBACKED_MOVE`. The
+  policy does not yet bind the event to a participant-specific move direction.
 - `STREAM_UNHEALTHY`: either required feed misses its health policy.
 - `REPRICE`: the consensus vector remains inside the configured epsilon for the
   required number of consecutive updates.
@@ -409,10 +420,14 @@ the separately approved public claim binds that exact hash and candidate digest.
 
 Stoppage does not report hypothetical betting profit or in-play CLV.
 
-- `stale_quote_seconds`: time the baseline remains open while the governed book
-  is unavailable.
+- `stale_quote_seconds`: time a deliberately naive, always-open baseline remains
+  executable while the governed book is unavailable. It is exposure duration,
+  not a claim of advantage over a competent market maker.
 - `mispricing_integral`: probability divergence multiplied by time, evaluated
   against the first post-trigger quote satisfying the frozen stability rule.
+  That stabilized reprice is Stoppage's internal evaluation reference, not an
+  independent ground-truth price; fixed-horizon repricing error below is the
+  future-feed comparator.
 - pre-resolution candidate reprices invalidated at confirmation or discard.
 - post-resolution Certified Reopens, split by confirmed and discarded outcomes.
 - suspension and reopen latency.

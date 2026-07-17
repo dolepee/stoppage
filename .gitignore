@@ -11,6 +11,7 @@ data/runtime/
 *.log
 test-results/
 playwright-report/
+packages/sdk/*.tgz
 .DS_Store
 
 # Private hackathon operations stay outside the public repository.

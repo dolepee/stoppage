@@ -172,10 +172,15 @@ export interface StoppageClientOptions {
   keySet?: PermitVerificationKeySet;
 }
 
+// Shared by every client created from this loaded SDK module. This closes
+// same-runtime replay across client instances without implying durable or
+// distributed replay protection.
+const sharedUsedNonces = new Map<string, number>();
+
 export class StoppageClient {
   readonly #baseUrl: string;
   readonly #fetch: typeof fetch;
-  readonly #usedNonces = new Map<string, number>();
+  readonly #usedNonces = sharedUsedNonces;
   #keySet: PermitVerificationKeySet | null;
 
   constructor(options: StoppageClientOptions = {}) {
@@ -315,8 +320,8 @@ export class StoppageClient {
       );
     }
 
-    // Claim the nonce synchronously before callback invocation. This makes the
-    // process-local guard at-most-once even when concurrent promises race.
+    // Claim the nonce synchronously before callback invocation. Every client
+    // from this loaded SDK module observes the claim before a callback can run.
     this.#usedNonces.set(
       nonceKey(response.result.permit.body),
       response.result.permit.body.expiresAt,

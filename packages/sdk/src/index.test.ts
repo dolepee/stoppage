@@ -158,6 +158,29 @@ describe("@stoppage/sdk enforcement adapter", () => {
     ).toBe("BLOCK_NONCE_REPLAY");
   });
 
+  it("rejects replay through a second client instance in the same SDK runtime", async () => {
+    const now = Date.now();
+    const intent = makeIntent("cross-client-nonce-0001");
+    const response = makeResponse(intent, now);
+    const fetch = vi
+      .fn<typeof globalThis.fetch>()
+      .mockImplementation(async () => jsonResponse(response));
+    const callback = vi.fn(() => "venue-receipt");
+    const firstClient = new StoppageClient({ fetch, keySet: keys });
+    const secondClient = new StoppageClient({ fetch, keySet: keys });
+
+    await expect(
+      firstClient.guardAction(intent, callback),
+    ).resolves.toMatchObject({ status: "VENUE_CALL_EXECUTED" });
+    await expect(
+      secondClient.guardAction(intent, callback),
+    ).resolves.toMatchObject({
+      status: "VENUE_CALL_WITHHELD",
+      verification: { decision: "BLOCK_NONCE_REPLAY" },
+    });
+    expect(callback).toHaveBeenCalledTimes(1);
+  });
+
   it("prunes consumed nonces after their five-second permit lifetime", async () => {
     const now = Date.now();
     const intent = makeIntent("expiring-replay-nonce-0001");
