@@ -427,6 +427,29 @@ blocked execution to a verified Certified Reopen permit. `pnpm reopen:verify`
 independently reruns the public normalized lifecycle and rejects a modified
 proof, receipt, or policy binding.
 
+For a public, no-credential judge pass, run these three checks in order:
+
+```bash
+curl -sS https://stoppage-txline.vercel.app/api/public-claim | jq '.status, .approvedConfigHash, .holdout.completeProtectedWindows, .holdout.preResolutionRepricesInvalidated'
+curl -sS https://stoppage-txline.vercel.app/api/live-decision-tape | jq '.counters.capturedRequests, .counters.callbacksAfterBlock, .counters.callbacksWithoutVerifiedPermit, .sampleProof.decision'
+curl -sS https://stoppage-txline.vercel.app/api/permit-keys | jq 'keys'
+```
+
+Expected signatures from the current published release:
+
+- `public-claim.status` is `AVAILABLE`
+- `public-claim.holdout.completeProtectedWindows` is `18`
+- `live-decision-tape.counters.callbacksAfterBlock` is `0`
+- `live-decision-tape.counters.callbacksWithoutVerifiedPermit` is `0`
+- `live-decision-tape.counters.capturedRequests` is greater than `0`
+
+For final sanity, open the app and verify:
+
+- `/evidence` shows the "Judge quick-verify" checklist and approved hashes.
+- `/system` confirms the fail-closed controls and explicit synthetic/live data boundary.
+- `/demo` reaches a full `BLOCK -> ALLOW_CERTIFIED_REOPEN` path on replay.
+- the `/api/public-claim` candidate hash is stable against the approved manifest.
+
 ## License
 
 MIT. The vendored TxODDS IDL remains subject to its upstream ISC licence; see
