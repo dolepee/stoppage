@@ -4,6 +4,12 @@
   "description": "Fail-closed enforcement adapter for Stoppage execution permits",
   "type": "module",
   "license": "MIT",
+  "homepage": "https://stoppage-txline.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dolepee/stoppage.git",
+    "directory": "packages/sdk"
+  },
   "sideEffects": false,
   "files": [
     "dist",

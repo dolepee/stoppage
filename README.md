@@ -6,6 +6,10 @@
 
 Live judge console: <https://stoppage-txline.vercel.app>
 
+**Approved agent evidence:** 20 builder-attested TxLINE capture requests, 10
+blocked requests, 10 verified permits, 10 cross-agent permit thefts rejected,
+and 0 unsafe callbacks. [Inspect the frozen Live Decision Tape](https://stoppage-txline.vercel.app/api/live-decision-tape).
+
 Other agents decide what to trade. Stoppage independently decides whether they
 are allowed to execute it. An external reference market-maker must ask Stoppage
 before publishing a simulated quote. When a provisional goal or VAR incident
