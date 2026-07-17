@@ -383,6 +383,13 @@ function HomePage({
     ? tape.counters.callbacksAfterBlock +
       tape.counters.callbacksWithoutVerifiedPermit
     : null;
+  const captureRequestLabel = tape
+    ? tape.captureModes.privateCaptureReplay === tape.counters.capturedRequests
+      ? "capture replays"
+      : tape.captureModes.live === tape.counters.capturedRequests
+        ? "live captures"
+        : "captured requests"
+    : null;
 
   return (
     <>
@@ -485,7 +492,7 @@ function HomePage({
                 <small>Approved Live Decision Tape</small>
                 <strong>
                   {tape
-                    ? `${tape.counters.capturedRequests} capture replays · ${unsafeCallbacks} unsafe callbacks`
+                    ? `${tape.counters.capturedRequests} ${captureRequestLabel} · ${unsafeCallbacks} unsafe callbacks`
                     : tapeStatus === "loading"
                       ? "Reading recorded agent enforcement"
                       : "Recorded enforcement evidence unavailable"}
