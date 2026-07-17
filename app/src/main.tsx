@@ -1449,6 +1449,52 @@ function ApprovedEvidencePanel({
         </p>
       </div>
 
+      <div className="judge-verification">
+        <span>Judge quick-verify</span>
+        <h3>What a reviewer should check first</h3>
+        <p>
+          The three checks below are public, automatic, and do not require any
+          private credentials.
+        </p>
+        <ol>
+          <li>
+            <strong>Approved claim:</strong> open{" "}
+            <a href="/api/public-claim" target="_blank" rel="noreferrer">
+              /api/public-claim
+            </a>{" "}
+            and confirm: approved status, a live revision hash, and holdout
+            counters.
+          </li>
+          <li>
+            <strong>Live decision tape:</strong> open{" "}
+            <a href="/api/live-decision-tape" target="_blank" rel="noreferrer">
+              /api/live-decision-tape
+            </a>{" "}
+            and confirm: 0 unsafe callbacks and non-zero captured requests.
+          </li>
+          <li>
+            <strong>Permit and evidence boundaries:</strong> open{" "}
+            <a href="/api/permit-keys" target="_blank" rel="noreferrer">
+              /api/permit-keys
+            </a>
+            and{" "}
+            <a
+              href={claim.lifecycleEvidence.txlineValidation.explorer}
+              target="_blank"
+              rel="noreferrer"
+            >
+              TxLINE on-chain proof
+            </a>
+            ; both are separate records from the synthetic replay layer.
+          </li>
+        </ol>
+        <p>
+          Candidate hash:{" "}
+          {claim.candidateHash ? shortHash(claim.candidateHash, 16) : "pending"}
+          · Approved config: {shortHash(claim.approvedConfigHash, 10)}
+        </p>
+      </div>
+
       <div className="evidence-links">
         <a
           href={claim.lifecycleEvidence.txlineValidation.explorer}
