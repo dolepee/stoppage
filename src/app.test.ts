@@ -351,6 +351,63 @@ describe("operator API", () => {
     }
   });
 
+  it("filters public claim by approvedConfigHash in judge bundle", async () => {
+    const dataRoot = await mkdtemp(
+      join(tmpdir(), "txodds-judge-bundle-config-hash-" + "XXXXXX"),
+    );
+    try {
+      const expectedClaimFile = await readFile(
+        "data/public/public-claim.json",
+        "utf8",
+      );
+      const expectedClaim = JSON.parse(expectedClaimFile) as {
+        approvedConfigHash: string;
+      };
+      await writeFile(join(dataRoot, "public-claim.json"), expectedClaimFile);
+
+      const liveDecisionTape = await readFile(
+        "data/public/live-decision-tape.json",
+        "utf8",
+      );
+      await writeFile(join(dataRoot, "live-decision-tape.json"), liveDecisionTape);
+
+      const application = await createApplication({
+        logger: false,
+        serveStatic: false,
+        publicClaimRoot: dataRoot,
+      });
+      applications.push(application);
+
+      const match = await application.app.inject({
+        method: "GET",
+        url: `/api/judge-bundle?approvedConfigHash=${expectedClaim.approvedConfigHash}`,
+      });
+      expect(match.statusCode).toBe(200);
+      expect(match.json()).toMatchObject({
+        version: 1,
+        status: "AVAILABLE",
+        publicClaim: { available: true },
+      });
+
+      const mismatch = await application.app.inject({
+        method: "GET",
+        url: "/api/judge-bundle?approvedConfigHash=0x0000000000000000000000000000000000000000000000000000000000000000",
+      });
+      expect(mismatch.statusCode).toBe(200);
+      expect(mismatch.json()).toMatchObject({
+        version: 1,
+        status: "AVAILABLE",
+        publicClaim: {
+          available: false,
+          reason: "No approved public claim found for 0x0000000000000000000000000000000000000000000000000000000000000000",
+        },
+        liveDecisionTape: { available: true },
+      });
+    } finally {
+      await rm(dataRoot, { recursive: true, force: true });
+    }
+  });
+
   it("returns 404 when no public claim is available", async () => {
     const dataRoot = await mkdtemp(
       join(tmpdir(), "txodds-public-claim-empty-" + "XXXXXX"),
