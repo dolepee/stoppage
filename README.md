@@ -220,7 +220,7 @@ scenario instead of exposing private worker uptime.
 - Machine-readable contract: [`/openapi.json`](https://stoppage-txline.vercel.app/openapi.json)
 - Public integration context: [`/api/agent-context`](https://stoppage-txline.vercel.app/api/agent-context)
 - Permit keys for public synthetic verification: [`/api/permit-keys`](https://stoppage-txline.vercel.app/api/permit-keys)
-- Installable SDK artifact: [`@stoppage/sdk v0.2.2`](https://github.com/dolepee/stoppage/releases/download/sdk-v0.2.2/stoppage-sdk-0.2.2.tgz)
+- Installable SDK artifact: [`@stoppage/sdk v0.2.3`](https://github.com/dolepee/stoppage/releases/download/sdk-v0.2.3/stoppage-sdk-0.2.3.tgz)
 - SDK source and quickstart: [`packages/sdk`](packages/sdk)
 - Callback-enforced example: [`examples/enforced-market-maker.ts`](examples/enforced-market-maker.ts)
 - Legacy Permit V1 client: [`src/integration/stoppage-agent-client.ts`](src/integration/stoppage-agent-client.ts)
