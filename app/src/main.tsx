@@ -1453,7 +1453,7 @@ function ApprovedEvidencePanel({
         <span>Judge quick-verify</span>
         <h3>What a reviewer should check first</h3>
         <p>
-          The three checks below are public, automatic, and do not require any
+          The four checks below are public, automatic, and do not require any
           private credentials.
         </p>
         <ol>
@@ -1499,8 +1499,11 @@ function ApprovedEvidencePanel({
           both the public claim and live decision tape together.
           <br />
           /api/live-decision-tape is the judge evidence for tape authenticity.
-          /api/permit-keys serves public synthetic verification keys used by the
-          in-app public challenge flow, and is not tape proof.
+          /api/permit-keys publishes the verification keys for the runtime that
+          serves it; on this judge host, those keys support the in-app synthetic
+          challenge. The approved tape carries its own signer public key in
+          payload.signer.publicKey, so tape verification does not depend on
+          assuming both runtimes share a key.
         </p>
         <p>
           Candidate hash:{" "}
