@@ -43,6 +43,8 @@ export interface PublicLiveDecisionTapePayload {
     kid: string;
     alg: "Ed25519";
     publicKey: string;
+    status?: "RETIRED";
+    validUntil?: number;
   };
   counters: LiveDecisionTapeCounters;
   decisions: {
@@ -175,6 +177,12 @@ export function buildLiveDecisionTapeCandidate(
       kid: signingKey.kid,
       alg: signingKey.alg,
       publicKey: signingKey.publicKey,
+      ...(signingKey.status === "RETIRED"
+        ? {
+            status: signingKey.status,
+            validUntil: signingKey.validUntil,
+          }
+        : {}),
     },
     counters,
     decisions,
@@ -548,6 +556,16 @@ function validateCandidate(candidate: LiveDecisionTapeCandidate) {
 
 function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
   const permit = payload.sampleProof.permit;
+  const signerStatus = payload.signer.status ?? "ACTIVE";
+  if (
+    (signerStatus === "ACTIVE" && "validUntil" in payload.signer) ||
+    (signerStatus === "RETIRED" &&
+      (!Number.isInteger(payload.signer.validUntil) ||
+        payload.signer.validUntil! <= 0)) ||
+    (signerStatus !== "ACTIVE" && signerStatus !== "RETIRED")
+  ) {
+    throw new Error("The public tape signer lifecycle is invalid");
+  }
   const intendedRequest = {
     agentId: payload.sampleProof.intendedAgent.id,
     audience: payload.sampleProof.intendedAgent.audience,
@@ -567,7 +585,10 @@ function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
         alg: payload.signer.alg,
         use: "sig",
         publicKey: payload.signer.publicKey,
-        status: "ACTIVE",
+        status: signerStatus,
+        ...(signerStatus === "RETIRED"
+          ? { validUntil: payload.signer.validUntil }
+          : {}),
       },
     ],
   };
@@ -576,6 +597,7 @@ function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
     request: intendedRequest,
     keys,
     now: permit.body.issuedAt,
+    allowRetiredSigners: true,
   });
   const stolen = inspectExecutionPermitV2({
     permit,
@@ -586,6 +608,7 @@ function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
     },
     keys,
     now: permit.body.issuedAt,
+    allowRetiredSigners: true,
   });
   const callbackInvokedAt = Date.parse(
     payload.sampleProof.intendedAgent.callbackInvokedAt,

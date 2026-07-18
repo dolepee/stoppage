@@ -4,6 +4,7 @@ import { join } from "node:path";
 
 import { describe, expect, it } from "vitest";
 
+import { sha256 } from "../domain/canonical.js";
 import { QuoteGovernor } from "../domain/governor.js";
 import { hashExecutionSubject } from "../execution-gate/execution-gate.js";
 import type { PersistedExecutionGateContext } from "../execution-gate/live-context.js";
@@ -165,12 +166,42 @@ describe("public live decision-tape evidence", () => {
     );
 
     expect(candidate.payload.signer.kid).toBe(retiredSigner.kid);
+    expect(candidate.payload.signer).toMatchObject({
+      status: "RETIRED",
+      validUntil: 35_000,
+    });
     const approved = buildApprovedLiveDecisionTape({
       candidate,
       approvalStatement: candidate.requiredApproval,
       approvedAt: "2026-07-16T16:00:00.000Z",
     });
     expect(approved.signer.kid).toBe(retiredSigner.kid);
+
+    const root = await mkdtemp(join(tmpdir(), "stoppage-retired-tape-"));
+    await writeFile(
+      join(root, "live-decision-tape.json"),
+      JSON.stringify(approved),
+    );
+    await expect(loadPublicLiveDecisionTape(root)).resolves.toEqual(approved);
+
+    const expiredPayload = structuredClone(candidate.payload);
+    expiredPayload.signer.validUntil = 34_999;
+    const expiredHash = sha256(expiredPayload);
+    await writeFile(
+      join(root, "live-decision-tape.json"),
+      JSON.stringify({
+        ...expiredPayload,
+        candidateHash: expiredHash,
+        approvedAt: "2026-07-16T16:00:00.000Z",
+        approval: {
+          statement: candidate.requiredApproval.replace(
+            candidate.candidateHash,
+            expiredHash,
+          ),
+        },
+      }),
+    );
+    await expect(loadPublicLiveDecisionTape(root)).resolves.toBeNull();
   });
 
   it("requires Certified Reopen rather than an ordinary healthy allow", async () => {
