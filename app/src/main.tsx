@@ -2865,8 +2865,10 @@ function stateNodeClass(
     return snapshot.mode === "SUSPENDED" ? "active" : "complete";
   if (index === 2 && lifecycleActions.includes("REPRICE"))
     return snapshot.mode === "REPRICED" ? "active" : "complete";
-  if (index === 3 && lifecycleActions.includes("REOPEN"))
+  if (index === 3) {
+    if (!lifecycleActions.includes("REOPEN")) return "pending";
     return snapshot.mode === "OPEN" ? "active" : "complete";
+  }
   return mode === snapshot.mode ? "active" : "pending";
 }
 

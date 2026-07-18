@@ -120,6 +120,10 @@ test.describe("Stoppage release browser gate", () => {
     await page
       .getByRole("button", { name: /Test the firewall|Test again/ })
       .click();
+    await page.waitForTimeout(1_000);
+    await expect(
+      page.locator(".state-node.active").getByText("REOPENED", { exact: true }),
+    ).toHaveCount(0);
     await expect(
       page.getByText("Agent action blocked", { exact: true }),
     ).toBeVisible({ timeout: 8_000 });

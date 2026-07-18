@@ -515,7 +515,7 @@ curl -sS https://stoppage-txline.vercel.app/api/live-decision-tape | jq '.sample
 Expected signatures from the current published release:
 
 - `public-claim.status` is `AVAILABLE`
-- `public-claim.holdout.completeProtectedWindows` is `18`
+- `public-claim.holdout.completeProtectedWindows` is `21`
 - `live-decision-tape.counters.callbacksAfterBlock` is `0`
 - `live-decision-tape.counters.callbacksWithoutVerifiedPermit` is `0`
 - `live-decision-tape.counters.capturedRequests` is greater than `0`
