@@ -5,6 +5,35 @@ import { expect, test, type Page } from "@playwright/test";
 const approvedTapePublished = existsSync("data/public/live-decision-tape.json");
 
 test.describe("Stoppage release browser gate", () => {
+  test("does not promise real proof when the approved claim is unavailable", async ({
+    page,
+  }) => {
+    await page.route("**/api/public-claim**", async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "UNAVAILABLE" }),
+      });
+    });
+
+    await page.goto("/demo");
+    await expect(
+      page.getByText("Real TxLINE proof below", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText(
+        "approved real TxLINE evidence appears below when available.",
+        { exact: false },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "No metrics are substituted when the approved claim cannot be read.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+  });
+
   test("blocks, certifies and rejects tampering without layout or browser errors", async ({
     page,
     request,

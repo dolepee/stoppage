@@ -618,8 +618,10 @@ function ControlPage({
               Run the complete VAR safety path now: block the provisional
               branch, certify fresh consensus, verify the signed permit, then
               call the simulated venue. This permanent judge test is synthetic
-              and reproducible; approved real TxLINE evidence is presented
-              separately below.
+              and reproducible;{" "}
+              {claim
+                ? "approved real TxLINE evidence is presented separately below."
+                : "approved real TxLINE evidence appears below when available."}
             </p>
             <div className="hero-meta">
               <span>
@@ -630,7 +632,7 @@ function ControlPage({
                   ? "Permanent judge scenario"
                   : `Fixture ${snapshot.match.fixtureId}`}
               </span>
-              <span>Real TxLINE proof below</span>
+              {claim ? <span>Real TxLINE proof below</span> : null}
               <span>{connectionLabel}</span>
             </div>
             <div className="failure-case">

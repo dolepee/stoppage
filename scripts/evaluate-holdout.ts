@@ -6,6 +6,7 @@ import {
   QuoteGovernor,
 } from "../src/domain/governor.js";
 import { evaluateHoldout } from "../src/evaluation/holdout.js";
+import { validatePublicFeaturedMatchLabel } from "../src/evidence/public-claim.js";
 import { writePrivateCapture } from "../src/private/capture-store.js";
 import {
   buildReplayInputs,
@@ -15,7 +16,11 @@ import {
 const fixtureIds = readFixtureArguments();
 const approvedConfigHash = readStringArgument("--approved-config-hash");
 const featuredFixtureId = readOptionalIntegerArgument("--featured-fixture");
-const featuredLabel = readOptionalStringArgument("--featured-label");
+const featuredLabelArgument = readOptionalStringArgument("--featured-label");
+const featuredLabel =
+  featuredLabelArgument === null
+    ? null
+    : validatePublicFeaturedMatchLabel(featuredLabelArgument);
 if ((featuredFixtureId === null) !== (featuredLabel === null)) {
   throw new Error(
     "--featured-fixture and --featured-label must be provided together",

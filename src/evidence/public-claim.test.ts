@@ -10,6 +10,7 @@ import {
   loadLatestPrivateEvidence,
   loadLatestPublicClaim,
   PUBLIC_CLAIM_APPROVAL_PREFIX,
+  validatePublicFeaturedMatchLabel,
   type PrivateHoldoutReport,
   type PublicLifecycleCandidate,
 } from "./public-claim.js";
@@ -95,6 +96,23 @@ describe("public claim approval", () => {
         lifecycle: lifecycle(),
       }),
     ).toThrow("Featured match exceeds the approved holdout aggregate");
+  });
+
+  it("accepts only privacy-safe completed-match labels", () => {
+    expect(
+      validatePublicFeaturedMatchLabel(
+        "Argentina–England · completed World Cup match",
+      ),
+    ).toBe("Argentina–England · completed World Cup match");
+    for (const unsafe of [
+      "Fixture 123456",
+      "Argentina–England · 2026-07-16T20:00:00Z",
+      "fixture-123456-raw-capture.json",
+    ]) {
+      expect(() => validatePublicFeaturedMatchLabel(unsafe)).toThrow(
+        "without IDs or timestamps",
+      );
+    }
   });
 
   it("publishes only allowlisted featured-match fields", () => {

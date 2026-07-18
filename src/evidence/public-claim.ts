@@ -90,6 +90,23 @@ const PUBLIC_FEATURED_MATCH_FIELDS = [
   "dataBoundary",
 ] as const;
 
+const PUBLIC_FEATURED_MATCH_LABEL_PATTERN =
+  /^[\p{L}][\p{L}\p{M} .&'’()-]{0,35}–[\p{L}][\p{L}\p{M} .&'’()-]{0,35} · completed World Cup match$/u;
+
+export function validatePublicFeaturedMatchLabel(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length < 3 ||
+    value.length > 80 ||
+    !PUBLIC_FEATURED_MATCH_LABEL_PATTERN.test(value)
+  ) {
+    throw new Error(
+      "Featured match label must use ‘Team–Team · completed World Cup match’ without IDs or timestamps",
+    );
+  }
+  return value;
+}
+
 export interface PrivateHoldoutReport {
   version: number;
   status: "AWAITING_PUBLIC_CLAIM_APPROVAL";
@@ -444,14 +461,12 @@ function assertFeaturedMatch(value: PublicFeaturedMatch) {
     value.evidenceType !== "DERIVED_MATCH_ADDENDUM" ||
     value.dataMode !== "TXLINE_REPLAY" ||
     value.finalState !== "TXLINE_GAME_FINALISED" ||
-    typeof value.label !== "string" ||
-    value.label.length < 3 ||
-    value.label.length > 80 ||
     typeof value.dataBoundary !== "string" ||
     !value.dataBoundary.includes("no fixture ID")
   ) {
     throw new Error("Invalid featured match metadata");
   }
+  validatePublicFeaturedMatchLabel(value.label);
   if (
     !Number.isFinite(value.protectedWindowSeconds) ||
     value.protectedWindowSeconds < 0
