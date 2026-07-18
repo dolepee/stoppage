@@ -162,17 +162,20 @@ missing or stale; that private route is not advertised on the static judge host.
 ### External builder-run compatibility
 
 Invited builders
-[`@Ridwannurudeen`](https://github.com/Ridwannurudeen) and
-[`@cyberrockng`](https://github.com/cyberrockng) independently installed the
+[`@Ridwannurudeen`](https://github.com/Ridwannurudeen),
+[`@cyberrockng`](https://github.com/cyberrockng), and
+[`@dmetagame`](https://github.com/dmetagame) independently installed the
 published `@stoppage/sdk` v0.2.3 artifact in separate public, non-fork
 repositories and ran the supplied compatibility check in GitHub Actions. Each
 hosted run verified the release checksum, called Stoppage's public synthetic
 gate, rejected 6/6 modified-permit attacks, confirmed future-time verification
-could not evict a live nonce claim, blocked cross-client replay, and executed
-the simulated venue callback exactly once.
+could not evict a live nonce claim, blocked replay through a second client in
+the same loaded SDK runtime, and executed the simulated venue callback exactly
+once. That nonce registry is in-memory, non-durable, and non-distributed.
 
 - [`@Ridwannurudeen` repository](https://github.com/Ridwannurudeen/stoppage-sdk-external-check), [successful hosted run](https://github.com/Ridwannurudeen/stoppage-sdk-external-check/actions/runs/29603337409), and [pinned commit `335e087`](https://github.com/Ridwannurudeen/stoppage-sdk-external-check/commit/335e087eb099877cc9e6816bd8fef8b1c7d9daea)
 - [`@cyberrockng` repository](https://github.com/cyberrockng/stoppage-sdk-external-check), [successful hosted run](https://github.com/cyberrockng/stoppage-sdk-external-check/actions/runs/29645328774), and [pinned commit `0e3399a`](https://github.com/cyberrockng/stoppage-sdk-external-check/commit/0e3399a6276933211480b4a0aaea84da393d9788)
+- [`@dmetagame` repository](https://github.com/dmetagame/stoppage-sdk-external-check), [successful hosted run](https://github.com/dmetagame/stoppage-sdk-external-check/actions/runs/29647230987), and [pinned commit `11f9096`](https://github.com/dmetagame/stoppage-sdk-external-check/commit/11f9096c2f032db8ce4d1296a84278e8da051f2a)
 
 Stoppage supplied the guide and the endpoint is synthetic. These are invited
 external builder-run compatibility checks, not independent security audits,
@@ -251,6 +254,7 @@ scenario instead of exposing private worker uptime.
 - SDK source and quickstart: [`packages/sdk`](packages/sdk)
 - External builder-run check 1: [`@Ridwannurudeen/stoppage-sdk-external-check`](https://github.com/Ridwannurudeen/stoppage-sdk-external-check) · [run `29603337409`](https://github.com/Ridwannurudeen/stoppage-sdk-external-check/actions/runs/29603337409) · [commit `335e087`](https://github.com/Ridwannurudeen/stoppage-sdk-external-check/commit/335e087eb099877cc9e6816bd8fef8b1c7d9daea)
 - External builder-run check 2: [`@cyberrockng/stoppage-sdk-external-check`](https://github.com/cyberrockng/stoppage-sdk-external-check) · [run `29645328774`](https://github.com/cyberrockng/stoppage-sdk-external-check/actions/runs/29645328774) · [commit `0e3399a`](https://github.com/cyberrockng/stoppage-sdk-external-check/commit/0e3399a6276933211480b4a0aaea84da393d9788)
+- External builder-run check 3: [`@dmetagame/stoppage-sdk-external-check`](https://github.com/dmetagame/stoppage-sdk-external-check) · [run `29647230987`](https://github.com/dmetagame/stoppage-sdk-external-check/actions/runs/29647230987) · [commit `11f9096`](https://github.com/dmetagame/stoppage-sdk-external-check/commit/11f9096c2f032db8ce4d1296a84278e8da051f2a)
 - Callback-enforced example: [`examples/enforced-market-maker.ts`](examples/enforced-market-maker.ts)
 - Legacy Permit V1 client: [`src/integration/stoppage-agent-client.ts`](src/integration/stoppage-agent-client.ts)
 
@@ -274,10 +278,11 @@ pnpm sdk:consumer:verify
   compatibility plus Ed25519-signed Permit V2, offline verification, exact
   action/audience/nonce bindings, expiry, sequence revocation and adversarial
   enforcement tests.
-- Invited external builder-run compatibility: passed independently from two
+- Invited external builder-run compatibility: passed independently from three
   separate public, non-fork repositories against the v0.2.3 release artifact,
-  with 6/6 mutation attacks and cross-client replay rejected before a second
-  callback in each run.
+  with 6/6 mutation attacks and same-runtime replay through a second client
+  rejected before a second callback in each run. The replay registry is
+  in-memory, non-durable, and non-distributed.
 - Live gate bridge: the persistent worker projects private governor state into a
   shared runtime context, and the application API fails closed if that context
   is missing, invalid, or more than five seconds old.

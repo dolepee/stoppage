@@ -88,7 +88,7 @@ const routeMetadata: Record<AppRoute, { title: string; description: string }> =
     "/evidence": {
       title: "Evidence · Stoppage",
       description:
-        "Inspect approved Stoppage holdout aggregates, receipt-bound lifecycle evidence, separate TxLINE Solana validation, and an invited external builder-run SDK check.",
+        "Inspect approved Stoppage holdout aggregates, receipt-bound lifecycle evidence, separate TxLINE Solana validation, and three invited external builder-run SDK checks.",
     },
     "/system": {
       title: "System · Stoppage",
@@ -933,7 +933,7 @@ function EvidencePage({
         index="03"
         eyebrow="Public verification"
         title="Evidence"
-        description="Approved holdout aggregates and receipt-bound lifecycle decisions, a separate TxLINE finalized-score validation path on Solana, and an invited external builder-run SDK compatibility check."
+        description="Approved holdout aggregates and receipt-bound lifecycle decisions, a separate TxLINE finalized-score validation path on Solana, and three invited external builder-run SDK compatibility checks."
       >
         <div className="page-status-block">
           <span>Public claim</span>
@@ -959,6 +959,21 @@ function EvidencePage({
 }
 
 function ExternalCompatibilityEvidence() {
+  const builderChecks = [
+    {
+      handle: "@Ridwannurudeen",
+      run: "https://github.com/Ridwannurudeen/stoppage-sdk-external-check/actions/runs/29603337409",
+    },
+    {
+      handle: "@cyberrockng",
+      run: "https://github.com/cyberrockng/stoppage-sdk-external-check/actions/runs/29645328774",
+    },
+    {
+      handle: "@dmetagame",
+      run: "https://github.com/dmetagame/stoppage-sdk-external-check/actions/runs/29647230987",
+    },
+  ] as const;
+
   return (
     <section
       className="external-compatibility"
@@ -967,9 +982,9 @@ function ExternalCompatibilityEvidence() {
       <div className="external-compatibility-copy">
         <div className="section-title-row">
           <div>
-            <span>Invited external builder run</span>
+            <span>Invited external builder runs</span>
             <h2 id="external-compatibility-title">
-              External builder-run SDK check
+              External builder-run SDK checks
             </h2>
           </div>
           <Bot size={20} aria-hidden="true" />
@@ -977,47 +992,40 @@ function ExternalCompatibilityEvidence() {
 
         <div className="external-compatibility-verdict">
           <Check size={14} strokeWidth={2.5} aria-hidden="true" />
-          <strong>Hosted check passed</strong>
-          <code>335e087</code>
+          <strong>3/3 hosted checks passed</strong>
+          <code>3 public repos</code>
         </div>
 
         <p className="external-compatibility-summary">
-          Invited builder <strong>@Ridwannurudeen</strong> installed{" "}
-          <code>@stoppage/sdk v0.2.3</code> in a separate public, non-fork
-          repository. GitHub Actions matched the published artifact checksum,
-          called Stoppage&apos;s synthetic gate, rejected every tested attack,
-          and executed the simulated venue callback exactly once.
+          Invited builders <strong>@Ridwannurudeen</strong>,{" "}
+          <strong>@cyberrockng</strong>, and <strong>@dmetagame</strong>{" "}
+          independently installed <code>@stoppage/sdk v0.2.3</code> in three
+          separate public, non-fork repositories. Each GitHub Actions run
+          matched the published artifact checksum, called Stoppage&apos;s
+          synthetic gate, rejected every tested attack, and executed the
+          simulated venue callback exactly once.
         </p>
 
         <div className="external-compatibility-actions">
-          <a
-            href="https://github.com/Ridwannurudeen/stoppage-sdk-external-check"
-            target="_blank"
-            rel="noreferrer"
-          >
-            External repository <ExternalLink size={13} aria-hidden="true" />
-          </a>
-          <a
-            href="https://github.com/Ridwannurudeen/stoppage-sdk-external-check/actions/runs/29603337409"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Hosted Actions run <ExternalLink size={13} aria-hidden="true" />
-          </a>
-          <a
-            href="https://github.com/Ridwannurudeen/stoppage-sdk-external-check/commit/335e087eb099877cc9e6816bd8fef8b1c7d9daea"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Pinned commit <ExternalLink size={13} aria-hidden="true" />
-          </a>
+          {builderChecks.map((check) => (
+            <a
+              key={check.handle}
+              href={check.run}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {check.handle} hosted run{" "}
+              <ExternalLink size={13} aria-hidden="true" />
+            </a>
+          ))}
         </div>
 
         <p className="external-compatibility-boundary">
-          Stoppage supplied the guide and the endpoint is synthetic. This is
-          external compatibility evidence, not an independent security audit,
-          production adoption, real trading, or verification of private
-          real-match metrics.
+          Stoppage supplied the guide and the endpoint is synthetic. The replay
+          result covers a second client in the same loaded SDK runtime; its
+          nonce registry is in-memory, non-durable, and non-distributed. These
+          are compatibility checks, not independent security audits, production
+          adoption, real trading, or verification of private real-match metrics.
         </p>
       </div>
 
@@ -1028,23 +1036,23 @@ function ExternalCompatibilityEvidence() {
         </div>
         <div>
           <dt>Mutation attacks</dt>
-          <dd>6/6 rejected</dd>
+          <dd>6/6 × 3 rejected</dd>
         </div>
         <div>
           <dt>Future-time eviction</dt>
-          <dd>Blocked</dd>
+          <dd>Blocked × 3</dd>
         </div>
         <div>
-          <dt>Cross-client replay</dt>
-          <dd>Blocked</dd>
+          <dt>Same-runtime replay</dt>
+          <dd>Blocked × 3</dd>
         </div>
         <div>
           <dt>Venue callback</dt>
-          <dd>1 execution</dd>
+          <dd>1 × 3 executions</dd>
         </div>
         <div>
-          <dt>Hosted workflow</dt>
-          <dd>Passed</dd>
+          <dt>Hosted workflows</dt>
+          <dd>3/3 passed</dd>
         </div>
       </dl>
     </section>

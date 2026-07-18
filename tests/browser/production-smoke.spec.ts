@@ -229,7 +229,7 @@ test.describe("Stoppage release browser gate", () => {
     await expectCanonical(page, "/evidence");
     await expect(
       page.getByRole("heading", {
-        name: "External builder-run SDK check",
+        name: "External builder-run SDK checks",
         exact: true,
       }),
     ).toBeVisible();
@@ -238,23 +238,37 @@ test.describe("Stoppage release browser gate", () => {
         exact: true,
       }),
     ).toBeVisible();
+    for (const [handle, run] of [
+      [
+        "@Ridwannurudeen",
+        "https://github.com/Ridwannurudeen/stoppage-sdk-external-check/actions/runs/29603337409",
+      ],
+      [
+        "@cyberrockng",
+        "https://github.com/cyberrockng/stoppage-sdk-external-check/actions/runs/29645328774",
+      ],
+      [
+        "@dmetagame",
+        "https://github.com/dmetagame/stoppage-sdk-external-check/actions/runs/29647230987",
+      ],
+    ] as const) {
+      await expect(page.getByText(handle, { exact: true })).toBeVisible();
+      await expect(
+        page.getByRole("link", {
+          name: `${handle} hosted run`,
+          exact: true,
+        }),
+      ).toHaveAttribute("href", run);
+    }
     await expect(
-      page.getByText("@Ridwannurudeen", { exact: true }),
+      page.getByText("6/6 × 3 rejected", { exact: true }),
     ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "External repository", exact: true }),
-    ).toHaveAttribute(
-      "href",
-      "https://github.com/Ridwannurudeen/stoppage-sdk-external-check",
-    );
+      page.getByText("Same-runtime replay", { exact: true }),
+    ).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "Hosted Actions run", exact: true }),
-    ).toHaveAttribute(
-      "href",
-      "https://github.com/Ridwannurudeen/stoppage-sdk-external-check/actions/runs/29603337409",
-    );
-    await expect(page.getByText("6/6 rejected", { exact: true })).toBeVisible();
-    await expect(page.getByText("1 execution", { exact: true })).toBeVisible();
+      page.getByText("1 × 3 executions", { exact: true }),
+    ).toBeVisible();
     await expectNoHorizontalOverflow(page);
 
     await primaryNavigation

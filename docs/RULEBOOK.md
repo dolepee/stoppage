@@ -59,7 +59,7 @@ A probability component moves by at least the sharp-move threshold without a
 recent high-impact event. Stoppage suspends conservatively. A later event may
 confirm the move; otherwise the lifecycle remains labeled unconfirmed.
 
-All 18 approved real holdout windows were event-led. This odds-led path is
+All 21 approved real holdout windows were event-led. This odds-led path is
 implemented and tested but was not exercised by the real holdout; synthetic
 coverage must remain visibly labeled and cannot be presented as live evidence.
 
