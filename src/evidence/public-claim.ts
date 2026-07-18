@@ -312,10 +312,10 @@ function isApprovedPublicClaim(value: PublicClaimResponse) {
   }
   const expectedApproval = `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${value.approvedConfigHash} ${value.candidateHash}`;
   if (value.approval?.statement !== expectedApproval) return false;
-  if (value.candidateHash !== sha256(publicClaimPayload(value))) {
-    return false;
-  }
   try {
+    if (value.candidateHash !== sha256(publicClaimPayload(value))) {
+      return false;
+    }
     assertAggregate(value.holdout);
     if (value.featuredMatch) {
       assertFeaturedWithinHoldout(value.featuredMatch, value.holdout);
