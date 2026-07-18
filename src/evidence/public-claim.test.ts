@@ -167,6 +167,41 @@ describe("public claim approval", () => {
     }
   });
 
+  it("rejects present-but-falsy featured-match fields at private and public boundaries", async () => {
+    for (const falsy of [null, false, 0, ""] as const) {
+      const malformed = holdout() as unknown as Record<string, unknown>;
+      malformed.featuredMatch = falsy;
+      expect(() =>
+        buildPublicClaimCandidate({
+          holdout: malformed as unknown as PrivateHoldoutReport,
+          lifecycle: lifecycle(),
+        }),
+      ).toThrow("Invalid featured match property");
+    }
+
+    const root = await mkdtemp(join(tmpdir(), "stoppage-public-claim-"));
+    try {
+      const withoutFeaturedMatch = holdout();
+      delete withoutFeaturedMatch.featuredMatch;
+      const candidate = buildPublicClaimCandidate({
+        holdout: withoutFeaturedMatch,
+        lifecycle: lifecycle(),
+      });
+      const claim = buildApprovedPublicClaim({
+        holdout: withoutFeaturedMatch,
+        lifecycle: lifecycle(),
+        approvalStatement: candidate.requiredApproval,
+        approvedAt: "2026-07-10T15:00:00.000Z",
+      }) as unknown as Record<string, unknown>;
+      claim.featuredMatch = null;
+      await writeFile(join(root, "public-claim.json"), JSON.stringify(claim));
+
+      expect(await loadLatestPublicClaim(root)).toBeNull();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("selects the strongest verified lifecycle for the latest holdout", async () => {
     const root = await mkdtemp(join(tmpdir(), "stoppage-evidence-"));
     try {

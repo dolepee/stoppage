@@ -239,8 +239,12 @@ export function buildPublicClaimCandidate({
     throw new Error("Holdout and lifecycle config hashes do not match");
   }
   assertAggregate(holdout.aggregate);
-  if (holdout.featuredMatch) {
-    assertFeaturedWithinHoldout(holdout.featuredMatch, holdout.aggregate);
+  const featuredMatchProperty = projectFeaturedMatchProperty(holdout, false);
+  if (featuredMatchProperty.featuredMatch) {
+    assertFeaturedWithinHoldout(
+      featuredMatchProperty.featuredMatch,
+      holdout.aggregate,
+    );
   }
   assertLifecycleCandidate(lifecycle);
 
@@ -251,9 +255,7 @@ export function buildPublicClaimCandidate({
     approvedConfigHash: holdout.approvedConfigHash,
     evaluatedAt: holdout.evaluatedAt,
     dataBoundary: lifecycle.dataBoundary,
-    ...(holdout.featuredMatch
-      ? { featuredMatch: projectFeaturedMatch(holdout.featuredMatch) }
-      : {}),
+    ...featuredMatchProperty,
     holdout: {
       ...holdout.aggregate,
       definitions: {
@@ -304,21 +306,22 @@ function isApprovedPublicClaim(value: PublicClaimResponse) {
   ) {
     return false;
   }
-  if (
-    value.featuredMatch &&
-    !hasOnlyPublicFeaturedMatchFields(value.featuredMatch)
-  ) {
-    return false;
-  }
   const expectedApproval = `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${value.approvedConfigHash} ${value.candidateHash}`;
   if (value.approval?.statement !== expectedApproval) return false;
   try {
-    if (value.candidateHash !== sha256(publicClaimPayload(value))) {
+    const featuredMatchProperty = projectFeaturedMatchProperty(value, true);
+    if (
+      value.candidateHash !==
+      sha256(publicClaimPayload(value, featuredMatchProperty))
+    ) {
       return false;
     }
     assertAggregate(value.holdout);
-    if (value.featuredMatch) {
-      assertFeaturedWithinHoldout(value.featuredMatch, value.holdout);
+    if (featuredMatchProperty.featuredMatch) {
+      assertFeaturedWithinHoldout(
+        featuredMatchProperty.featuredMatch,
+        value.holdout,
+      );
     }
     assertLifecycleCandidate({
       version: 2,
@@ -361,6 +364,13 @@ async function findLatestHoldout(
     }
     try {
       assertAggregate(report.aggregate);
+      const featuredMatchProperty = projectFeaturedMatchProperty(report, false);
+      if (featuredMatchProperty.featuredMatch) {
+        assertFeaturedWithinHoldout(
+          featuredMatchProperty.featuredMatch,
+          report.aggregate,
+        );
+      }
       return report;
     } catch {
       continue;
@@ -402,6 +412,7 @@ async function findLatestLifecycleEvidence(
 
 function publicClaimPayload(
   value: PublicClaimResponse,
+  featuredMatchProperty = projectFeaturedMatchProperty(value, true),
 ): PublicClaimCandidate["payload"] {
   return {
     version: value.version,
@@ -410,9 +421,7 @@ function publicClaimPayload(
     approvedConfigHash: value.approvedConfigHash,
     evaluatedAt: value.evaluatedAt,
     dataBoundary: value.dataBoundary,
-    ...(value.featuredMatch
-      ? { featuredMatch: projectFeaturedMatch(value.featuredMatch) }
-      : {}),
+    ...featuredMatchProperty,
     holdout: value.holdout,
     lifecycleEvidence: value.lifecycleEvidence,
   };
@@ -509,7 +518,28 @@ function projectFeaturedMatch(value: PublicFeaturedMatch): PublicFeaturedMatch {
   };
 }
 
-function hasOnlyPublicFeaturedMatchFields(value: PublicFeaturedMatch) {
+function projectFeaturedMatchProperty(
+  value: object,
+  requireExactFields: boolean,
+): { featuredMatch?: PublicFeaturedMatch } {
+  if (!Object.prototype.hasOwnProperty.call(value, "featuredMatch")) return {};
+  const featuredMatch = (value as { featuredMatch?: unknown }).featuredMatch;
+  if (
+    !featuredMatch ||
+    typeof featuredMatch !== "object" ||
+    Array.isArray(featuredMatch) ||
+    (requireExactFields && !hasOnlyPublicFeaturedMatchFields(featuredMatch))
+  ) {
+    throw new Error("Invalid featured match property");
+  }
+  return {
+    featuredMatch: projectFeaturedMatch(
+      featuredMatch as unknown as PublicFeaturedMatch,
+    ),
+  };
+}
+
+function hasOnlyPublicFeaturedMatchFields(value: object) {
   const fields = Object.keys(value);
   return (
     fields.length === PUBLIC_FEATURED_MATCH_FIELDS.length &&
