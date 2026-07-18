@@ -7,10 +7,17 @@ import {
 } from "node:fs";
 import { resolve } from "node:path";
 
+import type {
+  ExecutionGateResultV2 as SdkExecutionGateResultV2,
+  ExecutionPermitV2Body as SdkExecutionPermitV2Body,
+  PermitVerificationKey as SdkPermitVerificationKey,
+  PermitVerificationKeySet as SdkPermitVerificationKeySet,
+  SignedExecutionPermitV2 as SdkSignedExecutionPermitV2,
+} from "@stoppage/sdk";
 import nacl from "tweetnacl";
 
 import { canonicalJson, sha256 } from "../domain/canonical.js";
-import type { ExecutionGateDecision, ExecutionGateResult } from "./types.js";
+import type { ExecutionGateResult } from "./types.js";
 
 try {
   process.loadEnvFile();
@@ -31,72 +38,26 @@ export type PermitV2BlockDecision =
   | "BLOCK_PERMIT_EXPIRED"
   | "BLOCK_NONCE_REPLAY";
 
-export interface ExecutionPermitV2Body {
-  version: 2;
-  issuer: string;
-  kid: string;
-  agentId: string;
-  audience: string;
-  nonce: string;
-  command: "PUBLISH_QUOTE";
-  decision: "ALLOW_HEALTHY_QUOTE" | "ALLOW_CERTIFIED_REOPEN";
-  reason: string;
-  subjectHash: string;
-  market: "1X2";
-  quoteHash: string;
-  configHash: string;
-  stateReceiptHash: string | null;
-  reopenProofHash: string | null;
-  sequence: number;
-  issuedAt: number;
-  expiresAt: number;
-}
-
-export interface SignedExecutionPermitV2 {
-  alg: "Ed25519";
-  body: ExecutionPermitV2Body;
-  hash: string;
-  signature: string;
-}
-
-export interface ExecutionGateResultV2 {
-  version: 2;
-  command: "PUBLISH_QUOTE";
-  decision: ExecutionGateDecision;
-  reason: string;
-  evaluatedAt: number;
-  sequence: number;
-  permit: SignedExecutionPermitV2 | null;
-}
-
-interface PermitVerificationKeyBase {
-  kid: string;
-  alg: "Ed25519";
-  use: "sig";
-  publicKey: string;
-}
-
-export type ActivePermitVerificationKey = PermitVerificationKeyBase & {
-  status: "ACTIVE";
-  validUntil?: never;
-};
-
-export type RetiredPermitVerificationKey = PermitVerificationKeyBase & {
-  status: "RETIRED";
-  validUntil: number;
-};
-
-export type PermitVerificationKey =
-  ActivePermitVerificationKey | RetiredPermitVerificationKey;
+// The installable SDK is the canonical public Permit V2 contract. The server
+// aliases those exported types so producers and consumers cannot drift while
+// retaining server-local names at existing import sites.
+export type ExecutionPermitV2Body = SdkExecutionPermitV2Body;
+export type SignedExecutionPermitV2 = SdkSignedExecutionPermitV2;
+export type ExecutionGateResultV2 = SdkExecutionGateResultV2;
+export type PermitVerificationKey = SdkPermitVerificationKey;
+export type ActivePermitVerificationKey = Extract<
+  PermitVerificationKey,
+  { status: "ACTIVE" }
+>;
+export type RetiredPermitVerificationKey = Extract<
+  PermitVerificationKey,
+  { status: "RETIRED" }
+>;
 
 const STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS =
   "STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS";
 
-export interface PermitVerificationKeySet {
-  version: 1;
-  issuer: string;
-  keys: PermitVerificationKey[];
-}
+export type PermitVerificationKeySet = SdkPermitVerificationKeySet;
 
 export interface PermitSigner {
   issuer: string;

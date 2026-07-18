@@ -1,4 +1,10 @@
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
@@ -21,6 +27,66 @@ import {
 const signer = createPermitSigner(Uint8Array.from({ length: 32 }, (_, i) => i));
 
 describe("authenticated execution permit v2", () => {
+  it("keeps runtime discovery and OpenAPI key lifecycles aligned", () => {
+    const retiredSigner = createPermitSigner(
+      Uint8Array.from({ length: 32 }, (_, index) => 64 + index),
+    );
+    const retiredKey = {
+      kid: retiredSigner.kid,
+      alg: "Ed25519",
+      use: "sig",
+      publicKey: Buffer.from(retiredSigner.publicKey).toString("base64url"),
+      status: "RETIRED",
+      validUntil: 20_000,
+    } as const;
+    const discovered = publicKeySetFor(signer, [retiredKey]);
+
+    expect(discovered.keys[0]).toMatchObject({ status: "ACTIVE" });
+    expect(discovered.keys[0]).not.toHaveProperty("validUntil");
+    expect(discovered.keys[1]).toEqual(retiredKey);
+
+    const specification = JSON.parse(
+      readFileSync(
+        new URL("../../app/public/openapi.json", import.meta.url),
+        "utf8",
+      ),
+    ) as {
+      components: {
+        schemas: {
+          VerificationKeySet: {
+            properties: {
+              keys: {
+                items: {
+                  oneOf: unknown[];
+                  properties: {
+                    validUntil: { type: string; minimum: number };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+    const keySchema =
+      specification.components.schemas.VerificationKeySet.properties.keys.items;
+
+    expect(keySchema.oneOf).toEqual([
+      {
+        properties: { status: { const: "ACTIVE" } },
+        not: { required: ["validUntil"] },
+      },
+      {
+        properties: { status: { const: "RETIRED" } },
+        required: ["validUntil"],
+      },
+    ]);
+    expect(keySchema.properties.validUntil).toMatchObject({
+      type: "integer",
+      minimum: 1,
+    });
+  });
+
   it("loads retired verification keys from JSON configuration", () => {
     const retiredSigner = createPermitSigner(
       Uint8Array.from({ length: 32 }, (_, index) => 64 + index),
