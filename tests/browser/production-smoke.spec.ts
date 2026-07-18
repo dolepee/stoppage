@@ -5,6 +5,35 @@ import { expect, test, type Page } from "@playwright/test";
 const approvedTapePublished = existsSync("data/public/live-decision-tape.json");
 
 test.describe("Stoppage release browser gate", () => {
+  test("binds the evidence summary to the approved featured match", async ({
+    page,
+  }) => {
+    await page.route("**/api/public-claim**", async (route) => {
+      const response = await route.fetch();
+      const claim = (await response.json()) as {
+        featuredMatch?: { label: string };
+      };
+      if (!claim.featuredMatch) {
+        throw new Error("The approved claim lacks featured-match evidence");
+      }
+      claim.featuredMatch.label = "Brazil–Germany · completed World Cup match";
+      await route.fulfill({ response, json: claim });
+    });
+
+    await page.goto("/demo");
+    await expect(
+      page.getByText(
+        "Approved World Cup holdout · Brazil–Germany · completed World Cup match",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Approved World Cup holdout · Argentina–England/, {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+  });
+
   test("does not promise real proof when the approved claim is unavailable", async ({
     page,
   }) => {

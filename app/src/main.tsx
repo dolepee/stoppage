@@ -1452,7 +1452,7 @@ function ApprovedEvidenceBand({
         <div className="evidence-band-lead">
           <span>
             {claim?.featuredMatch
-              ? "Approved World Cup holdout · Argentina–England included"
+              ? `Approved World Cup holdout · ${claim.featuredMatch.label}`
               : "Approved mainnet holdout · revision 2"}
           </span>
           <strong>
