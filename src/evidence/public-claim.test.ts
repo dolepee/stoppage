@@ -94,6 +94,25 @@ describe("public claim approval", () => {
     ).toThrow("Featured match exceeds the approved holdout aggregate");
   });
 
+  it("publishes only allowlisted featured-match fields", () => {
+    const changed = holdout();
+    Object.assign(changed.featuredMatch!, {
+      fixtureId: "private-fixture-id",
+      sourceCapture: { path: "/private/raw-capture.json" },
+      receivedTs: "2026-07-10T14:00:00.000Z",
+    });
+
+    const candidate = buildPublicClaimCandidate({
+      holdout: changed,
+      lifecycle: lifecycle(),
+    });
+
+    expect(candidate.payload.featuredMatch).toEqual(holdout().featuredMatch);
+    expect(JSON.stringify(candidate.payload.featuredMatch)).not.toMatch(
+      /fixtureId|sourceCapture|receivedTs/,
+    );
+  });
+
   it("selects the strongest verified lifecycle for the latest holdout", async () => {
     const root = await mkdtemp(join(tmpdir(), "stoppage-evidence-"));
     try {

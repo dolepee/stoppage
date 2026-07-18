@@ -222,7 +222,7 @@ export function buildPublicClaimCandidate({
     evaluatedAt: holdout.evaluatedAt,
     dataBoundary: lifecycle.dataBoundary,
     ...(holdout.featuredMatch
-      ? { featuredMatch: assertFeaturedMatch(holdout.featuredMatch) }
+      ? { featuredMatch: projectFeaturedMatch(holdout.featuredMatch) }
       : {}),
     holdout: {
       ...holdout.aggregate,
@@ -454,7 +454,23 @@ function assertFeaturedMatch(value: PublicFeaturedMatch) {
   ) {
     throw new Error("Featured match counts are internally inconsistent");
   }
-  return value;
+}
+
+function projectFeaturedMatch(value: PublicFeaturedMatch): PublicFeaturedMatch {
+  assertFeaturedMatch(value);
+  return {
+    evidenceType: value.evidenceType,
+    label: value.label,
+    dataMode: value.dataMode,
+    finalState: value.finalState,
+    completeProtectedWindows: value.completeProtectedWindows,
+    protectedWindowSeconds: value.protectedWindowSeconds,
+    preResolutionRepricesInvalidated: value.preResolutionRepricesInvalidated,
+    postResolutionCertifiedReopens: value.postResolutionCertifiedReopens,
+    confirmedResolutionCertifiedReopens:
+      value.confirmedResolutionCertifiedReopens,
+    dataBoundary: value.dataBoundary,
+  };
 }
 
 function assertFeaturedWithinHoldout(
