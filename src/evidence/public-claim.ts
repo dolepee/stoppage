@@ -77,6 +77,19 @@ export interface PublicFeaturedMatch {
   dataBoundary: string;
 }
 
+const PUBLIC_FEATURED_MATCH_FIELDS = [
+  "evidenceType",
+  "label",
+  "dataMode",
+  "finalState",
+  "completeProtectedWindows",
+  "protectedWindowSeconds",
+  "preResolutionRepricesInvalidated",
+  "postResolutionCertifiedReopens",
+  "confirmedResolutionCertifiedReopens",
+  "dataBoundary",
+] as const;
+
 export interface PrivateHoldoutReport {
   version: number;
   status: "AWAITING_PUBLIC_CLAIM_APPROVAL";
@@ -274,6 +287,12 @@ function isApprovedPublicClaim(value: PublicClaimResponse) {
   ) {
     return false;
   }
+  if (
+    value.featuredMatch &&
+    !hasOnlyPublicFeaturedMatchFields(value.featuredMatch)
+  ) {
+    return false;
+  }
   const expectedApproval = `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${value.approvedConfigHash} ${value.candidateHash}`;
   if (value.approval?.statement !== expectedApproval) return false;
   if (value.candidateHash !== sha256(publicClaimPayload(value))) {
@@ -374,7 +393,9 @@ function publicClaimPayload(
     approvedConfigHash: value.approvedConfigHash,
     evaluatedAt: value.evaluatedAt,
     dataBoundary: value.dataBoundary,
-    ...(value.featuredMatch ? { featuredMatch: value.featuredMatch } : {}),
+    ...(value.featuredMatch
+      ? { featuredMatch: projectFeaturedMatch(value.featuredMatch) }
+      : {}),
     holdout: value.holdout,
     lifecycleEvidence: value.lifecycleEvidence,
   };
@@ -471,6 +492,16 @@ function projectFeaturedMatch(value: PublicFeaturedMatch): PublicFeaturedMatch {
       value.confirmedResolutionCertifiedReopens,
     dataBoundary: value.dataBoundary,
   };
+}
+
+function hasOnlyPublicFeaturedMatchFields(value: PublicFeaturedMatch) {
+  const fields = Object.keys(value);
+  return (
+    fields.length === PUBLIC_FEATURED_MATCH_FIELDS.length &&
+    fields.every((field) =>
+      (PUBLIC_FEATURED_MATCH_FIELDS as readonly string[]).includes(field),
+    )
+  );
 }
 
 function assertFeaturedWithinHoldout(

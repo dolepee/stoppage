@@ -8,9 +8,12 @@ import {
   buildApprovedPublicClaim,
   buildPublicClaimCandidate,
   loadLatestPrivateEvidence,
+  loadLatestPublicClaim,
+  PUBLIC_CLAIM_APPROVAL_PREFIX,
   type PrivateHoldoutReport,
   type PublicLifecycleCandidate,
 } from "./public-claim.js";
+import { sha256 } from "../domain/canonical.js";
 
 const configHash = `0x${"ab".repeat(32)}`;
 
@@ -111,6 +114,39 @@ describe("public claim approval", () => {
     expect(JSON.stringify(candidate.payload.featuredMatch)).not.toMatch(
       /fixtureId|sourceCapture|receivedTs/,
     );
+  });
+
+  it("rejects an approved claim containing non-public featured-match fields", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stoppage-public-claim-"));
+    try {
+      const candidate = buildPublicClaimCandidate({
+        holdout: holdout(),
+        lifecycle: lifecycle(),
+      });
+      const claim = buildApprovedPublicClaim({
+        holdout: holdout(),
+        lifecycle: lifecycle(),
+        approvalStatement: candidate.requiredApproval,
+        approvedAt: "2026-07-10T15:00:00.000Z",
+      });
+      Object.assign(claim.featuredMatch!, {
+        fixtureId: "private-fixture-id",
+        sourceCapture: "/private/raw-capture.json",
+      });
+      const {
+        candidateHash: _candidateHash,
+        approvedAt: _approvedAt,
+        approval: _approval,
+        ...poisonedPayload
+      } = claim;
+      claim.candidateHash = sha256(poisonedPayload);
+      claim.approval.statement = `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${claim.approvedConfigHash} ${claim.candidateHash}`;
+      await writeFile(join(root, "public-claim.json"), JSON.stringify(claim));
+
+      expect(await loadLatestPublicClaim(root)).toBeNull();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("selects the strongest verified lifecycle for the latest holdout", async () => {
