@@ -7,10 +7,17 @@ import {
 } from "node:fs";
 import { resolve } from "node:path";
 
+import type {
+  ExecutionGateResultV2 as SdkExecutionGateResultV2,
+  ExecutionPermitV2Body as SdkExecutionPermitV2Body,
+  PermitVerificationKey as SdkPermitVerificationKey,
+  PermitVerificationKeySet as SdkPermitVerificationKeySet,
+  SignedExecutionPermitV2 as SdkSignedExecutionPermitV2,
+} from "@stoppage/sdk";
 import nacl from "tweetnacl";
 
 import { canonicalJson, sha256 } from "../domain/canonical.js";
-import type { ExecutionGateDecision, ExecutionGateResult } from "./types.js";
+import type { ExecutionGateResult } from "./types.js";
 
 try {
   process.loadEnvFile();
@@ -31,60 +38,26 @@ export type PermitV2BlockDecision =
   | "BLOCK_PERMIT_EXPIRED"
   | "BLOCK_NONCE_REPLAY";
 
-export interface ExecutionPermitV2Body {
-  version: 2;
-  issuer: string;
-  kid: string;
-  agentId: string;
-  audience: string;
-  nonce: string;
-  command: "PUBLISH_QUOTE";
-  decision: "ALLOW_HEALTHY_QUOTE" | "ALLOW_CERTIFIED_REOPEN";
-  reason: string;
-  subjectHash: string;
-  market: "1X2";
-  quoteHash: string;
-  configHash: string;
-  stateReceiptHash: string | null;
-  reopenProofHash: string | null;
-  sequence: number;
-  issuedAt: number;
-  expiresAt: number;
-}
-
-export interface SignedExecutionPermitV2 {
-  alg: "Ed25519";
-  body: ExecutionPermitV2Body;
-  hash: string;
-  signature: string;
-}
-
-export interface ExecutionGateResultV2 {
-  version: 2;
-  command: "PUBLISH_QUOTE";
-  decision: ExecutionGateDecision;
-  reason: string;
-  evaluatedAt: number;
-  sequence: number;
-  permit: SignedExecutionPermitV2 | null;
-}
-
-export interface PermitVerificationKey {
-  kid: string;
-  alg: "Ed25519";
-  use: "sig";
-  publicKey: string;
-  status: "ACTIVE" | "RETIRED";
-}
+// The installable SDK is the canonical public Permit V2 contract. The server
+// aliases those exported types so producers and consumers cannot drift while
+// retaining server-local names at existing import sites.
+export type ExecutionPermitV2Body = SdkExecutionPermitV2Body;
+export type SignedExecutionPermitV2 = SdkSignedExecutionPermitV2;
+export type ExecutionGateResultV2 = SdkExecutionGateResultV2;
+export type PermitVerificationKey = SdkPermitVerificationKey;
+export type ActivePermitVerificationKey = Extract<
+  PermitVerificationKey,
+  { status: "ACTIVE" }
+>;
+export type RetiredPermitVerificationKey = Extract<
+  PermitVerificationKey,
+  { status: "RETIRED" }
+>;
 
 const STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS =
   "STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS";
 
-export interface PermitVerificationKeySet {
-  version: 1;
-  issuer: string;
-  keys: PermitVerificationKey[];
-}
+export type PermitVerificationKeySet = SdkPermitVerificationKeySet;
 
 export interface PermitSigner {
   issuer: string;
@@ -166,7 +139,7 @@ export function loadPermitSigner(
 
 export function loadRetiredPermitVerificationKeys(
   environment: NodeJS.ProcessEnv = process.env,
-): PermitVerificationKey[] {
+): RetiredPermitVerificationKey[] {
   const raw = environment.STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS;
   if (!raw) return [];
   let payload: unknown;
@@ -180,36 +153,43 @@ export function loadRetiredPermitVerificationKeys(
       "STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS must be a JSON array",
     );
   }
-  return payload.map((entry, index) => {
+  const keys = payload.map((entry, index) => {
     if (
       !entry ||
       typeof entry !== "object" ||
-      Object.keys(entry as Record<string, unknown>).length !== 2 ||
+      Object.keys(entry as Record<string, unknown>).length !== 3 ||
       !("kid" in entry) ||
-      !("publicKey" in entry)
+      !("publicKey" in entry) ||
+      !("validUntil" in entry)
     ) {
       throw new Error(
-        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}] must include kid and publicKey`,
+        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}] must include kid, publicKey and validUntil`,
       );
     }
-    const { kid, publicKey } = entry as {
+    const { kid, publicKey, validUntil } = entry as {
       kid: unknown;
       publicKey: unknown;
+      validUntil: unknown;
     };
     if (typeof kid !== "string" || kid.length < 4) {
       throw new Error(
-        `STOPPAGE_RETIRED_VERIFICATION_KEYS[${index}].kid must be a non-empty string`,
+        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}].kid must be a non-empty string`,
       );
     }
     if (typeof publicKey !== "string" || publicKey.length < 4) {
       throw new Error(
-        `STOPPAGE_RETIRED_VERIFICATION_KEYS[${index}].publicKey must be a non-empty base64url string`,
+        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}].publicKey must be a non-empty base64url string`,
       );
     }
     const decoded = decodeBase64Url(publicKey);
     if (decoded.length !== nacl.sign.publicKeyLength) {
       throw new Error(
-        `STOPPAGE_RETIRED_VERIFICATION_KEYS[${index}].publicKey must decode to ${nacl.sign.publicKeyLength} bytes`,
+        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}].publicKey must decode to ${nacl.sign.publicKeyLength} bytes`,
+      );
+    }
+    if (!Number.isInteger(validUntil) || (validUntil as number) <= 0) {
+      throw new Error(
+        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}].validUntil must be a positive epoch-millisecond integer`,
       );
     }
     return {
@@ -218,8 +198,15 @@ export function loadRetiredPermitVerificationKeys(
       use: "sig",
       publicKey,
       status: "RETIRED",
+      validUntil: validUntil as number,
     } satisfies PermitVerificationKey;
   });
+  if (new Set(keys.map((key) => key.kid)).size !== keys.length) {
+    throw new Error(
+      "STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS must not contain duplicate key IDs",
+    );
+  }
+  return keys;
 }
 
 function readOwnerOnlySeedFile(path: string): Uint8Array {
@@ -249,10 +236,26 @@ function readOwnerOnlySeedFile(path: string): Uint8Array {
 
 export function publicKeySetFor(
   signer: PermitSigner,
-  retiredKeys: readonly PermitVerificationKey[] = [],
+  retiredKeys: readonly RetiredPermitVerificationKey[] = [],
 ): PermitVerificationKeySet {
-  if (new Set(retiredKeys.map((key) => key.kid)).has(signer.kid)) {
+  const retiredKeyIds = retiredKeys.map((key) => key.kid);
+  if (new Set(retiredKeyIds).size !== retiredKeyIds.length) {
+    throw new Error("Retired key list must not contain duplicate key IDs");
+  }
+  if (new Set(retiredKeyIds).has(signer.kid)) {
     throw new Error("Retired key list must not include the active key");
+  }
+  if (
+    retiredKeys.some(
+      (key) =>
+        key.status !== "RETIRED" ||
+        !Number.isInteger(key.validUntil) ||
+        key.validUntil! <= 0,
+    )
+  ) {
+    throw new Error(
+      "Every retired key must include a positive epoch-millisecond validUntil cutoff",
+    );
   }
   return {
     version: 1,
@@ -381,6 +384,16 @@ export function inspectExecutionPermitV2({
       return blocked(
         "BLOCK_BINDING_INVALID",
         "The permit hash does not bind the signed body.",
+      );
+    }
+    if (
+      key.status === "RETIRED" &&
+      (!Number.isInteger(key.validUntil) ||
+        permit.body.expiresAt > key.validUntil!)
+    ) {
+      return blocked(
+        "BLOCK_UNKNOWN_SIGNING_KEY",
+        "The retired signing key does not authorize permits beyond its configured cutoff.",
       );
     }
     if (permit.body.audience !== request.audience) {

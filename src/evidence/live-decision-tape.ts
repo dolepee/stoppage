@@ -5,6 +5,7 @@ import { sha256 } from "../domain/canonical.js";
 import { liveAgentRequestV2Schema } from "../execution-gate/live-agent-gate.js";
 import {
   inspectExecutionPermitV2,
+  type PermitVerificationKey,
   type PermitVerificationKeySet,
   type SignedExecutionPermitV2,
 } from "../execution-gate/permit-v2.js";
@@ -43,6 +44,8 @@ export interface PublicLiveDecisionTapePayload {
     kid: string;
     alg: "Ed25519";
     publicKey: string;
+    status?: "RETIRED";
+    validUntil?: number;
   };
   counters: LiveDecisionTapeCounters;
   decisions: {
@@ -175,6 +178,12 @@ export function buildLiveDecisionTapeCandidate(
       kid: signingKey.kid,
       alg: signingKey.alg,
       publicKey: signingKey.publicKey,
+      ...(signingKey.status === "RETIRED"
+        ? {
+            status: signingKey.status,
+            validUntil: signingKey.validUntil,
+          }
+        : {}),
     },
     counters,
     decisions,
@@ -548,6 +557,18 @@ function validateCandidate(candidate: LiveDecisionTapeCandidate) {
 
 function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
   const permit = payload.sampleProof.permit;
+  const signerStatusValue = (payload.signer as { status?: unknown }).status;
+  const signerStatus = signerStatusValue ?? "ACTIVE";
+  if (
+    (signerStatusValue !== undefined && signerStatusValue !== "RETIRED") ||
+    (signerStatusValue === undefined && "validUntil" in payload.signer) ||
+    (signerStatus === "RETIRED" &&
+      (!Number.isInteger(payload.signer.validUntil) ||
+        payload.signer.validUntil! <= 0)) ||
+    (signerStatus !== "ACTIVE" && signerStatus !== "RETIRED")
+  ) {
+    throw new Error("The public tape signer lifecycle is invalid");
+  }
   const intendedRequest = {
     agentId: payload.sampleProof.intendedAgent.id,
     audience: payload.sampleProof.intendedAgent.audience,
@@ -558,24 +579,34 @@ function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
     quoteHash: permit.body.quoteHash,
     sequence: permit.body.sequence,
   };
+  const verificationKey: PermitVerificationKey =
+    signerStatus === "RETIRED"
+      ? {
+          kid: payload.signer.kid,
+          alg: payload.signer.alg,
+          use: "sig",
+          publicKey: payload.signer.publicKey,
+          status: "RETIRED",
+          validUntil: payload.signer.validUntil!,
+        }
+      : {
+          kid: payload.signer.kid,
+          alg: payload.signer.alg,
+          use: "sig",
+          publicKey: payload.signer.publicKey,
+          status: "ACTIVE",
+        };
   const keys: PermitVerificationKeySet = {
     version: 1,
     issuer: payload.signer.issuer,
-    keys: [
-      {
-        kid: payload.signer.kid,
-        alg: payload.signer.alg,
-        use: "sig",
-        publicKey: payload.signer.publicKey,
-        status: "ACTIVE",
-      },
-    ],
+    keys: [verificationKey],
   };
   const intended = inspectExecutionPermitV2({
     permit,
     request: intendedRequest,
     keys,
     now: permit.body.issuedAt,
+    allowRetiredSigners: true,
   });
   const stolen = inspectExecutionPermitV2({
     permit,
@@ -586,6 +617,7 @@ function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
     },
     keys,
     now: permit.body.issuedAt,
+    allowRetiredSigners: true,
   });
   const callbackInvokedAt = Date.parse(
     payload.sampleProof.intendedAgent.callbackInvokedAt,

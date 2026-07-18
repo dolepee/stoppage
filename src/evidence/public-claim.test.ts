@@ -8,9 +8,13 @@ import {
   buildApprovedPublicClaim,
   buildPublicClaimCandidate,
   loadLatestPrivateEvidence,
+  loadLatestPublicClaim,
+  PUBLIC_CLAIM_APPROVAL_PREFIX,
+  validatePublicFeaturedMatchLabel,
   type PrivateHoldoutReport,
   type PublicLifecycleCandidate,
 } from "./public-claim.js";
+import { sha256 } from "../domain/canonical.js";
 
 const configHash = `0x${"ab".repeat(32)}`;
 
@@ -53,6 +57,12 @@ describe("public claim approval", () => {
         preResolutionRepricesInvalidated: 7,
         postResolutionCertifiedReopens: 11,
       },
+      featuredMatch: {
+        label: "Argentina–England · completed World Cup match",
+        completeProtectedWindows: 3,
+        preResolutionRepricesInvalidated: 3,
+        postResolutionCertifiedReopens: 3,
+      },
     });
     expect(JSON.stringify(claim)).not.toContain("fixtureId");
   });
@@ -73,6 +83,123 @@ describe("public claim approval", () => {
         approvedAt: "2026-07-10T15:00:00.000Z",
       }),
     ).toThrow("Human approval must exactly equal");
+  });
+
+  it("rejects a featured match that exceeds the holdout aggregate", () => {
+    const changed = holdout();
+    changed.featuredMatch!.completeProtectedWindows =
+      changed.aggregate.completeProtectedWindows + 1;
+
+    expect(() =>
+      buildPublicClaimCandidate({
+        holdout: changed,
+        lifecycle: lifecycle(),
+      }),
+    ).toThrow("Featured match exceeds the approved holdout aggregate");
+  });
+
+  it("accepts only privacy-safe completed-match labels", () => {
+    expect(
+      validatePublicFeaturedMatchLabel(
+        "Argentina–England · completed World Cup match",
+      ),
+    ).toBe("Argentina–England · completed World Cup match");
+    for (const unsafe of [
+      "Fixture 123456",
+      "Argentina–England · 2026-07-16T20:00:00Z",
+      "fixture-123456-raw-capture.json",
+    ]) {
+      expect(() => validatePublicFeaturedMatchLabel(unsafe)).toThrow(
+        "without IDs or timestamps",
+      );
+    }
+  });
+
+  it("publishes only allowlisted featured-match fields", () => {
+    const changed = holdout();
+    Object.assign(changed.featuredMatch!, {
+      fixtureId: "private-fixture-id",
+      sourceCapture: { path: "/private/raw-capture.json" },
+      receivedTs: "2026-07-10T14:00:00.000Z",
+    });
+
+    const candidate = buildPublicClaimCandidate({
+      holdout: changed,
+      lifecycle: lifecycle(),
+    });
+
+    expect(candidate.payload.featuredMatch).toEqual(holdout().featuredMatch);
+    expect(JSON.stringify(candidate.payload.featuredMatch)).not.toMatch(
+      /fixtureId|sourceCapture|receivedTs/,
+    );
+  });
+
+  it("rejects an approved claim containing non-public featured-match fields", async () => {
+    const root = await mkdtemp(join(tmpdir(), "stoppage-public-claim-"));
+    try {
+      const candidate = buildPublicClaimCandidate({
+        holdout: holdout(),
+        lifecycle: lifecycle(),
+      });
+      const claim = buildApprovedPublicClaim({
+        holdout: holdout(),
+        lifecycle: lifecycle(),
+        approvalStatement: candidate.requiredApproval,
+        approvedAt: "2026-07-10T15:00:00.000Z",
+      });
+      Object.assign(claim.featuredMatch!, {
+        fixtureId: "private-fixture-id",
+        sourceCapture: "/private/raw-capture.json",
+      });
+      const {
+        candidateHash: _candidateHash,
+        approvedAt: _approvedAt,
+        approval: _approval,
+        ...poisonedPayload
+      } = claim;
+      claim.candidateHash = sha256(poisonedPayload);
+      claim.approval.statement = `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${claim.approvedConfigHash} ${claim.candidateHash}`;
+      await writeFile(join(root, "public-claim.json"), JSON.stringify(claim));
+
+      expect(await loadLatestPublicClaim(root)).toBeNull();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects present-but-falsy featured-match fields at private and public boundaries", async () => {
+    for (const falsy of [null, false, 0, ""] as const) {
+      const malformed = holdout() as unknown as Record<string, unknown>;
+      malformed.featuredMatch = falsy;
+      expect(() =>
+        buildPublicClaimCandidate({
+          holdout: malformed as unknown as PrivateHoldoutReport,
+          lifecycle: lifecycle(),
+        }),
+      ).toThrow("Invalid featured match property");
+    }
+
+    const root = await mkdtemp(join(tmpdir(), "stoppage-public-claim-"));
+    try {
+      const withoutFeaturedMatch = holdout();
+      delete withoutFeaturedMatch.featuredMatch;
+      const candidate = buildPublicClaimCandidate({
+        holdout: withoutFeaturedMatch,
+        lifecycle: lifecycle(),
+      });
+      const claim = buildApprovedPublicClaim({
+        holdout: withoutFeaturedMatch,
+        lifecycle: lifecycle(),
+        approvalStatement: candidate.requiredApproval,
+        approvedAt: "2026-07-10T15:00:00.000Z",
+      }) as unknown as Record<string, unknown>;
+      claim.featuredMatch = null;
+      await writeFile(join(root, "public-claim.json"), JSON.stringify(claim));
+
+      expect(await loadLatestPublicClaim(root)).toBeNull();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("selects the strongest verified lifecycle for the latest holdout", async () => {
@@ -123,6 +250,19 @@ function holdout(): PrivateHoldoutReport {
     approvedConfigHash: configHash,
     evaluatedAt: "2026-07-10T14:00:00.000Z",
     fixtures: [],
+    featuredMatch: {
+      evidenceType: "DERIVED_MATCH_ADDENDUM",
+      label: "Argentina–England · completed World Cup match",
+      dataMode: "TXLINE_REPLAY",
+      finalState: "TXLINE_GAME_FINALISED",
+      completeProtectedWindows: 3,
+      protectedWindowSeconds: 366.131,
+      preResolutionRepricesInvalidated: 3,
+      postResolutionCertifiedReopens: 3,
+      confirmedResolutionCertifiedReopens: 3,
+      dataBoundary:
+        "Derived aggregate only; no fixture ID, raw TxLINE record, odds vector or source timestamp.",
+    },
     aggregate: {
       fixtures: 2,
       completeProtectedWindows: 11,

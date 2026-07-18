@@ -440,6 +440,49 @@ describe("operator API", () => {
     }
   });
 
+  it("fails closed when a checked-in public claim is malformed", async () => {
+    const dataRoot = await mkdtemp(
+      join(tmpdir(), "txodds-public-claim-malformed-" + "XXXXXX"),
+    );
+    try {
+      const claim = JSON.parse(
+        await readFile("data/public/public-claim.json", "utf8"),
+      ) as { featuredMatch: { label: string } };
+      claim.featuredMatch.label = "fixture-123456-raw-capture.json";
+      await writeFile(
+        join(dataRoot, "public-claim.json"),
+        JSON.stringify(claim),
+      );
+
+      const application = await createApplication({
+        logger: false,
+        serveStatic: false,
+        publicClaimRoot: dataRoot,
+      });
+      applications.push(application);
+
+      const publicClaim = await application.app.inject({
+        method: "GET",
+        url: "/api/public-claim",
+      });
+      expect(publicClaim.statusCode).toBe(404);
+      expect(publicClaim.json()).toMatchObject({
+        error: "Public claim not available",
+      });
+
+      const bundle = await application.app.inject({
+        method: "GET",
+        url: "/api/judge-bundle",
+      });
+      expect(bundle.statusCode).toBe(404);
+      expect(bundle.json()).toMatchObject({
+        error: "Judge evidence bundle not available",
+      });
+    } finally {
+      await rm(dataRoot, { recursive: true, force: true });
+    }
+  });
+
   it("reports an honest mainnet activation state", async () => {
     const application = await createApplication({
       config: loadConfig({}),
@@ -668,6 +711,7 @@ describe("operator API", () => {
           use: "sig",
           publicKey: Buffer.from(retiredSigner.publicKey).toString("base64url"),
           status: "RETIRED",
+          validUntil: 20_000,
         },
       ],
     });

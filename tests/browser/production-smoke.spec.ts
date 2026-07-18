@@ -5,11 +5,69 @@ import { expect, test, type Page } from "@playwright/test";
 const approvedTapePublished = existsSync("data/public/live-decision-tape.json");
 
 test.describe("Stoppage release browser gate", () => {
+  test("binds the evidence summary to the approved featured match", async ({
+    page,
+  }) => {
+    await page.route("**/api/public-claim**", async (route) => {
+      const response = await route.fetch();
+      const claim = (await response.json()) as {
+        featuredMatch?: { label: string };
+      };
+      if (!claim.featuredMatch) {
+        throw new Error("The approved claim lacks featured-match evidence");
+      }
+      claim.featuredMatch.label = "Brazil–Germany · completed World Cup match";
+      await route.fulfill({ response, json: claim });
+    });
+
+    await page.goto("/demo");
+    await expect(
+      page.getByText(
+        "Approved World Cup holdout · Brazil–Germany · completed World Cup match",
+        { exact: true },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(/Approved World Cup holdout · Argentina–England/, {
+        exact: true,
+      }),
+    ).toHaveCount(0);
+  });
+
+  test("does not promise real proof when the approved claim is unavailable", async ({
+    page,
+  }) => {
+    await page.route("**/api/public-claim**", async (route) => {
+      await route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ status: "UNAVAILABLE" }),
+      });
+    });
+
+    await page.goto("/demo");
+    await expect(
+      page.getByText("Real TxLINE proof below", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page.getByText(
+        "approved real TxLINE evidence appears below when available.",
+        { exact: false },
+      ),
+    ).toBeVisible();
+    await expect(
+      page.getByText(
+        "No metrics are substituted when the approved claim cannot be read.",
+        { exact: true },
+      ),
+    ).toBeVisible();
+  });
+
   test("blocks, certifies and rejects tampering without layout or browser errors", async ({
     page,
     request,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
     const browserErrors: string[] = [];
     const pageErrors: string[] = [];
     const failedRequests: string[] = [];
@@ -73,6 +131,20 @@ test.describe("Stoppage release browser gate", () => {
     await expect(page).toHaveURL(/\/demo$/);
     await expect(page).toHaveTitle("Demo · Stoppage");
     await expectNoHorizontalOverflow(page);
+    if (
+      (await page
+        .getByRole("button", { name: "Test the firewall", exact: true })
+        .count()) > 0
+    ) {
+      await expect(
+        page.getByText("Demo ready · permanent what-if", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page
+          .locator(".state-node.active")
+          .getByText("REOPENED", { exact: true }),
+      ).toHaveCount(0);
+    }
     if (approvedTapePublished) {
       await expect(
         page.getByRole("heading", {
@@ -106,12 +178,26 @@ test.describe("Stoppage release browser gate", () => {
     await page
       .getByRole("button", { name: /Test the firewall|Test again/ })
       .click();
+    await page.waitForTimeout(1_000);
+    await expect(
+      page.locator(".state-node.active").getByText("REOPENED", { exact: true }),
+    ).toHaveCount(0);
     await expect(
       page.getByText("Agent action blocked", { exact: true }),
-    ).toBeVisible({ timeout: 5_000 });
+    ).toBeVisible({ timeout: 8_000 });
+    await expect(
+      page
+        .locator(".execution-stage")
+        .getByText("VENUE CALL EXECUTED", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page
+        .locator(".execution-stage .venue-call-result")
+        .getByText("VENUE CALL WITHHELD", { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Test again", exact: true }),
-    ).toBeVisible({ timeout: 15_000 });
+    ).toBeVisible({ timeout: 35_000 });
     await expect(
       page.getByText("VENUE CALL EXECUTED", { exact: true }).first(),
     ).toBeVisible();
@@ -126,6 +212,15 @@ test.describe("Stoppage release browser gate", () => {
       page.getByText(/Verified locally by @stoppage\/sdk/),
     ).toBeVisible();
 
+    await page.getByRole("button", { name: "Test again", exact: true }).click();
+    await expect(
+      page.getByText("VENUE CALL EXECUTED", { exact: true }),
+    ).toHaveCount(0);
+    await expect(page.locator(".signed-permit-details")).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Stop gate test", exact: true })
+      .click();
+
     await primaryNavigation
       .getByRole("link", { name: "Evidence", exact: true })
       .click();
@@ -135,6 +230,11 @@ test.describe("Stoppage release browser gate", () => {
     await expect(
       page.getByRole("heading", {
         name: "External builder-run SDK check",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Argentina–England · completed World Cup match", {
         exact: true,
       }),
     ).toBeVisible();
@@ -175,6 +275,28 @@ test.describe("Stoppage release browser gate", () => {
     expect(openapi.status()).toBe(200);
     const contract = (await openapi.json()) as {
       paths?: Record<string, unknown>;
+      components?: {
+        schemas?: {
+          LiveDecisionTape?: {
+            properties?: {
+              signer?: {
+                dependentRequired?: Record<string, string[]>;
+                properties?: Record<string, unknown>;
+              };
+            };
+          };
+          VerificationKeySet?: {
+            properties?: {
+              keys?: {
+                items?: {
+                  oneOf?: unknown[];
+                  properties?: Record<string, unknown>;
+                };
+              };
+            };
+          };
+        };
+      };
     };
     expect(Object.keys(contract.paths ?? {}).sort()).toEqual([
       "/api/agent-context",
@@ -183,6 +305,32 @@ test.describe("Stoppage release browser gate", () => {
       "/api/live-decision-tape",
       "/api/permit-keys",
       "/api/public-claim",
+    ]);
+    const tapeSignerSchema =
+      contract.components?.schemas?.LiveDecisionTape?.properties?.signer;
+    expect(tapeSignerSchema?.properties).toMatchObject({
+      status: { const: "RETIRED" },
+      validUntil: { type: "integer", minimum: 1 },
+    });
+    expect(tapeSignerSchema?.dependentRequired).toEqual({
+      status: ["validUntil"],
+      validUntil: ["status"],
+    });
+    const discoveryKeySchema =
+      contract.components?.schemas?.VerificationKeySet?.properties?.keys?.items;
+    expect(discoveryKeySchema?.properties).toMatchObject({
+      status: { enum: ["ACTIVE", "RETIRED"] },
+      validUntil: { type: "integer", minimum: 1 },
+    });
+    expect(discoveryKeySchema?.oneOf).toEqual([
+      {
+        properties: { status: { const: "ACTIVE" } },
+        not: { required: ["validUntil"] },
+      },
+      {
+        properties: { status: { const: "RETIRED" } },
+        required: ["validUntil"],
+      },
     ]);
 
     const context = await request.get("/api/agent-context");
@@ -209,7 +357,13 @@ test.describe("Stoppage release browser gate", () => {
     await expect(claim.json()).resolves.toMatchObject({
       version: 3,
       status: "AVAILABLE",
-      holdout: { fixtures: 4, completeProtectedWindows: 18 },
+      featuredMatch: {
+        label: "Argentina–England · completed World Cup match",
+        completeProtectedWindows: 3,
+        preResolutionRepricesInvalidated: 3,
+        postResolutionCertifiedReopens: 3,
+      },
+      holdout: { fixtures: 5, completeProtectedWindows: 21 },
     });
 
     const tape = await request.get("/api/live-decision-tape");

@@ -71,7 +71,7 @@
     "/api/permit-keys": {
       "get": {
         "summary": "Discover Permit V2 verification keys",
-        "description": "Returns the current Ed25519 public verification key set used to verify Permit V2 signatures, including retired keys supplied for historical-tape verification. Private signing material is never returned.",
+        "description": "Returns the current Ed25519 public verification key set used to verify Permit V2 signatures. Retired keys include a validUntil cutoff and are accepted only for historical-tape permits whose full lifetime ends by that cutoff. Private signing material is never returned.",
         "operationId": "discoverPermitKeys",
         "responses": {
           "200": {
@@ -572,11 +572,21 @@
             "type": "object",
             "additionalProperties": false,
             "required": ["issuer", "kid", "alg", "publicKey"],
+            "dependentRequired": {
+              "status": ["validUntil"],
+              "validUntil": ["status"]
+            },
             "properties": {
               "issuer": { "const": "stoppage" },
               "kid": { "type": "string" },
               "alg": { "const": "Ed25519" },
-              "publicKey": { "type": "string" }
+              "publicKey": { "type": "string" },
+              "status": { "const": "RETIRED" },
+              "validUntil": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Epoch-millisecond cutoff by which the retired sample permit's full lifetime must end. Omitted for the active signer."
+              }
             }
           },
           "counters": {
@@ -694,12 +704,27 @@
               "type": "object",
               "additionalProperties": false,
               "required": ["kid", "alg", "use", "publicKey", "status"],
+              "oneOf": [
+                {
+                  "properties": { "status": { "const": "ACTIVE" } },
+                  "not": { "required": ["validUntil"] }
+                },
+                {
+                  "properties": { "status": { "const": "RETIRED" } },
+                  "required": ["validUntil"]
+                }
+              ],
               "properties": {
                 "kid": { "type": "string" },
                 "alg": { "const": "Ed25519" },
                 "use": { "const": "sig" },
                 "publicKey": { "type": "string" },
-                "status": { "type": "string", "enum": ["ACTIVE", "RETIRED"] }
+                "status": { "type": "string", "enum": ["ACTIVE", "RETIRED"] },
+                "validUntil": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "description": "Epoch-millisecond verification cutoff required for RETIRED keys."
+                }
               }
             }
           }

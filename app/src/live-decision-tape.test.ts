@@ -26,6 +26,30 @@ describe("live decision tape parser", () => {
       "APPROVE STOPPAGE LIVE DECISION TAPE stp_wrong 0xwrong";
     expect(() => parseLiveDecisionTape(wrongApproval)).toThrow(/contract/);
   });
+
+  it("accepts retired signer metadata only when the permit lifetime fits its cutoff", () => {
+    const retired = fixture();
+    const retiredSigner = retired.signer as typeof retired.signer & {
+      status?: string;
+      validUntil?: number;
+    };
+    retiredSigner.status = "RETIRED";
+    retiredSigner.validUntil = 15_000;
+    expect(parseLiveDecisionTape(retired).signer).toMatchObject({
+      status: "RETIRED",
+      validUntil: 15_000,
+    });
+
+    retiredSigner.validUntil = 14_999;
+    expect(() => parseLiveDecisionTape(retired)).toThrow(/invariants/);
+
+    delete retiredSigner.status;
+    expect(() => parseLiveDecisionTape(retired)).toThrow(/invariants/);
+
+    delete retiredSigner.validUntil;
+    retiredSigner.status = "ACTIVE";
+    expect(() => parseLiveDecisionTape(retired)).toThrow(/invariants/);
+  });
 });
 
 function fixture() {

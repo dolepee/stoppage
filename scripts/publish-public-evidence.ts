@@ -30,6 +30,7 @@ if (!approvalStatement) {
         candidateHash: candidate.candidateHash,
         requiredApproval: candidate.requiredApproval,
         evaluatedAt: candidate.payload.evaluatedAt,
+        featuredMatch: candidate.payload.featuredMatch ?? null,
         holdout: candidate.payload.holdout,
         lifecycleEvidence: candidate.payload.lifecycleEvidence,
         publicClaimWritten: false,

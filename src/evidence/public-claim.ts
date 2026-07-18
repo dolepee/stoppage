@@ -64,6 +64,49 @@ export interface PrivateHoldoutAggregate {
   discardedResolutionCertifiedReopens: number;
 }
 
+export interface PublicFeaturedMatch {
+  evidenceType: "DERIVED_MATCH_ADDENDUM";
+  label: string;
+  dataMode: "TXLINE_REPLAY";
+  finalState: "TXLINE_GAME_FINALISED";
+  completeProtectedWindows: number;
+  protectedWindowSeconds: number;
+  preResolutionRepricesInvalidated: number;
+  postResolutionCertifiedReopens: number;
+  confirmedResolutionCertifiedReopens: number;
+  dataBoundary: string;
+}
+
+const PUBLIC_FEATURED_MATCH_FIELDS = [
+  "evidenceType",
+  "label",
+  "dataMode",
+  "finalState",
+  "completeProtectedWindows",
+  "protectedWindowSeconds",
+  "preResolutionRepricesInvalidated",
+  "postResolutionCertifiedReopens",
+  "confirmedResolutionCertifiedReopens",
+  "dataBoundary",
+] as const;
+
+const PUBLIC_FEATURED_MATCH_LABEL_PATTERN =
+  /^[\p{L}][\p{L}\p{M} .&'’()-]{0,35}–[\p{L}][\p{L}\p{M} .&'’()-]{0,35} · completed World Cup match$/u;
+
+export function validatePublicFeaturedMatchLabel(value: unknown): string {
+  if (
+    typeof value !== "string" ||
+    value.length < 3 ||
+    value.length > 80 ||
+    !PUBLIC_FEATURED_MATCH_LABEL_PATTERN.test(value)
+  ) {
+    throw new Error(
+      "Featured match label must use ‘Team–Team · completed World Cup match’ without IDs or timestamps",
+    );
+  }
+  return value;
+}
+
 export interface PrivateHoldoutReport {
   version: number;
   status: "AWAITING_PUBLIC_CLAIM_APPROVAL";
@@ -71,6 +114,7 @@ export interface PrivateHoldoutReport {
   approvedConfigHash: string;
   evaluatedAt: string;
   fixtures: Array<Record<string, unknown>>;
+  featuredMatch?: PublicFeaturedMatch;
   aggregate: PrivateHoldoutAggregate;
 }
 
@@ -86,6 +130,7 @@ export interface PublicClaimResponse {
     statement: string;
   };
   dataBoundary: string;
+  featuredMatch?: PublicFeaturedMatch;
   holdout: PrivateHoldoutAggregate & {
     definitions: {
       unconfirmedOddsLedSuspensionRate: string;
@@ -194,6 +239,13 @@ export function buildPublicClaimCandidate({
     throw new Error("Holdout and lifecycle config hashes do not match");
   }
   assertAggregate(holdout.aggregate);
+  const featuredMatchProperty = projectFeaturedMatchProperty(holdout, false);
+  if (featuredMatchProperty.featuredMatch) {
+    assertFeaturedWithinHoldout(
+      featuredMatchProperty.featuredMatch,
+      holdout.aggregate,
+    );
+  }
   assertLifecycleCandidate(lifecycle);
 
   const payload: PublicClaimCandidate["payload"] = {
@@ -203,6 +255,7 @@ export function buildPublicClaimCandidate({
     approvedConfigHash: holdout.approvedConfigHash,
     evaluatedAt: holdout.evaluatedAt,
     dataBoundary: lifecycle.dataBoundary,
+    ...featuredMatchProperty,
     holdout: {
       ...holdout.aggregate,
       definitions: {
@@ -255,11 +308,21 @@ function isApprovedPublicClaim(value: PublicClaimResponse) {
   }
   const expectedApproval = `${PUBLIC_CLAIM_APPROVAL_PREFIX} ${value.approvedConfigHash} ${value.candidateHash}`;
   if (value.approval?.statement !== expectedApproval) return false;
-  if (value.candidateHash !== sha256(publicClaimPayload(value))) {
-    return false;
-  }
   try {
+    const featuredMatchProperty = projectFeaturedMatchProperty(value, true);
+    if (
+      value.candidateHash !==
+      sha256(publicClaimPayload(value, featuredMatchProperty))
+    ) {
+      return false;
+    }
     assertAggregate(value.holdout);
+    if (featuredMatchProperty.featuredMatch) {
+      assertFeaturedWithinHoldout(
+        featuredMatchProperty.featuredMatch,
+        value.holdout,
+      );
+    }
     assertLifecycleCandidate({
       version: 2,
       status: "AWAITING_HUMAN_APPROVAL",
@@ -301,6 +364,13 @@ async function findLatestHoldout(
     }
     try {
       assertAggregate(report.aggregate);
+      const featuredMatchProperty = projectFeaturedMatchProperty(report, false);
+      if (featuredMatchProperty.featuredMatch) {
+        assertFeaturedWithinHoldout(
+          featuredMatchProperty.featuredMatch,
+          report.aggregate,
+        );
+      }
       return report;
     } catch {
       continue;
@@ -342,6 +412,7 @@ async function findLatestLifecycleEvidence(
 
 function publicClaimPayload(
   value: PublicClaimResponse,
+  featuredMatchProperty = projectFeaturedMatchProperty(value, true),
 ): PublicClaimCandidate["payload"] {
   return {
     version: value.version,
@@ -350,6 +421,7 @@ function publicClaimPayload(
     approvedConfigHash: value.approvedConfigHash,
     evaluatedAt: value.evaluatedAt,
     dataBoundary: value.dataBoundary,
+    ...featuredMatchProperty,
     holdout: value.holdout,
     lifecycleEvidence: value.lifecycleEvidence,
   };
@@ -390,6 +462,109 @@ function assertAggregate(value: PrivateHoldoutAggregate) {
   const rate = value.unconfirmedOddsLedSuspensionRate;
   if (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 1)) {
     throw new Error("Invalid unconfirmed odds-led suspension rate");
+  }
+}
+
+function assertFeaturedMatch(value: PublicFeaturedMatch) {
+  if (
+    value.evidenceType !== "DERIVED_MATCH_ADDENDUM" ||
+    value.dataMode !== "TXLINE_REPLAY" ||
+    value.finalState !== "TXLINE_GAME_FINALISED" ||
+    typeof value.dataBoundary !== "string" ||
+    !value.dataBoundary.includes("no fixture ID")
+  ) {
+    throw new Error("Invalid featured match metadata");
+  }
+  validatePublicFeaturedMatchLabel(value.label);
+  if (
+    !Number.isFinite(value.protectedWindowSeconds) ||
+    value.protectedWindowSeconds < 0
+  ) {
+    throw new Error("Invalid featured match protected-window duration");
+  }
+  for (const field of [
+    "completeProtectedWindows",
+    "preResolutionRepricesInvalidated",
+    "postResolutionCertifiedReopens",
+    "confirmedResolutionCertifiedReopens",
+  ] as const) {
+    if (!Number.isInteger(value[field]) || value[field] < 0) {
+      throw new Error(`Invalid featured match field: ${field}`);
+    }
+  }
+  if (
+    value.confirmedResolutionCertifiedReopens >
+      value.postResolutionCertifiedReopens ||
+    value.postResolutionCertifiedReopens > value.completeProtectedWindows
+  ) {
+    throw new Error("Featured match counts are internally inconsistent");
+  }
+}
+
+function projectFeaturedMatch(value: PublicFeaturedMatch): PublicFeaturedMatch {
+  assertFeaturedMatch(value);
+  return {
+    evidenceType: value.evidenceType,
+    label: value.label,
+    dataMode: value.dataMode,
+    finalState: value.finalState,
+    completeProtectedWindows: value.completeProtectedWindows,
+    protectedWindowSeconds: value.protectedWindowSeconds,
+    preResolutionRepricesInvalidated: value.preResolutionRepricesInvalidated,
+    postResolutionCertifiedReopens: value.postResolutionCertifiedReopens,
+    confirmedResolutionCertifiedReopens:
+      value.confirmedResolutionCertifiedReopens,
+    dataBoundary: value.dataBoundary,
+  };
+}
+
+function projectFeaturedMatchProperty(
+  value: object,
+  requireExactFields: boolean,
+): { featuredMatch?: PublicFeaturedMatch } {
+  if (!Object.prototype.hasOwnProperty.call(value, "featuredMatch")) return {};
+  const featuredMatch = (value as { featuredMatch?: unknown }).featuredMatch;
+  if (
+    !featuredMatch ||
+    typeof featuredMatch !== "object" ||
+    Array.isArray(featuredMatch) ||
+    (requireExactFields && !hasOnlyPublicFeaturedMatchFields(featuredMatch))
+  ) {
+    throw new Error("Invalid featured match property");
+  }
+  return {
+    featuredMatch: projectFeaturedMatch(
+      featuredMatch as unknown as PublicFeaturedMatch,
+    ),
+  };
+}
+
+function hasOnlyPublicFeaturedMatchFields(value: object) {
+  const fields = Object.keys(value);
+  return (
+    fields.length === PUBLIC_FEATURED_MATCH_FIELDS.length &&
+    fields.every((field) =>
+      (PUBLIC_FEATURED_MATCH_FIELDS as readonly string[]).includes(field),
+    )
+  );
+}
+
+function assertFeaturedWithinHoldout(
+  featured: PublicFeaturedMatch,
+  holdout: PrivateHoldoutAggregate,
+) {
+  assertFeaturedMatch(featured);
+  if (
+    featured.completeProtectedWindows > holdout.completeProtectedWindows ||
+    featured.protectedWindowSeconds > holdout.staleQuoteSeconds ||
+    featured.preResolutionRepricesInvalidated >
+      holdout.preResolutionRepricesInvalidated ||
+    featured.postResolutionCertifiedReopens >
+      holdout.postResolutionCertifiedReopens ||
+    featured.confirmedResolutionCertifiedReopens >
+      holdout.confirmedResolutionCertifiedReopens
+  ) {
+    throw new Error("Featured match exceeds the approved holdout aggregate");
   }
 }
 

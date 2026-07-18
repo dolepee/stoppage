@@ -33,7 +33,7 @@ export default defineConfig({
     : {
         command: "pnpm start",
         url: `${baseURL}/api/health`,
-        reuseExistingServer: !process.env.CI,
+        reuseExistingServer: false,
         timeout: 120_000,
       },
 });

@@ -74,13 +74,22 @@ export interface SignedExecutionPermitV2 {
   signature: string;
 }
 
-export interface PermitVerificationKey {
+interface PermitVerificationKeyBase {
   kid: string;
   alg: "Ed25519";
   use: "sig";
   publicKey: string;
-  status: "ACTIVE" | "RETIRED";
 }
+
+export type PermitVerificationKey =
+  | (PermitVerificationKeyBase & {
+      status: "ACTIVE";
+      validUntil?: never;
+    })
+  | (PermitVerificationKeyBase & {
+      status: "RETIRED";
+      validUntil: number;
+    });
 
 export interface PermitVerificationKeySet {
   version: 1;

@@ -22,6 +22,8 @@ export interface LiveDecisionTape {
     kid: string;
     alg: "Ed25519";
     publicKey: string;
+    status?: "RETIRED";
+    validUntil?: number;
   };
   counters: {
     capturedRequests: number;
@@ -146,6 +148,7 @@ export function parseLiveDecisionTape(value: unknown): LiveDecisionTape {
   const blockedOther = asNonNegativeInteger(decisions.blockedOther);
   const permitIssuedAt = asNonNegativeInteger(permitBody.issuedAt);
   const permitExpiresAt = asNonNegativeInteger(permitBody.expiresAt);
+  const signerStatus = signer.status ?? "ACTIVE";
   const callbackInvokedAt = Date.parse(
     asString(intendedAgent.callbackInvokedAt),
   );
@@ -158,6 +161,12 @@ export function parseLiveDecisionTape(value: unknown): LiveDecisionTape {
     callbacksWithoutPermit !== 0 ||
     allowCertifiedReopen < 1 ||
     sampleProof.decision !== "ALLOW_CERTIFIED_REOPEN" ||
+    (signer.status !== undefined && signer.status !== "RETIRED") ||
+    (signer.status === undefined && "validUntil" in signer) ||
+    (signerStatus === "RETIRED" &&
+      (!Number.isInteger(signer.validUntil) ||
+        permitExpiresAt > (signer.validUntil as number))) ||
+    (signerStatus !== "ACTIVE" && signerStatus !== "RETIRED") ||
     !Number.isFinite(callbackInvokedAt) ||
     callbackInvokedAt < permitIssuedAt ||
     callbackInvokedAt >= permitExpiresAt ||
