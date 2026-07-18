@@ -556,9 +556,11 @@ function validateCandidate(candidate: LiveDecisionTapeCandidate) {
 
 function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
   const permit = payload.sampleProof.permit;
-  const signerStatus = payload.signer.status ?? "ACTIVE";
+  const signerStatusValue = (payload.signer as { status?: unknown }).status;
+  const signerStatus = signerStatusValue ?? "ACTIVE";
   if (
-    (signerStatus === "ACTIVE" && "validUntil" in payload.signer) ||
+    (signerStatusValue !== undefined && signerStatusValue !== "RETIRED") ||
+    (signerStatusValue === undefined && "validUntil" in payload.signer) ||
     (signerStatus === "RETIRED" &&
       (!Number.isInteger(payload.signer.validUntil) ||
         payload.signer.validUntil! <= 0)) ||

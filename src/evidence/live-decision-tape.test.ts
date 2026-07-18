@@ -90,6 +90,32 @@ describe("public live decision-tape evidence", () => {
       JSON.stringify(approved),
     );
     await expect(loadPublicLiveDecisionTape(root)).resolves.toBeNull();
+
+    const mislabeledPayload = structuredClone(
+      candidate.payload,
+    ) as unknown as Omit<typeof candidate.payload, "signer"> & {
+      signer: Omit<typeof candidate.payload.signer, "status"> & {
+        status?: "ACTIVE" | "RETIRED";
+      };
+    };
+    mislabeledPayload.signer.status = "ACTIVE";
+    delete mislabeledPayload.signer.validUntil;
+    const mislabeledHash = sha256(mislabeledPayload);
+    await writeFile(
+      join(root, "live-decision-tape.json"),
+      JSON.stringify({
+        ...mislabeledPayload,
+        candidateHash: mislabeledHash,
+        approvedAt: "2026-07-16T16:00:00.000Z",
+        approval: {
+          statement: candidate.requiredApproval.replace(
+            candidate.candidateHash,
+            mislabeledHash,
+          ),
+        },
+      }),
+    );
+    await expect(loadPublicLiveDecisionTape(root)).resolves.toBeNull();
   });
 
   it("requires one real block and rejects unapproved or tampered publication", async () => {

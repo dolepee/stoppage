@@ -572,11 +572,21 @@
             "type": "object",
             "additionalProperties": false,
             "required": ["issuer", "kid", "alg", "publicKey"],
+            "dependentRequired": {
+              "status": ["validUntil"],
+              "validUntil": ["status"]
+            },
             "properties": {
               "issuer": { "const": "stoppage" },
               "kid": { "type": "string" },
               "alg": { "const": "Ed25519" },
-              "publicKey": { "type": "string" }
+              "publicKey": { "type": "string" },
+              "status": { "const": "RETIRED" },
+              "validUntil": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Epoch-millisecond cutoff by which the retired sample permit's full lifetime must end. Omitted for the active signer."
+              }
             }
           },
           "counters": {

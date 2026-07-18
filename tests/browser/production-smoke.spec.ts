@@ -246,6 +246,18 @@ test.describe("Stoppage release browser gate", () => {
     expect(openapi.status()).toBe(200);
     const contract = (await openapi.json()) as {
       paths?: Record<string, unknown>;
+      components?: {
+        schemas?: {
+          LiveDecisionTape?: {
+            properties?: {
+              signer?: {
+                dependentRequired?: Record<string, string[]>;
+                properties?: Record<string, unknown>;
+              };
+            };
+          };
+        };
+      };
     };
     expect(Object.keys(contract.paths ?? {}).sort()).toEqual([
       "/api/agent-context",
@@ -255,6 +267,16 @@ test.describe("Stoppage release browser gate", () => {
       "/api/permit-keys",
       "/api/public-claim",
     ]);
+    const tapeSignerSchema =
+      contract.components?.schemas?.LiveDecisionTape?.properties?.signer;
+    expect(tapeSignerSchema?.properties).toMatchObject({
+      status: { const: "RETIRED" },
+      validUntil: { type: "integer", minimum: 1 },
+    });
+    expect(tapeSignerSchema?.dependentRequired).toEqual({
+      status: ["validUntil"],
+      validUntil: ["status"],
+    });
 
     const context = await request.get("/api/agent-context");
     expect(context.status()).toBe(200);

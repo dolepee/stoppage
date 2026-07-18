@@ -224,7 +224,10 @@ key, the intended callback receipt hash, and these counters:
 The public `/api/live-decision-tape` response says
 `RECORDED_CAPTURE_NOT_HOSTED_UPTIME`; it is evidence of builder-operated TxLINE
 capture, not a claim that the Vercel static deployment runs the persistent
-worker.
+worker. An active sample signer keeps the compact four-field `signer` shape. A
+retired sample signer additionally exposes `status: RETIRED` and its
+epoch-millisecond `validUntil` cutoff, and the permit's full lifetime must end
+by that cutoff.
 
 The static judge-host contract intentionally omits host-only endpoints that are
 available only in the long-running worker runtime:
