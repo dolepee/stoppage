@@ -21,6 +21,20 @@ const publicClaimSchema = z
     evaluatedAt: z.string().min(1),
     approvedAt: z.string().min(1),
     dataBoundary: z.string().min(1),
+    featuredMatch: z
+      .object({
+        evidenceType: z.literal("DERIVED_MATCH_ADDENDUM"),
+        label: z.string().min(3).max(80),
+        dataMode: z.literal("TXLINE_REPLAY"),
+        finalState: z.literal("TXLINE_GAME_FINALISED"),
+        completeProtectedWindows: z.number().int().nonnegative(),
+        protectedWindowSeconds: z.number().nonnegative(),
+        preResolutionRepricesInvalidated: z.number().int().nonnegative(),
+        postResolutionCertifiedReopens: z.number().int().nonnegative(),
+        confirmedResolutionCertifiedReopens: z.number().int().nonnegative(),
+        dataBoundary: z.string().min(1),
+      })
+      .optional(),
     holdout: z.object({
       fixtures: z.number().int().positive(),
       completeProtectedWindows: z.number().int().nonnegative(),

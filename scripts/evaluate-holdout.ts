@@ -14,6 +14,13 @@ import {
 
 const fixtureIds = readFixtureArguments();
 const approvedConfigHash = readStringArgument("--approved-config-hash");
+const featuredFixtureId = readOptionalIntegerArgument("--featured-fixture");
+const featuredLabel = readOptionalStringArgument("--featured-label");
+if ((featuredFixtureId === null) !== (featuredLabel === null)) {
+  throw new Error(
+    "--featured-fixture and --featured-label must be provided together",
+  );
+}
 const expectedConfigHash = new QuoteGovernor(DEFAULT_GOVERNOR_CONFIG)
   .configHash;
 if (approvedConfigHash !== expectedConfigHash) {
@@ -45,6 +52,13 @@ const oddsLedProtectedWindows = sum(
 const unconfirmedOddsLedProtectedWindows = sum(
   fixtures.map((fixture) => fixture.metrics.unconfirmedOddsLedProtectedWindows),
 );
+const featuredFixture =
+  featuredFixtureId === null
+    ? null
+    : fixtures.find((fixture) => fixture.fixtureId === featuredFixtureId);
+if (featuredFixtureId !== null && !featuredFixture) {
+  throw new Error("The featured fixture must be part of this holdout");
+}
 
 const report = {
   version: 2,
@@ -53,6 +67,26 @@ const report = {
   approvedConfigHash,
   evaluatedAt: new Date().toISOString(),
   fixtures,
+  featuredMatch:
+    featuredFixture && featuredLabel
+      ? {
+          evidenceType: "DERIVED_MATCH_ADDENDUM",
+          label: featuredLabel,
+          dataMode: "TXLINE_REPLAY",
+          finalState: "TXLINE_GAME_FINALISED",
+          completeProtectedWindows:
+            featuredFixture.sample.completeProtectedWindows,
+          protectedWindowSeconds: featuredFixture.metrics.staleQuoteSeconds,
+          preResolutionRepricesInvalidated:
+            featuredFixture.metrics.preResolutionRepricesInvalidated,
+          postResolutionCertifiedReopens:
+            featuredFixture.metrics.postResolutionCertifiedReopens,
+          confirmedResolutionCertifiedReopens:
+            featuredFixture.metrics.confirmedResolutionCertifiedReopens,
+          dataBoundary:
+            "Derived aggregate only; no fixture ID, raw TxLINE record, odds vector or source timestamp.",
+        }
+      : undefined,
   aggregate: {
     fixtures: fixtures.length,
     completeProtectedWindows: sum(
@@ -118,6 +152,7 @@ console.log(
       status: report.status,
       approvedConfigHash,
       aggregate: report.aggregate,
+      featuredMatch: report.featuredMatch ?? null,
       privateReport: output,
       publicClaimApprovalRequired: true,
     },
@@ -157,6 +192,26 @@ function readStringArgument(name: string) {
   const value = index >= 0 ? process.argv[index + 1] : undefined;
   if (!value || !/^0x[0-9a-f]{64}$/.test(value)) {
     throw new Error(`${name} requires a lowercase 32-byte hash`);
+  }
+  return value;
+}
+
+function readOptionalIntegerArgument(name: string) {
+  const index = process.argv.indexOf(name);
+  if (index < 0) return null;
+  const value = Number(process.argv[index + 1]);
+  if (!Number.isInteger(value) || value <= 0) {
+    throw new Error(`${name} requires a positive integer`);
+  }
+  return value;
+}
+
+function readOptionalStringArgument(name: string) {
+  const index = process.argv.indexOf(name);
+  if (index < 0) return null;
+  const value = process.argv[index + 1]?.trim();
+  if (!value || value.length < 3 || value.length > 80) {
+    throw new Error(`${name} requires 3–80 characters`);
   }
   return value;
 }

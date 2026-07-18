@@ -32,6 +32,7 @@ describe("authenticated execution permit v2", () => {
             publicKey: Buffer.from(retiredSigner.publicKey).toString(
               "base64url",
             ),
+            validUntil: 20_000,
           },
         ]),
       }),
@@ -42,8 +43,28 @@ describe("authenticated execution permit v2", () => {
         use: "sig",
         status: "RETIRED",
         publicKey: Buffer.from(retiredSigner.publicKey).toString("base64url"),
+        validUntil: 20_000,
       },
     ]);
+  });
+
+  it("rejects duplicate retired key IDs", () => {
+    const retiredSigner = createPermitSigner(
+      Uint8Array.from({ length: 32 }, (_, index) => 64 + index),
+    );
+    const entry = {
+      kid: retiredSigner.kid,
+      publicKey: Buffer.from(retiredSigner.publicKey).toString("base64url"),
+      validUntil: 20_000,
+    };
+    expect(() =>
+      loadRetiredPermitVerificationKeys({
+        STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS: JSON.stringify([
+          entry,
+          entry,
+        ]),
+      }),
+    ).toThrow("must not contain duplicate key IDs");
   });
 
   it("rejects malformed retired key configuration", () => {
@@ -159,6 +180,56 @@ describe("authenticated execution permit v2", () => {
         request,
         keys,
         now: 10_001,
+      }),
+    ).toMatchObject({
+      valid: false,
+      decision: "BLOCK_UNKNOWN_SIGNING_KEY",
+    });
+  });
+
+  it("accepts historical permits only within a retired key cutoff", () => {
+    const { result, request } = allowedResult();
+    const retiredSigner = createPermitSigner(
+      Uint8Array.from({ length: 32 }, (_, index) => 64 + index),
+    );
+    const activeSigner = createPermitSigner(
+      Uint8Array.from({ length: 32 }, (_, index) => 96 + index),
+    );
+    const signed = issueExecutionPermitV2(
+      result,
+      request,
+      retiredSigner,
+      10_000,
+    );
+    const keys = publicKeySetFor(activeSigner, [
+      {
+        kid: retiredSigner.kid,
+        alg: "Ed25519",
+        use: "sig",
+        publicKey: Buffer.from(retiredSigner.publicKey).toString("base64url"),
+        status: "RETIRED",
+        validUntil: 15_000,
+      },
+    ]);
+
+    expect(
+      inspectExecutionPermitV2({
+        permit: signed.permit!,
+        request,
+        keys,
+        now: 10_001,
+        allowRetiredSigners: true,
+      }),
+    ).toMatchObject({ valid: true, decision: "ALLOW" });
+
+    keys.keys[1]!.validUntil = 14_999;
+    expect(
+      inspectExecutionPermitV2({
+        permit: signed.permit!,
+        request,
+        keys,
+        now: 10_001,
+        allowRetiredSigners: true,
       }),
     ).toMatchObject({
       valid: false,

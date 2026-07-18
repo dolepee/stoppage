@@ -64,6 +64,19 @@ export interface PrivateHoldoutAggregate {
   discardedResolutionCertifiedReopens: number;
 }
 
+export interface PublicFeaturedMatch {
+  evidenceType: "DERIVED_MATCH_ADDENDUM";
+  label: string;
+  dataMode: "TXLINE_REPLAY";
+  finalState: "TXLINE_GAME_FINALISED";
+  completeProtectedWindows: number;
+  protectedWindowSeconds: number;
+  preResolutionRepricesInvalidated: number;
+  postResolutionCertifiedReopens: number;
+  confirmedResolutionCertifiedReopens: number;
+  dataBoundary: string;
+}
+
 export interface PrivateHoldoutReport {
   version: number;
   status: "AWAITING_PUBLIC_CLAIM_APPROVAL";
@@ -71,6 +84,7 @@ export interface PrivateHoldoutReport {
   approvedConfigHash: string;
   evaluatedAt: string;
   fixtures: Array<Record<string, unknown>>;
+  featuredMatch?: PublicFeaturedMatch;
   aggregate: PrivateHoldoutAggregate;
 }
 
@@ -86,6 +100,7 @@ export interface PublicClaimResponse {
     statement: string;
   };
   dataBoundary: string;
+  featuredMatch?: PublicFeaturedMatch;
   holdout: PrivateHoldoutAggregate & {
     definitions: {
       unconfirmedOddsLedSuspensionRate: string;
@@ -194,6 +209,9 @@ export function buildPublicClaimCandidate({
     throw new Error("Holdout and lifecycle config hashes do not match");
   }
   assertAggregate(holdout.aggregate);
+  if (holdout.featuredMatch) {
+    assertFeaturedWithinHoldout(holdout.featuredMatch, holdout.aggregate);
+  }
   assertLifecycleCandidate(lifecycle);
 
   const payload: PublicClaimCandidate["payload"] = {
@@ -203,6 +221,9 @@ export function buildPublicClaimCandidate({
     approvedConfigHash: holdout.approvedConfigHash,
     evaluatedAt: holdout.evaluatedAt,
     dataBoundary: lifecycle.dataBoundary,
+    ...(holdout.featuredMatch
+      ? { featuredMatch: assertFeaturedMatch(holdout.featuredMatch) }
+      : {}),
     holdout: {
       ...holdout.aggregate,
       definitions: {
@@ -260,6 +281,9 @@ function isApprovedPublicClaim(value: PublicClaimResponse) {
   }
   try {
     assertAggregate(value.holdout);
+    if (value.featuredMatch) {
+      assertFeaturedWithinHoldout(value.featuredMatch, value.holdout);
+    }
     assertLifecycleCandidate({
       version: 2,
       status: "AWAITING_HUMAN_APPROVAL",
@@ -350,6 +374,7 @@ function publicClaimPayload(
     approvedConfigHash: value.approvedConfigHash,
     evaluatedAt: value.evaluatedAt,
     dataBoundary: value.dataBoundary,
+    ...(value.featuredMatch ? { featuredMatch: value.featuredMatch } : {}),
     holdout: value.holdout,
     lifecycleEvidence: value.lifecycleEvidence,
   };
@@ -390,6 +415,64 @@ function assertAggregate(value: PrivateHoldoutAggregate) {
   const rate = value.unconfirmedOddsLedSuspensionRate;
   if (rate !== null && (!Number.isFinite(rate) || rate < 0 || rate > 1)) {
     throw new Error("Invalid unconfirmed odds-led suspension rate");
+  }
+}
+
+function assertFeaturedMatch(value: PublicFeaturedMatch) {
+  if (
+    value.evidenceType !== "DERIVED_MATCH_ADDENDUM" ||
+    value.dataMode !== "TXLINE_REPLAY" ||
+    value.finalState !== "TXLINE_GAME_FINALISED" ||
+    typeof value.label !== "string" ||
+    value.label.length < 3 ||
+    value.label.length > 80 ||
+    typeof value.dataBoundary !== "string" ||
+    !value.dataBoundary.includes("no fixture ID")
+  ) {
+    throw new Error("Invalid featured match metadata");
+  }
+  if (
+    !Number.isFinite(value.protectedWindowSeconds) ||
+    value.protectedWindowSeconds < 0
+  ) {
+    throw new Error("Invalid featured match protected-window duration");
+  }
+  for (const field of [
+    "completeProtectedWindows",
+    "preResolutionRepricesInvalidated",
+    "postResolutionCertifiedReopens",
+    "confirmedResolutionCertifiedReopens",
+  ] as const) {
+    if (!Number.isInteger(value[field]) || value[field] < 0) {
+      throw new Error(`Invalid featured match field: ${field}`);
+    }
+  }
+  if (
+    value.confirmedResolutionCertifiedReopens >
+      value.postResolutionCertifiedReopens ||
+    value.postResolutionCertifiedReopens > value.completeProtectedWindows
+  ) {
+    throw new Error("Featured match counts are internally inconsistent");
+  }
+  return value;
+}
+
+function assertFeaturedWithinHoldout(
+  featured: PublicFeaturedMatch,
+  holdout: PrivateHoldoutAggregate,
+) {
+  assertFeaturedMatch(featured);
+  if (
+    featured.completeProtectedWindows > holdout.completeProtectedWindows ||
+    featured.protectedWindowSeconds > holdout.staleQuoteSeconds ||
+    featured.preResolutionRepricesInvalidated >
+      holdout.preResolutionRepricesInvalidated ||
+    featured.postResolutionCertifiedReopens >
+      holdout.postResolutionCertifiedReopens ||
+    featured.confirmedResolutionCertifiedReopens >
+      holdout.confirmedResolutionCertifiedReopens
+  ) {
+    throw new Error("Featured match exceeds the approved holdout aggregate");
   }
 }
 

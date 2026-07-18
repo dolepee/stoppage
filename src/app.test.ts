@@ -668,6 +668,7 @@ describe("operator API", () => {
           use: "sig",
           publicKey: Buffer.from(retiredSigner.publicKey).toString("base64url"),
           status: "RETIRED",
+          validUntil: 20_000,
         },
       ],
     });

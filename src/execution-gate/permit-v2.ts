@@ -75,6 +75,7 @@ export interface PermitVerificationKey {
   use: "sig";
   publicKey: string;
   status: "ACTIVE" | "RETIRED";
+  validUntil?: number;
 }
 
 const STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS =
@@ -180,36 +181,43 @@ export function loadRetiredPermitVerificationKeys(
       "STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS must be a JSON array",
     );
   }
-  return payload.map((entry, index) => {
+  const keys = payload.map((entry, index) => {
     if (
       !entry ||
       typeof entry !== "object" ||
-      Object.keys(entry as Record<string, unknown>).length !== 2 ||
+      Object.keys(entry as Record<string, unknown>).length !== 3 ||
       !("kid" in entry) ||
-      !("publicKey" in entry)
+      !("publicKey" in entry) ||
+      !("validUntil" in entry)
     ) {
       throw new Error(
-        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}] must include kid and publicKey`,
+        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}] must include kid, publicKey and validUntil`,
       );
     }
-    const { kid, publicKey } = entry as {
+    const { kid, publicKey, validUntil } = entry as {
       kid: unknown;
       publicKey: unknown;
+      validUntil: unknown;
     };
     if (typeof kid !== "string" || kid.length < 4) {
       throw new Error(
-        `STOPPAGE_RETIRED_VERIFICATION_KEYS[${index}].kid must be a non-empty string`,
+        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}].kid must be a non-empty string`,
       );
     }
     if (typeof publicKey !== "string" || publicKey.length < 4) {
       throw new Error(
-        `STOPPAGE_RETIRED_VERIFICATION_KEYS[${index}].publicKey must be a non-empty base64url string`,
+        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}].publicKey must be a non-empty base64url string`,
       );
     }
     const decoded = decodeBase64Url(publicKey);
     if (decoded.length !== nacl.sign.publicKeyLength) {
       throw new Error(
-        `STOPPAGE_RETIRED_VERIFICATION_KEYS[${index}].publicKey must decode to ${nacl.sign.publicKeyLength} bytes`,
+        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}].publicKey must decode to ${nacl.sign.publicKeyLength} bytes`,
+      );
+    }
+    if (!Number.isInteger(validUntil) || (validUntil as number) <= 0) {
+      throw new Error(
+        `STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS[${index}].validUntil must be a positive epoch-millisecond integer`,
       );
     }
     return {
@@ -218,8 +226,15 @@ export function loadRetiredPermitVerificationKeys(
       use: "sig",
       publicKey,
       status: "RETIRED",
+      validUntil: validUntil as number,
     } satisfies PermitVerificationKey;
   });
+  if (new Set(keys.map((key) => key.kid)).size !== keys.length) {
+    throw new Error(
+      "STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS must not contain duplicate key IDs",
+    );
+  }
+  return keys;
 }
 
 function readOwnerOnlySeedFile(path: string): Uint8Array {
@@ -251,8 +266,24 @@ export function publicKeySetFor(
   signer: PermitSigner,
   retiredKeys: readonly PermitVerificationKey[] = [],
 ): PermitVerificationKeySet {
-  if (new Set(retiredKeys.map((key) => key.kid)).has(signer.kid)) {
+  const retiredKeyIds = retiredKeys.map((key) => key.kid);
+  if (new Set(retiredKeyIds).size !== retiredKeyIds.length) {
+    throw new Error("Retired key list must not contain duplicate key IDs");
+  }
+  if (new Set(retiredKeyIds).has(signer.kid)) {
     throw new Error("Retired key list must not include the active key");
+  }
+  if (
+    retiredKeys.some(
+      (key) =>
+        key.status !== "RETIRED" ||
+        !Number.isInteger(key.validUntil) ||
+        key.validUntil! <= 0,
+    )
+  ) {
+    throw new Error(
+      "Every retired key must include a positive epoch-millisecond validUntil cutoff",
+    );
   }
   return {
     version: 1,
@@ -381,6 +412,16 @@ export function inspectExecutionPermitV2({
       return blocked(
         "BLOCK_BINDING_INVALID",
         "The permit hash does not bind the signed body.",
+      );
+    }
+    if (
+      key.status === "RETIRED" &&
+      (!Number.isInteger(key.validUntil) ||
+        permit.body.expiresAt > key.validUntil!)
+    ) {
+      return blocked(
+        "BLOCK_UNKNOWN_SIGNING_KEY",
+        "The retired signing key does not authorize permits beyond its configured cutoff.",
       );
     }
     if (permit.body.audience !== request.audience) {

@@ -139,9 +139,12 @@ use `STOPPAGE_PERMIT_SIGNING_SEED_FILE` pointing to an ignored mode-0600 raw
 32-byte seed file.
 
 For key rotation, add retired verification keys as a JSON array in
-`STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS` using `{"kid":..., "publicKey":...}` entries;
-retired entries are accepted for historical Live Decision Tape verification but
-never become active signing keys.
+`STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS` using
+`{"kid":..., "publicKey":..., "validUntil":...}` entries, where `validUntil`
+is an epoch-millisecond cutoff. Retired entries are accepted only for historical
+Live Decision Tape permits whose complete five-second lifetime ends by that
+cutoff; duplicate key IDs are rejected and retired keys never become active
+signing keys.
 
 Development and tests use an explicitly non-production
 signer; production fails closed rather than falling back to it. Signing material
@@ -283,18 +286,21 @@ pnpm sdk:consumer:verify
 - Dual-stream transport gate: mainnet fixtures, odds, and scores were observed
   together through the full private runtime gate. Raw transport records remain
   private under the event data licence.
-- Private historical gate: four captured fixtures each produced at least one
+- Private historical gate: five captured fixtures each produced at least one
   complete `SUSPEND -> REPRICE -> REOPEN` lifecycle. Raw TxLINE records and
   real-match vectors remain private under the event data licence.
 - TxLINE on-chain score validation: confirmed on Solana mainnet with a true
   predicate result.
-- Public real-match metrics: four held-out fixtures, 18 complete protected
-  windows, 11 pre-resolution reprices invalidated, and 18 fresh
-  post-resolution Certified Reopens (14 confirmed, 4 discarded), human-approved
-  under revision 2 in `/api/public-claim`. The endpoint exposes only derived
-  aggregates, lifecycle decisions, hashes, and public Solana evidence; raw
-  fixture IDs, records, source timestamps, and vectors remain private.
-- Trigger coverage is explicit: all 18 real holdout windows were event-led. The
+- Public real-match metrics: five held-out fixtures, 21 complete protected
+  windows, 14 pre-resolution reprices invalidated, and 21 fresh
+  post-resolution Certified Reopens (17 confirmed, 4 discarded), human-approved
+  under revision 2 in `/api/public-claim`. The latest completed-match addendum
+  is labeled Argentina–England and contributes three protected windows, three
+  invalidated branches, and three confirmed Certified Reopens. The endpoint
+  exposes only derived aggregates, lifecycle decisions, hashes, and public
+  Solana evidence; raw fixture IDs, records, source timestamps, and vectors
+  remain private.
+- Trigger coverage is explicit: all 21 real holdout windows were event-led. The
   odds-led `UNBACKED_MOVE` detector is implemented and tested but was not
   exercised by the real holdout, so no odds-led success rate is claimed.
 

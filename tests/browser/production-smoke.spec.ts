@@ -9,7 +9,7 @@ test.describe("Stoppage release browser gate", () => {
     page,
     request,
   }) => {
-    test.setTimeout(60_000);
+    test.setTimeout(90_000);
     const browserErrors: string[] = [];
     const pageErrors: string[] = [];
     const failedRequests: string[] = [];
@@ -73,6 +73,20 @@ test.describe("Stoppage release browser gate", () => {
     await expect(page).toHaveURL(/\/demo$/);
     await expect(page).toHaveTitle("Demo · Stoppage");
     await expectNoHorizontalOverflow(page);
+    if (
+      (await page
+        .getByRole("button", { name: "Test the firewall", exact: true })
+        .count()) > 0
+    ) {
+      await expect(
+        page.getByText("Demo ready · permanent what-if", { exact: true }),
+      ).toBeVisible();
+      await expect(
+        page
+          .locator(".state-node.active")
+          .getByText("REOPENED", { exact: true }),
+      ).toHaveCount(0);
+    }
     if (approvedTapePublished) {
       await expect(
         page.getByRole("heading", {
@@ -108,10 +122,20 @@ test.describe("Stoppage release browser gate", () => {
       .click();
     await expect(
       page.getByText("Agent action blocked", { exact: true }),
-    ).toBeVisible({ timeout: 5_000 });
+    ).toBeVisible({ timeout: 8_000 });
+    await expect(
+      page
+        .locator(".execution-stage")
+        .getByText("VENUE CALL EXECUTED", { exact: true }),
+    ).toHaveCount(0);
+    await expect(
+      page
+        .locator(".execution-stage .venue-call-result")
+        .getByText("VENUE CALL WITHHELD", { exact: true }),
+    ).toBeVisible();
     await expect(
       page.getByRole("button", { name: "Test again", exact: true }),
-    ).toBeVisible({ timeout: 15_000 });
+    ).toBeVisible({ timeout: 35_000 });
     await expect(
       page.getByText("VENUE CALL EXECUTED", { exact: true }).first(),
     ).toBeVisible();
@@ -135,6 +159,11 @@ test.describe("Stoppage release browser gate", () => {
     await expect(
       page.getByRole("heading", {
         name: "External builder-run SDK check",
+        exact: true,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Argentina–England · completed World Cup match", {
         exact: true,
       }),
     ).toBeVisible();
@@ -209,7 +238,13 @@ test.describe("Stoppage release browser gate", () => {
     await expect(claim.json()).resolves.toMatchObject({
       version: 3,
       status: "AVAILABLE",
-      holdout: { fixtures: 4, completeProtectedWindows: 18 },
+      featuredMatch: {
+        label: "Argentina–England · completed World Cup match",
+        completeProtectedWindows: 3,
+        preResolutionRepricesInvalidated: 3,
+        postResolutionCertifiedReopens: 3,
+      },
+      holdout: { fixtures: 5, completeProtectedWindows: 21 },
     });
 
     const tape = await request.get("/api/live-decision-tape");

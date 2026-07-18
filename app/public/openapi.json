@@ -71,7 +71,7 @@
     "/api/permit-keys": {
       "get": {
         "summary": "Discover Permit V2 verification keys",
-        "description": "Returns the current Ed25519 public verification key set used to verify Permit V2 signatures, including retired keys supplied for historical-tape verification. Private signing material is never returned.",
+        "description": "Returns the current Ed25519 public verification key set used to verify Permit V2 signatures. Retired keys include a validUntil cutoff and are accepted only for historical-tape permits whose full lifetime ends by that cutoff. Private signing material is never returned.",
         "operationId": "discoverPermitKeys",
         "responses": {
           "200": {
@@ -699,7 +699,11 @@
                 "alg": { "const": "Ed25519" },
                 "use": { "const": "sig" },
                 "publicKey": { "type": "string" },
-                "status": { "type": "string", "enum": ["ACTIVE", "RETIRED"] }
+                "status": { "type": "string", "enum": ["ACTIVE", "RETIRED"] },
+                "validUntil": {
+                  "type": "integer",
+                  "description": "Epoch-millisecond verification cutoff required for RETIRED keys."
+                }
               }
             }
           }

@@ -3,23 +3,35 @@
   "status": "AVAILABLE",
   "network": "solana-mainnet",
   "approvedConfigHash": "0x1d773fb526081fb15a4643c0767f692144ecbec28cf4fc75a96b43aa17b5fcf2",
-  "evaluatedAt": "2026-07-13T12:23:04.667Z",
+  "evaluatedAt": "2026-07-18T02:06:50.585Z",
   "dataBoundary": "No TxLINE records, vectors, identifiers, or absolute source timestamps.",
+  "featuredMatch": {
+    "evidenceType": "DERIVED_MATCH_ADDENDUM",
+    "label": "Argentina–England · completed World Cup match",
+    "dataMode": "TXLINE_REPLAY",
+    "finalState": "TXLINE_GAME_FINALISED",
+    "completeProtectedWindows": 3,
+    "protectedWindowSeconds": 366.131,
+    "preResolutionRepricesInvalidated": 3,
+    "postResolutionCertifiedReopens": 3,
+    "confirmedResolutionCertifiedReopens": 3,
+    "dataBoundary": "Derived aggregate only; no fixture ID, raw TxLINE record, odds vector or source timestamp."
+  },
   "holdout": {
-    "fixtures": 4,
-    "completeProtectedWindows": 18,
-    "staleQuoteSeconds": 2007.973,
-    "mispricingIntegral": 315.3208445093693,
-    "eventLedProtectedWindows": 18,
+    "fixtures": 5,
+    "completeProtectedWindows": 21,
+    "staleQuoteSeconds": 2374.104,
+    "mispricingIntegral": 435.79841242576924,
+    "eventLedProtectedWindows": 21,
     "oddsLedProtectedWindows": 0,
     "confirmedOddsLedProtectedWindows": 0,
     "unconfirmedOddsLedProtectedWindows": 0,
     "unconfirmedOddsLedSuspensionRate": null,
     "failsafeProtectedWindows": 0,
-    "provisionalEventProtectedWindows": 18,
-    "preResolutionRepricesInvalidated": 11,
-    "postResolutionCertifiedReopens": 18,
-    "confirmedResolutionCertifiedReopens": 14,
+    "provisionalEventProtectedWindows": 21,
+    "preResolutionRepricesInvalidated": 14,
+    "postResolutionCertifiedReopens": 21,
+    "confirmedResolutionCertifiedReopens": 17,
     "discardedResolutionCertifiedReopens": 4,
     "definitions": {
       "unconfirmedOddsLedSuspensionRate": "Odds-led protected windows that remained UNBACKED_MOVE through repricing divided by all odds-led protected windows; null when no odds-led window was observed.",
@@ -81,9 +93,9 @@
       }
     ]
   },
-  "candidateHash": "0x05ba120565890638d9ee7305e06df20d2b30427d7c949c2e952d681e40465d9d",
-  "approvedAt": "2026-07-13T12:37:59.879Z",
+  "candidateHash": "0x358f6eb646a56b647c0ed10b1c7e37de845cc5b769d6462b095e9a654bd8351d",
+  "approvedAt": "2026-07-18T02:10:53.651Z",
   "approval": {
-    "statement": "APPROVE STOPPAGE PUBLIC CLAIM 0x1d773fb526081fb15a4643c0767f692144ecbec28cf4fc75a96b43aa17b5fcf2 0x05ba120565890638d9ee7305e06df20d2b30427d7c949c2e952d681e40465d9d"
+    "statement": "APPROVE STOPPAGE PUBLIC CLAIM 0x1d773fb526081fb15a4643c0767f692144ecbec28cf4fc75a96b43aa17b5fcf2 0x358f6eb646a56b647c0ed10b1c7e37de845cc5b769d6462b095e9a654bd8351d"
   }
 }

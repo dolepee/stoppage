@@ -159,6 +159,7 @@ describe("public live decision-tape evidence", () => {
           use: "sig",
           publicKey: Buffer.from(retiredSigner.publicKey).toString("base64url"),
           status: "RETIRED",
+          validUntil: 35_000,
         },
       ]),
     );

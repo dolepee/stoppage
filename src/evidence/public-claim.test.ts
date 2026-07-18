@@ -53,6 +53,12 @@ describe("public claim approval", () => {
         preResolutionRepricesInvalidated: 7,
         postResolutionCertifiedReopens: 11,
       },
+      featuredMatch: {
+        label: "Argentina–England · completed World Cup match",
+        completeProtectedWindows: 3,
+        preResolutionRepricesInvalidated: 3,
+        postResolutionCertifiedReopens: 3,
+      },
     });
     expect(JSON.stringify(claim)).not.toContain("fixtureId");
   });
@@ -73,6 +79,19 @@ describe("public claim approval", () => {
         approvedAt: "2026-07-10T15:00:00.000Z",
       }),
     ).toThrow("Human approval must exactly equal");
+  });
+
+  it("rejects a featured match that exceeds the holdout aggregate", () => {
+    const changed = holdout();
+    changed.featuredMatch!.completeProtectedWindows =
+      changed.aggregate.completeProtectedWindows + 1;
+
+    expect(() =>
+      buildPublicClaimCandidate({
+        holdout: changed,
+        lifecycle: lifecycle(),
+      }),
+    ).toThrow("Featured match exceeds the approved holdout aggregate");
   });
 
   it("selects the strongest verified lifecycle for the latest holdout", async () => {
@@ -123,6 +142,19 @@ function holdout(): PrivateHoldoutReport {
     approvedConfigHash: configHash,
     evaluatedAt: "2026-07-10T14:00:00.000Z",
     fixtures: [],
+    featuredMatch: {
+      evidenceType: "DERIVED_MATCH_ADDENDUM",
+      label: "Argentina–England · completed World Cup match",
+      dataMode: "TXLINE_REPLAY",
+      finalState: "TXLINE_GAME_FINALISED",
+      completeProtectedWindows: 3,
+      protectedWindowSeconds: 366.131,
+      preResolutionRepricesInvalidated: 3,
+      postResolutionCertifiedReopens: 3,
+      confirmedResolutionCertifiedReopens: 3,
+      dataBoundary:
+        "Derived aggregate only; no fixture ID, raw TxLINE record, odds vector or source timestamp.",
+    },
     aggregate: {
       fixtures: 2,
       completeProtectedWindows: 11,

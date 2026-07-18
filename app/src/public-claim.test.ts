@@ -13,6 +13,19 @@ function claim() {
     evaluatedAt: "2026-07-12T21:42:11.859Z",
     approvedAt: "2026-07-12T21:52:56.944Z",
     dataBoundary: "No source data.",
+    featuredMatch: {
+      evidenceType: "DERIVED_MATCH_ADDENDUM",
+      label: "Argentina–England · completed World Cup match",
+      dataMode: "TXLINE_REPLAY",
+      finalState: "TXLINE_GAME_FINALISED",
+      completeProtectedWindows: 3,
+      protectedWindowSeconds: 366.131,
+      preResolutionRepricesInvalidated: 3,
+      postResolutionCertifiedReopens: 3,
+      confirmedResolutionCertifiedReopens: 3,
+      dataBoundary:
+        "Derived aggregate only; no fixture ID, raw TxLINE record, odds vector or source timestamp.",
+    },
     holdout: {
       fixtures: 4,
       completeProtectedWindows: 18,
@@ -86,6 +99,9 @@ function claim() {
 describe("parsePublicClaim", () => {
   it("accepts the approved lifecycle shape", () => {
     expect(parsePublicClaim(claim()).holdout.completeProtectedWindows).toBe(18);
+    expect(parsePublicClaim(claim()).featuredMatch?.label).toContain(
+      "Argentina–England",
+    );
   });
 
   it("rejects reordered lifecycle decisions", () => {

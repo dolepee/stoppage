@@ -2337,6 +2337,33 @@ time,
   text-align: right;
 }
 
+.demo-ready-note {
+  margin-top: 18px;
+  padding: 13px 15px;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  border: 1px solid #9fcfc0;
+  border-radius: var(--radius);
+  color: var(--green);
+  background: #eaf6f1;
+}
+
+.demo-ready-note > span {
+  display: grid;
+  gap: 3px;
+}
+
+.demo-ready-note strong {
+  font-size: 12px;
+}
+
+.demo-ready-note small {
+  color: #58756b;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
 .state-lane {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -2494,6 +2521,17 @@ time,
 .book-state.state-failsafe {
   color: var(--red);
   border-color: #db908c;
+}
+
+.book-state.state-ready {
+  color: var(--faint);
+}
+
+.market-idle-note {
+  margin: -11px 0 21px;
+  color: var(--faint);
+  font-size: 11px;
+  line-height: 1.45;
 }
 
 .selection-grid {
@@ -2933,6 +2971,70 @@ time,
   white-space: nowrap;
 }
 
+.featured-match-proof {
+  margin-top: 24px;
+  padding: 18px 20px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  border: 1px solid #8fc5b2;
+  border-radius: var(--radius);
+  background: #e8f5f0;
+}
+
+.featured-match-icon {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #087a5c;
+  background: #d2ebe2;
+}
+
+.featured-match-proof > div,
+.featured-match-duration {
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.featured-match-proof small {
+  color: #58756b;
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.featured-match-proof > div > strong {
+  color: #17372e;
+  font-size: 16px;
+}
+
+.featured-match-proof p {
+  margin: 0;
+  color: #4f6d63;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.featured-match-duration {
+  justify-items: end;
+  padding-left: 20px;
+  border-left: 1px solid #a8d0c1;
+  text-align: right;
+}
+
+.featured-match-duration strong {
+  color: #087a5c;
+  font:
+    18px "SFMono-Regular",
+    Consolas,
+    monospace;
+}
+
 .evidence-grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(380px, 0.82fr);
@@ -3290,8 +3392,9 @@ a:focus-visible {
   outline-offset: 3px;
 }
 
-main h1:focus {
-  outline: none;
+main h1:focus-visible {
+  outline: 2px solid var(--mint);
+  outline-offset: 5px;
 }
 
 @media (max-width: 1120px) {
@@ -3902,6 +4005,20 @@ main h1:focus {
   .evidence-links {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .featured-match-proof {
+    grid-template-columns: auto minmax(0, 1fr);
+    padding: 16px;
+  }
+
+  .featured-match-duration {
+    grid-column: 2;
+    justify-items: start;
+    padding: 10px 0 0;
+    border-top: 1px solid #a8d0c1;
+    border-left: 0;
+    text-align: left;
   }
 
   .evidence-aggregate {

@@ -18,6 +18,7 @@ import {
   Server,
   ShieldCheck,
   TimerReset,
+  Trophy,
   Waves,
 } from "lucide-react";
 import {
@@ -82,7 +83,7 @@ const routeMetadata: Record<AppRoute, { title: string; description: string }> =
     "/demo": {
       title: "Demo · Stoppage",
       description:
-        "Test Stoppage's synthetic World Cup enforcement adapter and inspect the approved Live Decision Tape: real TxLINE capture, signed permit enforcement, and cross-agent isolation.",
+        "Test Stoppage's permanent synthetic World Cup enforcement adapter and inspect the approved Live Decision Tape: builder-attested TxLINE capture replay, signed permit enforcement, and cross-agent isolation.",
     },
     "/evidence": {
       title: "Evidence · Stoppage",
@@ -250,7 +251,7 @@ function App() {
     setActionError(null);
     try {
       if (localRuntime.current) {
-        const run = localRuntime.current.start(4);
+        const run = localRuntime.current.start(1);
         setActionPending(false);
         void run.catch((error: unknown) =>
           setActionError((error as Error).message),
@@ -260,7 +261,7 @@ function App() {
       const response = await fetch("/api/replay/start", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ speed: 4 }),
+        body: JSON.stringify({ speed: 1 }),
       });
       if (!response.ok) throw new Error(`Replay failed: ${response.status}`);
       setSnapshot((await response.json()) as RuntimeSnapshot);
@@ -611,13 +612,14 @@ function ControlPage({
               <DataMode mode={snapshot.dataMode} />
             </div>
             <h1 id="product-title" tabIndex={-1}>
-              Agent gate test
+              World Cup execution firewall
             </h1>
             <p className="product-lede">
-              A reference market-maker chooses a quote, then asks Stoppage for
-              permission to publish it. This synthetic France–Spain VAR what-if
-              shows the independent gate block the dead branch and issue a
-              receipt-bound permit only after fresh consensus.
+              Run the complete VAR safety path now: block the provisional
+              branch, certify fresh consensus, verify the signed permit, then
+              call the simulated venue. This permanent judge test is synthetic
+              and reproducible; approved real TxLINE evidence is presented
+              separately below.
             </p>
             <div className="hero-meta">
               <span>
@@ -625,9 +627,10 @@ function ControlPage({
               </span>
               <span>
                 {snapshot.dataMode === "SYNTHETIC"
-                  ? "What-if scenario"
+                  ? "Permanent judge scenario"
                   : `Fixture ${snapshot.match.fixtureId}`}
               </span>
+              <span>Real TxLINE proof below</span>
               <span>{connectionLabel}</span>
             </div>
             <div className="failure-case">
@@ -695,7 +698,7 @@ function ControlPage({
             <span>{snapshot.match.competition}</span>
             <strong>
               {snapshot.dataMode === "SYNTHETIC"
-                ? "Not actual match data"
+                ? "Permanent judge demo · not live match state"
                 : `Fixture ${snapshot.match.fixtureId}`}
             </strong>
           </div>
@@ -709,6 +712,19 @@ function ControlPage({
             <strong>{formatReplayClock(snapshot.replayElapsedMs)}</strong>
           </div>
         </section>
+
+        {!hasRun ? (
+          <section className="demo-ready-note" role="status">
+            <Play size={17} aria-hidden="true" />
+            <span>
+              <strong>Demo ready · permanent what-if</strong>
+              <small>
+                This is not the finished match or a live fixture. Use “Test the
+                firewall” above to populate the simulated lifecycle and books.
+              </small>
+            </span>
+          </section>
+        ) : null}
 
         <section className="state-lane" aria-label="Quote lifecycle">
           {(["OPEN", "SUSPENDED", "REPRICED", "OPEN"] as const).map(
@@ -736,12 +752,14 @@ function ControlPage({
             mode={snapshot.mode}
             probabilities={snapshot.currentProbability}
             governed
+            idle={!hasRun}
           />
           <MarketBook
             title="Naive-open baseline"
             subtitle="Always open · follows consensus"
             mode="OPEN"
             probabilities={snapshot.baselineProbability}
+            idle={!hasRun}
           />
         </section>
 
@@ -1430,7 +1448,11 @@ function ApprovedEvidenceBand({
     <section className="evidence-band" aria-label="Approved mainnet evidence">
       <div className="evidence-band-inner">
         <div className="evidence-band-lead">
-          <span>Approved mainnet holdout · revision 2</span>
+          <span>
+            {claim?.featuredMatch
+              ? "Approved World Cup holdout · Argentina–England included"
+              : "Approved mainnet holdout · revision 2"}
+          </span>
           <strong>
             {status === "available"
               ? "Resolution-aware TxLINE evidence"
@@ -1524,6 +1546,32 @@ function ApprovedEvidencePanel({
         </span>
       </div>
 
+      {claim.featuredMatch ? (
+        <article className="featured-match-proof">
+          <span className="featured-match-icon" aria-hidden="true">
+            <Trophy size={18} />
+          </span>
+          <div>
+            <small>Latest completed-match addendum</small>
+            <strong>{claim.featuredMatch.label}</strong>
+            <p>
+              Finalized TxLINE replay ·{" "}
+              {claim.featuredMatch.completeProtectedWindows} protected incidents
+              · {claim.featuredMatch.preResolutionRepricesInvalidated}{" "}
+              provisional branches invalidated ·{" "}
+              {claim.featuredMatch.postResolutionCertifiedReopens} Certified
+              Reopens
+            </p>
+          </div>
+          <span className="featured-match-duration">
+            <small>Gate protected</small>
+            <strong>
+              {formatDuration(claim.featuredMatch.protectedWindowSeconds)}
+            </strong>
+          </span>
+        </article>
+      ) : null}
+
       <div className="evidence-grid">
         <div className="evidence-aggregate">
           <EvidenceStat
@@ -1553,7 +1601,11 @@ function ApprovedEvidencePanel({
                 key={decision.receiptHash}
               >
                 <small>{String(index + 1).padStart(2, "0")}</small>
-                <strong>{decision.action}</strong>
+                <strong>
+                  {decision.action === "INVALIDATE_REPRICE"
+                    ? "INVALIDATE REPRICE"
+                    : decision.action}
+                </strong>
                 <span>{formatElapsed(decision.elapsedMs)}</span>
               </div>
             ))}
@@ -1960,6 +2012,9 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
       market: "1X2",
       quoteHash: agent.requestedQuoteHash,
     };
+    setHandshake(null);
+    setOutcome(null);
+    setLatencyMs(null);
     setPending(true);
     setError(null);
     setBenchResults([]);
@@ -2029,8 +2084,20 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
     }
   }
 
-  const permit = handshake?.result.permit ?? null;
-  const venueExecuted = outcome?.status === "VENUE_CALL_EXECUTED";
+  const currentDecisionBlocked = agent.decision === "BLOCK";
+  const permit = currentDecisionBlocked
+    ? null
+    : (handshake?.result.permit ?? null);
+  const venueExecuted =
+    !currentDecisionBlocked &&
+    !pending &&
+    outcome?.status === "VENUE_CALL_EXECUTED";
+  const venueResultReason = pending
+    ? "Verifying the current decision; the callback remains closed."
+    : currentDecisionBlocked
+      ? agent.reason
+      : (outcome?.verification.reason ??
+        "No signed Permit V2 has authorized this callback.");
   const status = pending
     ? "CALLING"
     : error
@@ -2131,10 +2198,7 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
           <strong>
             {venueExecuted ? "VENUE CALL EXECUTED" : "VENUE CALL WITHHELD"}
           </strong>
-          <small>
-            {outcome?.verification.reason ??
-              "No signed Permit V2 has authorized this callback."}
-          </small>
+          <small>{venueResultReason}</small>
         </span>
       </div>
 
@@ -2303,12 +2367,14 @@ function MarketBook({
   mode,
   probabilities,
   governed = false,
+  idle = false,
 }: {
   title: string;
   subtitle: string;
   mode: GovernorMode;
   probabilities: ProbabilityVector | null;
   governed?: boolean;
+  idle?: boolean;
 }) {
   const quoteAvailable = probabilities && (!governed || mode === "OPEN");
 
@@ -2319,8 +2385,17 @@ function MarketBook({
           <span>{subtitle}</span>
           <h2>{title}</h2>
         </div>
-        <span className={`book-state state-${mode.toLowerCase()}`}>{mode}</span>
+        <span
+          className={`book-state state-${idle ? "ready" : mode.toLowerCase()}`}
+        >
+          {idle ? "READY" : mode}
+        </span>
       </header>
+      {idle ? (
+        <p className="market-idle-note">
+          Waiting for the judge to start this simulated run.
+        </p>
+      ) : null}
       <div className="selection-grid">
         {selections.map(({ key, label }) => {
           const value = probabilities?.[key] ?? 0;
@@ -2779,6 +2854,9 @@ function stateNodeClass(
   mode: GovernorMode,
   index: number,
 ) {
+  if (snapshot.timeline.length === 0) {
+    return index === 0 ? "active" : "pending";
+  }
   const lifecycleActions = snapshot.receipts.map(
     (receipt) => receipt.body.action,
   );
