@@ -1972,6 +1972,9 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
     null,
   );
   const [outcome, setOutcome] = useState<VenueOutcome | null>(null);
+  const [completedHandshakeKey, setCompletedHandshakeKey] = useState<
+    string | null
+  >(null);
   const [pending, setPending] = useState(false);
   const [latencyMs, setLatencyMs] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -1995,6 +1998,7 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
     if (!handshakeKey || !agent.requestedQuoteHash) {
       setHandshake(null);
       setOutcome(null);
+      setCompletedHandshakeKey(null);
       setLatencyMs(null);
       setError(null);
       setBenchResults([]);
@@ -2016,6 +2020,7 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
     };
     setHandshake(null);
     setOutcome(null);
+    setCompletedHandshakeKey(null);
     setLatencyMs(null);
     setPending(true);
     setError(null);
@@ -2031,12 +2036,14 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
         if (controller.signal.aborted) return;
         setOutcome(nextOutcome);
         setHandshake(nextOutcome.response);
+        setCompletedHandshakeKey(handshakeKey);
         setLatencyMs(Math.max(1, Math.round(performance.now() - startedAt)));
       })
       .catch((requestError: unknown) => {
         if ((requestError as Error).name !== "AbortError") {
           setHandshake(null);
           setOutcome(null);
+          setCompletedHandshakeKey(null);
           setError((requestError as Error).message);
         }
       })
@@ -2046,6 +2053,13 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
 
     return () => controller.abort();
   }, [client, handshakeKey]);
+
+  const handshakeIsCurrent =
+    handshakeKey !== null && completedHandshakeKey === handshakeKey;
+  const currentHandshake = handshakeIsCurrent ? handshake : null;
+  const currentOutcome = handshakeIsCurrent ? outcome : null;
+  const currentLatencyMs = handshakeIsCurrent ? latencyMs : null;
+  const currentBenchResults = handshakeIsCurrent ? benchResults : [];
 
   function applyIdentity(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -2064,15 +2078,15 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
   }
 
   async function runBenchLiteInBrowser() {
-    if (!handshake?.result.permit) return;
+    if (!currentHandshake?.result.permit) return;
     setBenchPending(true);
     setBenchResults([]);
     setError(null);
     try {
       const keys = await client.discoverKeys();
       const results = runSdkBenchLite({
-        permit: handshake.result.permit,
-        intent: handshake.request,
+        permit: currentHandshake.result.permit,
+        intent: currentHandshake.request,
         keys,
       });
       setBenchResults(results);
@@ -2087,18 +2101,19 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
   }
 
   const currentDecisionBlocked = agent.decision === "BLOCK";
-  const permit = currentDecisionBlocked
-    ? null
-    : (handshake?.result.permit ?? null);
+  const currentDecisionAllowed = agent.decision === "ALLOW";
+  const permit = currentDecisionAllowed
+    ? (currentHandshake?.result.permit ?? null)
+    : null;
   const venueExecuted =
-    !currentDecisionBlocked &&
+    currentDecisionAllowed &&
     !pending &&
-    outcome?.status === "VENUE_CALL_EXECUTED";
+    currentOutcome?.status === "VENUE_CALL_EXECUTED";
   const venueResultReason = pending
     ? "Verifying the current decision; the callback remains closed."
     : currentDecisionBlocked
       ? agent.reason
-      : (outcome?.verification.reason ??
+      : (currentOutcome?.verification.reason ??
         "No signed Permit V2 has authorized this callback.");
   const status = pending
     ? "CALLING"
@@ -2106,7 +2121,7 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
       ? "UNAVAILABLE"
       : venueExecuted
         ? "VENUE CALL EXECUTED"
-        : outcome
+        : currentOutcome
           ? "VENUE CALL WITHHELD"
           : "ARMED";
   const stateClass = pending
@@ -2115,14 +2130,14 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
       ? "failed"
       : venueExecuted
         ? "verified"
-        : outcome
+        : currentOutcome
           ? "rejected"
           : "armed";
   const challengeReady =
-    handshake?.result.decision === "ALLOW_CERTIFIED_REOPEN" &&
+    currentHandshake?.result.decision === "ALLOW_CERTIFIED_REOPEN" &&
     venueExecuted &&
     Boolean(permit);
-  const passedBench = benchResults.filter(
+  const passedBench = currentBenchResults.filter(
     (result) => getChallengeResultDisplay(result).passed,
   ).length;
 
@@ -2146,8 +2161,8 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
         <div className="agent-api-status" role="status" aria-live="polite">
           <span>{status}</span>
           <small>
-            {latencyMs !== null
-              ? `offline verify · ${latencyMs}ms total`
+            {currentLatencyMs !== null
+              ? `offline verify · ${currentLatencyMs}ms total`
               : "callback closed by default"}
           </small>
         </div>
@@ -2265,7 +2280,7 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
         </div>
       ) : null}
 
-      {benchResults.length > 0 ? (
+      {currentBenchResults.length > 0 ? (
         <div
           className={`permit-challenge-result ${passedBench === 6 ? "" : "failed"}`}
           role={passedBench === 6 ? "status" : "alert"}
@@ -2279,7 +2294,7 @@ function AgentApiHandshake({ snapshot }: { snapshot: RuntimeSnapshot }) {
             <strong>{passedBench}/6 EXECUTION ATTACKS REJECTED</strong>
             <small>
               Verified locally by @stoppage/sdk ·{" "}
-              {benchResults
+              {currentBenchResults
                 .map((result) => challengeLabels[result.challenge])
                 .join(" · ")}
             </small>

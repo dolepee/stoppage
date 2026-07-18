@@ -183,6 +183,15 @@ test.describe("Stoppage release browser gate", () => {
       page.getByText(/Verified locally by @stoppage\/sdk/),
     ).toBeVisible();
 
+    await page.getByRole("button", { name: "Test again", exact: true }).click();
+    await expect(
+      page.getByText("VENUE CALL EXECUTED", { exact: true }),
+    ).toHaveCount(0);
+    await expect(page.locator(".signed-permit-details")).toHaveCount(0);
+    await page
+      .getByRole("button", { name: "Stop gate test", exact: true })
+      .click();
+
     await primaryNavigation
       .getByRole("link", { name: "Evidence", exact: true })
       .click();
