@@ -704,6 +704,16 @@
               "type": "object",
               "additionalProperties": false,
               "required": ["kid", "alg", "use", "publicKey", "status"],
+              "oneOf": [
+                {
+                  "properties": { "status": { "const": "ACTIVE" } },
+                  "not": { "required": ["validUntil"] }
+                },
+                {
+                  "properties": { "status": { "const": "RETIRED" } },
+                  "required": ["validUntil"]
+                }
+              ],
               "properties": {
                 "kid": { "type": "string" },
                 "alg": { "const": "Ed25519" },
@@ -712,6 +722,7 @@
                 "status": { "type": "string", "enum": ["ACTIVE", "RETIRED"] },
                 "validUntil": {
                   "type": "integer",
+                  "minimum": 1,
                   "description": "Epoch-millisecond verification cutoff required for RETIRED keys."
                 }
               }

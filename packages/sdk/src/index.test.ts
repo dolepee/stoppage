@@ -73,8 +73,20 @@ describe("@stoppage/sdk enforcement adapter", () => {
     const now = Date.now();
     const intent = makeIntent("retired-key-nonce-0001");
     const permit = makePermit(intent, now);
-    const retiredKeys = structuredClone(keys);
-    retiredKeys.keys[0]!.status = "RETIRED";
+    const activeKey = keys.keys[0]!;
+    const retiredKeys: PermitVerificationKeySet = {
+      ...structuredClone(keys),
+      keys: [
+        {
+          kid: activeKey.kid,
+          alg: activeKey.alg,
+          use: activeKey.use,
+          publicKey: activeKey.publicKey,
+          status: "RETIRED",
+          validUntil: permit.body.expiresAt,
+        },
+      ],
+    };
 
     expect(
       verifyPermit({ permit, intent, keys: retiredKeys, now: now + 1 }),

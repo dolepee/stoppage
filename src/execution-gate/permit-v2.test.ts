@@ -14,6 +14,7 @@ import {
   loadRetiredPermitVerificationKeys,
   nonceKey,
   publicKeySetFor,
+  type PermitVerificationKeySet,
   type PermitV2RequestBinding,
 } from "./permit-v2.js";
 
@@ -171,8 +172,20 @@ describe("authenticated execution permit v2", () => {
   it("rejects a valid signature from a retired verification key", () => {
     const { result, request } = allowedResult();
     const signed = issueExecutionPermitV2(result, request, signer, 10_000);
-    const keys = publicKeySetFor(signer);
-    keys.keys[0]!.status = "RETIRED";
+    const keys: PermitVerificationKeySet = {
+      version: 1,
+      issuer: signer.issuer,
+      keys: [
+        {
+          kid: signer.kid,
+          alg: "Ed25519",
+          use: "sig",
+          publicKey: Buffer.from(signer.publicKey).toString("base64url"),
+          status: "RETIRED",
+          validUntil: signed.permit!.body.expiresAt,
+        },
+      ],
+    };
 
     expect(
       inspectExecutionPermitV2({

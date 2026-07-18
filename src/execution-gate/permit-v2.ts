@@ -69,14 +69,25 @@ export interface ExecutionGateResultV2 {
   permit: SignedExecutionPermitV2 | null;
 }
 
-export interface PermitVerificationKey {
+interface PermitVerificationKeyBase {
   kid: string;
   alg: "Ed25519";
   use: "sig";
   publicKey: string;
-  status: "ACTIVE" | "RETIRED";
-  validUntil?: number;
 }
+
+export type ActivePermitVerificationKey = PermitVerificationKeyBase & {
+  status: "ACTIVE";
+  validUntil?: never;
+};
+
+export type RetiredPermitVerificationKey = PermitVerificationKeyBase & {
+  status: "RETIRED";
+  validUntil: number;
+};
+
+export type PermitVerificationKey =
+  ActivePermitVerificationKey | RetiredPermitVerificationKey;
 
 const STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS =
   "STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS";
@@ -167,7 +178,7 @@ export function loadPermitSigner(
 
 export function loadRetiredPermitVerificationKeys(
   environment: NodeJS.ProcessEnv = process.env,
-): PermitVerificationKey[] {
+): RetiredPermitVerificationKey[] {
   const raw = environment.STOPPAGE_PERMIT_RETIRED_VERIFICATION_KEYS;
   if (!raw) return [];
   let payload: unknown;
@@ -264,7 +275,7 @@ function readOwnerOnlySeedFile(path: string): Uint8Array {
 
 export function publicKeySetFor(
   signer: PermitSigner,
-  retiredKeys: readonly PermitVerificationKey[] = [],
+  retiredKeys: readonly RetiredPermitVerificationKey[] = [],
 ): PermitVerificationKeySet {
   const retiredKeyIds = retiredKeys.map((key) => key.kid);
   if (new Set(retiredKeyIds).size !== retiredKeyIds.length) {

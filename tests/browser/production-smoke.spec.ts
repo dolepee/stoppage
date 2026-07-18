@@ -285,6 +285,16 @@ test.describe("Stoppage release browser gate", () => {
               };
             };
           };
+          VerificationKeySet?: {
+            properties?: {
+              keys?: {
+                items?: {
+                  oneOf?: unknown[];
+                  properties?: Record<string, unknown>;
+                };
+              };
+            };
+          };
         };
       };
     };
@@ -306,6 +316,22 @@ test.describe("Stoppage release browser gate", () => {
       status: ["validUntil"],
       validUntil: ["status"],
     });
+    const discoveryKeySchema =
+      contract.components?.schemas?.VerificationKeySet?.properties?.keys?.items;
+    expect(discoveryKeySchema?.properties).toMatchObject({
+      status: { enum: ["ACTIVE", "RETIRED"] },
+      validUntil: { type: "integer", minimum: 1 },
+    });
+    expect(discoveryKeySchema?.oneOf).toEqual([
+      {
+        properties: { status: { const: "ACTIVE" } },
+        not: { required: ["validUntil"] },
+      },
+      {
+        properties: { status: { const: "RETIRED" } },
+        required: ["validUntil"],
+      },
+    ]);
 
     const context = await request.get("/api/agent-context");
     expect(context.status()).toBe(200);

@@ -5,6 +5,7 @@ import { sha256 } from "../domain/canonical.js";
 import { liveAgentRequestV2Schema } from "../execution-gate/live-agent-gate.js";
 import {
   inspectExecutionPermitV2,
+  type PermitVerificationKey,
   type PermitVerificationKeySet,
   type SignedExecutionPermitV2,
 } from "../execution-gate/permit-v2.js";
@@ -578,21 +579,27 @@ function assertPublicSample(payload: PublicLiveDecisionTapePayload) {
     quoteHash: permit.body.quoteHash,
     sequence: permit.body.sequence,
   };
+  const verificationKey: PermitVerificationKey =
+    signerStatus === "RETIRED"
+      ? {
+          kid: payload.signer.kid,
+          alg: payload.signer.alg,
+          use: "sig",
+          publicKey: payload.signer.publicKey,
+          status: "RETIRED",
+          validUntil: payload.signer.validUntil!,
+        }
+      : {
+          kid: payload.signer.kid,
+          alg: payload.signer.alg,
+          use: "sig",
+          publicKey: payload.signer.publicKey,
+          status: "ACTIVE",
+        };
   const keys: PermitVerificationKeySet = {
     version: 1,
     issuer: payload.signer.issuer,
-    keys: [
-      {
-        kid: payload.signer.kid,
-        alg: payload.signer.alg,
-        use: "sig",
-        publicKey: payload.signer.publicKey,
-        status: signerStatus,
-        ...(signerStatus === "RETIRED"
-          ? { validUntil: payload.signer.validUntil }
-          : {}),
-      },
-    ],
+    keys: [verificationKey],
   };
   const intended = inspectExecutionPermitV2({
     permit,
