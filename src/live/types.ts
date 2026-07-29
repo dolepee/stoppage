@@ -12,9 +12,16 @@ export interface LiveWorkerStatus {
   fixtureRefreshes: number;
   fixtureRefreshFailures: number;
   lastFixtureRefreshAt: number | null;
+  lastFixtureRefreshFailure?: WorkerFailure | null;
   streamHealth: Record<StreamName, boolean>;
   lastMessageAt: Record<StreamName, number | null>;
+  lastStreamFailure?: Record<StreamName, WorkerFailure | null>;
   startedAt: string | null;
+}
+
+export interface WorkerFailure {
+  reason: string;
+  at: number;
 }
 
 export interface LiveWorkerCallbacks {

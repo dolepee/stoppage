@@ -1,5 +1,6 @@
 dist/
 node_modules/
+pnpm-lock.yaml
 vendor/
 TXODDS_STOPPAGE_MASTER_PLAN.md
 data/private/
