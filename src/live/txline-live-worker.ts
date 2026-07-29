@@ -232,12 +232,6 @@ export class TxLineLiveWorker {
         }
       } catch (error) {
         if (signal.aborted) return;
-        if (
-          (error as Error).name === "AbortError" &&
-          !activeAttempt.abortReason
-        ) {
-          return;
-        }
         this.#status.reconnects[name] += 1;
         const reason =
           activeAttempt.abortReason ?? `stream-error:${safeErrorReason(error)}`;

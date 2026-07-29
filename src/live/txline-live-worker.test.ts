@@ -615,6 +615,67 @@ describe("TxLineLiveWorker", () => {
     }
   });
 
+  it("retries an AbortError that is not caused by parent shutdown", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    let scoreConnections = 0;
+    const client = {
+      fetchFixtures: async () => [],
+      streamOdds: async (
+        callbacks: FakeCallbacks<OddsPayload>,
+        signal: AbortSignal,
+      ) => {
+        await callbacks.onOpen();
+        await untilAborted(signal);
+      },
+      streamScores: async (
+        callbacks: FakeCallbacks<ScorePayload>,
+        signal: AbortSignal,
+      ) => {
+        scoreConnections += 1;
+        if (scoreConnections === 1) {
+          const error = new Error("shared guest session request aborted");
+          error.name = "AbortError";
+          throw error;
+        }
+        await callbacks.onOpen();
+        await untilAborted(signal);
+      },
+    };
+    const worker = new TxLineLiveWorker({
+      client,
+      reconnectBaseMs: 100,
+      callbacks: { onInput: () => undefined },
+      capture: async () => undefined,
+    });
+
+    try {
+      const run = worker.run(controller.signal);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(worker.status()).toMatchObject({
+        reconnects: { odds: 0, scores: 1 },
+        streamHealth: { odds: true, scores: false },
+        lastStreamFailure: {
+          odds: null,
+          scores: { reason: "stream-error:AbortError" },
+        },
+      });
+
+      await vi.advanceTimersByTimeAsync(100);
+      expect(scoreConnections).toBe(2);
+      expect(worker.status()).toMatchObject({
+        streamHealth: { odds: true, scores: true },
+        lastStreamFailure: { odds: null, scores: null },
+      });
+
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(0);
+      await run;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("resets reconnect backoff after a healthy heartbeat", async () => {
     vi.useFakeTimers();
     const controller = new AbortController();
