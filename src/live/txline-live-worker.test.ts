@@ -451,6 +451,89 @@ describe("TxLineLiveWorker", () => {
     }
   });
 
+  it("ignores data that resumes after its stream attempt is aborted", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    let now = 1_000;
+    let oddsConnections = 0;
+    let releaseCapture: (() => void) | undefined;
+    const captureBlocked = new Promise<void>((resolve) => {
+      releaseCapture = resolve;
+    });
+    const client = {
+      fetchFixtures: async () => [
+        {
+          FixtureId: 77,
+          StartTime: 1_000,
+          Participant1: "Northbridge",
+          Participant2: "Eastport",
+          Participant1IsHome: true,
+        },
+      ],
+      streamOdds: async (
+        callbacks: FakeCallbacks<OddsPayload>,
+        signal: AbortSignal,
+      ) => {
+        oddsConnections += 1;
+        await callbacks.onOpen();
+        if (oddsConnections === 1) {
+          await callbacks.onRaw?.(oddsPayload(), "odds:delayed");
+          await callbacks.onData(oddsPayload());
+          return;
+        }
+        await untilAborted(signal);
+      },
+      streamScores: async (
+        callbacks: FakeCallbacks<ScorePayload>,
+        signal: AbortSignal,
+      ) => {
+        await callbacks.onOpen();
+        await untilAborted(signal);
+      },
+    };
+    const worker = new TxLineLiveWorker({
+      client,
+      heartbeatTimeoutMs: 500,
+      reconnectBaseMs: 100,
+      now: () => now,
+      callbacks: { onInput: () => undefined },
+      capture: async () => captureBlocked,
+    });
+
+    try {
+      const run = worker.run(controller.signal);
+      await vi.advanceTimersByTimeAsync(0);
+
+      now = 2_000;
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(worker.status()).toMatchObject({
+        streamHealth: { odds: false },
+        lastStreamFailure: {
+          odds: { reason: "heartbeat-timeout", at: 2_000 },
+        },
+        oddsMessages: 0,
+        normalizedOdds: 0,
+      });
+
+      releaseCapture?.();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(worker.status()).toMatchObject({
+        streamHealth: { odds: false },
+        lastStreamFailure: {
+          odds: { reason: "heartbeat-timeout", at: 2_000 },
+        },
+        oddsMessages: 0,
+        normalizedOdds: 0,
+      });
+
+      controller.abort();
+      await vi.advanceTimersByTimeAsync(0);
+      await run;
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("removes completed delay listeners before scheduling the next tick", async () => {
     vi.useFakeTimers();
     const controller = new AbortController();
@@ -742,4 +825,18 @@ function untilAborted(signal: AbortSignal) {
   return new Promise<void>((resolve) =>
     signal.addEventListener("abort", () => resolve(), { once: true }),
   );
+}
+
+function oddsPayload(): OddsPayload {
+  return {
+    FixtureId: 77,
+    MessageId: "delayed",
+    Ts: 1_000,
+    Bookmaker: "StablePrice",
+    BookmakerId: 1,
+    SuperOddsType: "1X2",
+    InRunning: true,
+    PriceNames: ["Northbridge", "Draw", "Eastport"],
+    Pct: ["50.000", "25.000", "25.000"],
+  };
 }

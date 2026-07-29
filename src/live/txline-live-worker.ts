@@ -170,26 +170,40 @@ export class TxLineLiveWorker {
         controller.abort();
       }, this.#streamConnectTimeoutMs);
       const markConnected = () => {
+        if (
+          controller.signal.aborted ||
+          this.#activeStreamAttempts[name] !== activeAttempt
+        ) {
+          return false;
+        }
         connected = true;
         clearTimeout(connectTimeout);
+        return true;
       };
       try {
         if (name === "odds") {
           await this.#client.streamOdds(
             {
               onOpen: () => {
-                markConnected();
+                if (!markConnected()) return;
                 return this.#touch(name);
               },
               onHeartbeat: () => {
-                markConnected();
+                if (!markConnected()) return;
                 attempt = 0;
                 return this.#touch(name);
               },
-              onRaw: (payload, eventId) =>
-                this.#captureRaw(name, payload, eventId),
+              onRaw: (payload, eventId) => {
+                if (
+                  controller.signal.aborted ||
+                  this.#activeStreamAttempts[name] !== activeAttempt
+                ) {
+                  return;
+                }
+                return this.#captureRaw(name, payload, eventId);
+              },
               onData: (payload) => {
-                markConnected();
+                if (!markConnected()) return;
                 attempt = 0;
                 return this.#handleOdds(payload);
               },
@@ -200,18 +214,25 @@ export class TxLineLiveWorker {
           await this.#client.streamScores(
             {
               onOpen: () => {
-                markConnected();
+                if (!markConnected()) return;
                 return this.#touch(name);
               },
               onHeartbeat: () => {
-                markConnected();
+                if (!markConnected()) return;
                 attempt = 0;
                 return this.#touch(name);
               },
-              onRaw: (payload, eventId) =>
-                this.#captureRaw(name, payload, eventId),
+              onRaw: (payload, eventId) => {
+                if (
+                  controller.signal.aborted ||
+                  this.#activeStreamAttempts[name] !== activeAttempt
+                ) {
+                  return;
+                }
+                return this.#captureRaw(name, payload, eventId);
+              },
               onData: (payload) => {
-                markConnected();
+                if (!markConnected()) return;
                 attempt = 0;
                 return this.#handleScore(payload);
               },
