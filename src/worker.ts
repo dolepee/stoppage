@@ -25,6 +25,8 @@ if (!config.txlineApiToken) {
   throw new Error("TXLINE_API_TOKEN is required for the live worker");
 }
 
+const STATUS_COUNTER_LOG_INTERVAL_MS = 300_000;
+const STATUS_HEARTBEAT_LOG_INTERVAL_MS = 900_000;
 const governor = new QuoteGovernor();
 const controller = new AbortController();
 const durationMs = readOptionalDuration();
@@ -33,6 +35,8 @@ const client = new TxLineClient({
   apiToken: config.txlineApiToken,
 });
 let lastStatusLogAt = 0;
+let lastStatusStateSignature: string | null = null;
+let lastStatusCounterSignature: string | null = null;
 let inputQueue = Promise.resolve();
 const executionContexts = new LiveExecutionContextTracker();
 const liveDecisionTape = config.liveDecisionTapeEnabled
@@ -82,9 +86,39 @@ const worker = new TxLineLiveWorker({
         updatedAt: new Date().toISOString(),
       };
       await writeRuntimeState("worker-status.json", snapshot);
-      if (Date.now() - lastStatusLogAt >= 30_000 || !status.running) {
+      const now = Date.now();
+      const stateSignature = JSON.stringify({
+        running: status.running,
+        fixturesLoaded: status.fixturesLoaded,
+        fixtureRefreshFailure: status.lastFixtureRefreshFailure?.reason ?? null,
+        streamHealth: status.streamHealth,
+        streamFailures: {
+          odds: status.lastStreamFailure?.odds?.reason ?? null,
+          scores: status.lastStreamFailure?.scores?.reason ?? null,
+        },
+      });
+      const counterSignature = JSON.stringify({
+        oddsMessages: status.oddsMessages,
+        scoreMessages: status.scoreMessages,
+        normalizedOdds: status.normalizedOdds,
+        normalizedEvents: status.normalizedEvents,
+        skippedOdds: status.skippedOdds,
+        reconnects: status.reconnects,
+        fixtureRefreshes: status.fixtureRefreshes,
+        fixtureRefreshFailures: status.fixtureRefreshFailures,
+      });
+      const stateChanged = stateSignature !== lastStatusStateSignature;
+      const countersChanged = counterSignature !== lastStatusCounterSignature;
+      const counterUpdateDue =
+        countersChanged &&
+        now - lastStatusLogAt >= STATUS_COUNTER_LOG_INTERVAL_MS;
+      const heartbeatDue =
+        now - lastStatusLogAt >= STATUS_HEARTBEAT_LOG_INTERVAL_MS;
+      if (stateChanged || counterUpdateDue || heartbeatDue || !status.running) {
         console.log(JSON.stringify(snapshot));
-        lastStatusLogAt = Date.now();
+        lastStatusLogAt = now;
+        lastStatusStateSignature = stateSignature;
+        lastStatusCounterSignature = counterSignature;
       }
     },
   },

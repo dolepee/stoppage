@@ -30,21 +30,35 @@ interface LiveWorkerOptions {
   client: LiveTxLineClient;
   callbacks: LiveWorkerCallbacks;
   heartbeatTimeoutMs?: number;
+  streamConnectTimeoutMs?: number;
   reconnectBaseMs?: number;
   fixtureRefreshMs?: number;
   now?: () => number;
   capture?: (name: string, value: unknown) => Promise<unknown>;
 }
 
+type StreamAbortReason = "heartbeat-timeout" | "stream-connect-timeout";
+
+interface ActiveStreamAttempt {
+  abortReason: StreamAbortReason | null;
+  failureRecorded: boolean;
+  controller: AbortController;
+}
+
 export class TxLineLiveWorker {
   readonly #client: LiveTxLineClient;
   readonly #callbacks: LiveWorkerCallbacks;
   readonly #heartbeatTimeoutMs: number;
+  readonly #streamConnectTimeoutMs: number;
   readonly #reconnectBaseMs: number;
   readonly #fixtureRefreshMs: number;
   readonly #now: () => number;
   readonly #capture: (name: string, value: unknown) => Promise<unknown>;
   readonly #participants = new Map<number, { home: string; away: string }>();
+  readonly #activeStreamAttempts: Record<
+    "odds" | "scores",
+    ActiveStreamAttempt | null
+  > = { odds: null, scores: null };
   #status: LiveWorkerStatus = emptyStatus();
   #lastHealthEmission = { odds: true, scores: true };
 
@@ -52,6 +66,7 @@ export class TxLineLiveWorker {
     this.#client = options.client;
     this.#callbacks = options.callbacks;
     this.#heartbeatTimeoutMs = options.heartbeatTimeoutMs ?? 45_000;
+    this.#streamConnectTimeoutMs = options.streamConnectTimeoutMs ?? 30_000;
     this.#reconnectBaseMs = options.reconnectBaseMs ?? 1_000;
     this.#fixtureRefreshMs = options.fixtureRefreshMs ?? 300_000;
     this.#now = options.now ?? Date.now;
@@ -104,11 +119,23 @@ export class TxLineLiveWorker {
   }
 
   async #refreshFixtures(signal: AbortSignal) {
-    const fixtures = await this.#client.fetchFixtures({ signal });
-    this.#loadParticipants(fixtures);
-    this.#status.fixturesLoaded = this.#participants.size;
-    this.#status.fixtureRefreshes += 1;
-    this.#status.lastFixtureRefreshAt = this.#now();
+    try {
+      const fixtures = await this.#client.fetchFixtures({ signal });
+      this.#loadParticipants(fixtures);
+      this.#status.fixturesLoaded = this.#participants.size;
+      this.#status.fixtureRefreshes += 1;
+      this.#status.lastFixtureRefreshAt = this.#now();
+      this.#status.lastFixtureRefreshFailure = null;
+    } catch (error) {
+      if (!signal.aborted && (error as Error).name !== "AbortError") {
+        this.#status.fixtureRefreshFailures += 1;
+        this.#status.lastFixtureRefreshFailure = {
+          reason: `fixture-refresh-error:${safeErrorReason(error)}`,
+          at: this.#now(),
+        };
+      }
+      throw error;
+    }
   }
 
   async #refreshFixtureLoop(signal: AbortSignal) {
@@ -119,7 +146,6 @@ export class TxLineLiveWorker {
         await this.#refreshFixtures(signal);
       } catch (error) {
         if (signal.aborted || (error as Error).name === "AbortError") break;
-        this.#status.fixtureRefreshFailures += 1;
       }
       await this.#publishStatus();
     }
@@ -131,18 +157,53 @@ export class TxLineLiveWorker {
       const controller = new AbortController();
       const abort = () => controller.abort();
       signal.addEventListener("abort", abort, { once: true });
+      let connected = false;
+      const activeAttempt: ActiveStreamAttempt = {
+        abortReason: null,
+        failureRecorded: false,
+        controller,
+      };
+      this.#activeStreamAttempts[name] = activeAttempt;
+      const connectTimeout = setTimeout(() => {
+        if (connected || signal.aborted) return;
+        activeAttempt.abortReason = "stream-connect-timeout";
+        controller.abort();
+      }, this.#streamConnectTimeoutMs);
+      const markConnected = () => {
+        if (
+          controller.signal.aborted ||
+          this.#activeStreamAttempts[name] !== activeAttempt
+        ) {
+          return false;
+        }
+        connected = true;
+        clearTimeout(connectTimeout);
+        return true;
+      };
       try {
         if (name === "odds") {
           await this.#client.streamOdds(
             {
-              onOpen: () => this.#touch(name),
+              onOpen: () => {
+                if (!markConnected()) return;
+                return this.#touch(name);
+              },
               onHeartbeat: () => {
+                if (!markConnected()) return;
                 attempt = 0;
                 return this.#touch(name);
               },
-              onRaw: (payload, eventId) =>
-                this.#captureRaw(name, payload, eventId),
+              onRaw: (payload, eventId) => {
+                if (
+                  controller.signal.aborted ||
+                  this.#activeStreamAttempts[name] !== activeAttempt
+                ) {
+                  return;
+                }
+                return this.#captureRaw(name, payload, eventId);
+              },
               onData: (payload) => {
+                if (!markConnected()) return;
                 attempt = 0;
                 return this.#handleOdds(payload);
               },
@@ -152,14 +213,26 @@ export class TxLineLiveWorker {
         } else {
           await this.#client.streamScores(
             {
-              onOpen: () => this.#touch(name),
+              onOpen: () => {
+                if (!markConnected()) return;
+                return this.#touch(name);
+              },
               onHeartbeat: () => {
+                if (!markConnected()) return;
                 attempt = 0;
                 return this.#touch(name);
               },
-              onRaw: (payload, eventId) =>
-                this.#captureRaw(name, payload, eventId),
+              onRaw: (payload, eventId) => {
+                if (
+                  controller.signal.aborted ||
+                  this.#activeStreamAttempts[name] !== activeAttempt
+                ) {
+                  return;
+                }
+                return this.#captureRaw(name, payload, eventId);
+              },
               onData: (payload) => {
+                if (!markConnected()) return;
                 attempt = 0;
                 return this.#handleScore(payload);
               },
@@ -169,19 +242,32 @@ export class TxLineLiveWorker {
         }
         if (!signal.aborted) {
           this.#status.reconnects[name] += 1;
-          await this.#setHealth(name, false, "stream-closed");
+          const reason = activeAttempt.abortReason ?? "stream-closed";
+          if (!activeAttempt.failureRecorded) {
+            this.#recordStreamFailure(name, reason);
+            activeAttempt.failureRecorded = true;
+            await this.#setHealth(name, false, reason);
+          }
+          await this.#publishStatus();
           attempt += 1;
         }
       } catch (error) {
-        if (signal.aborted || (error as Error).name === "AbortError") return;
+        if (signal.aborted) return;
         this.#status.reconnects[name] += 1;
-        await this.#setHealth(
-          name,
-          false,
-          `stream-error:${(error as Error).name}`,
-        );
+        const reason =
+          activeAttempt.abortReason ?? `stream-error:${safeErrorReason(error)}`;
+        if (!activeAttempt.failureRecorded) {
+          this.#recordStreamFailure(name, reason);
+          activeAttempt.failureRecorded = true;
+          await this.#setHealth(name, false, reason);
+        }
+        await this.#publishStatus();
         attempt += 1;
       } finally {
+        clearTimeout(connectTimeout);
+        if (this.#activeStreamAttempts[name] === activeAttempt) {
+          this.#activeStreamAttempts[name] = null;
+        }
         signal.removeEventListener("abort", abort);
       }
 
@@ -241,8 +327,13 @@ export class TxLineLiveWorker {
   }
 
   async #touch(name: "odds" | "scores", timestamp = this.#now()) {
+    const recovered =
+      !this.#status.streamHealth[name] ||
+      Boolean(this.#status.lastStreamFailure?.[name]);
     this.#status.lastMessageAt[name] = timestamp;
+    this.#status.lastStreamFailure![name] = null;
     await this.#setHealth(name, true);
+    if (recovered) await this.#publishStatus();
   }
 
   async #monitorHealth(signal: AbortSignal) {
@@ -253,10 +344,23 @@ export class TxLineLiveWorker {
       for (const name of ["odds", "scores"] as const) {
         const lastMessage = this.#status.lastMessageAt[name];
         if (
+          this.#status.streamHealth[name] &&
           lastMessage !== null &&
           now - lastMessage > this.#heartbeatTimeoutMs
         ) {
-          await this.#setHealth(name, false, "heartbeat-timeout");
+          const activeAttempt = this.#activeStreamAttempts[name];
+          if (activeAttempt && !activeAttempt.controller.signal.aborted) {
+            activeAttempt.abortReason = "heartbeat-timeout";
+            activeAttempt.failureRecorded = true;
+            this.#recordStreamFailure(name, "heartbeat-timeout");
+            const healthUpdate = this.#setHealth(
+              name,
+              false,
+              "heartbeat-timeout",
+            );
+            activeAttempt.controller.abort();
+            await healthUpdate;
+          }
         }
       }
       await this.#callbacks.onInput({ kind: "tick", observedTs: now });
@@ -277,6 +381,13 @@ export class TxLineLiveWorker {
     });
   }
 
+  #recordStreamFailure(name: "odds" | "scores", reason: string) {
+    this.#status.lastStreamFailure![name] = {
+      reason,
+      at: this.#now(),
+    };
+  }
+
   async #publishStatus() {
     await this.#callbacks.onStatus?.(this.status());
   }
@@ -295,10 +406,24 @@ function emptyStatus(): LiveWorkerStatus {
     fixtureRefreshes: 0,
     fixtureRefreshFailures: 0,
     lastFixtureRefreshAt: null,
+    lastFixtureRefreshFailure: null,
     streamHealth: { odds: false, scores: false },
     lastMessageAt: { odds: null, scores: null },
+    lastStreamFailure: { odds: null, scores: null },
     startedAt: null,
   };
+}
+
+function safeErrorReason(error: unknown) {
+  const name =
+    error instanceof Error && /^[A-Za-z][A-Za-z0-9]{0,63}$/.test(error.name)
+      ? error.name
+      : "UnknownError";
+  const status =
+    error instanceof Error
+      ? /\bHTTP\s+(\d{3})\b/.exec(error.message)?.[1]
+      : null;
+  return status ? `${name}:HTTP_${status}` : name;
 }
 
 function captureName() {
@@ -308,14 +433,15 @@ function captureName() {
 function abortableDelay(milliseconds: number, signal: AbortSignal) {
   if (signal.aborted) return Promise.resolve();
   return new Promise<void>((resolve) => {
-    const timeout = setTimeout(resolve, milliseconds);
-    signal.addEventListener(
-      "abort",
-      () => {
-        clearTimeout(timeout);
-        resolve();
-      },
-      { once: true },
-    );
+    let settled = false;
+    const settle = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      signal.removeEventListener("abort", settle);
+      resolve();
+    };
+    const timeout = setTimeout(settle, milliseconds);
+    signal.addEventListener("abort", settle, { once: true });
   });
 }

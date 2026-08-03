@@ -397,7 +397,11 @@ ignored private capture directory, reconnects with bounded backoff, emits
 stream-health inputs into the same governor, and persists derived decision
 receipts and Certified Reopen sidecars separately. It also refreshes the fixture
 catalog every five minutes so new knockout fixtures become eligible without a
-restart.
+restart. Its private status file retains only sanitized failure classes, HTTP
+status codes and timestamps for the latest stream or fixture-refresh failure;
+successful recovery clears those diagnostics. Console snapshots are emitted
+immediately for health-state changes and otherwise rate-limited, while the
+status file remains fresh every second.
 
 For a container host, the compiled worker runs without development dependencies:
 

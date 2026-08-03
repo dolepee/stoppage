@@ -7,8 +7,6 @@ on:
     types: [checks_requested]
   push:
     branches: [main]
-  schedule:
-    - cron: "12 12 * * 1"
 
 permissions:
   actions: read
@@ -17,7 +15,7 @@ permissions:
 
 jobs:
   scan-full:
-    if: ${{ github.event_name == 'push' || github.event_name == 'schedule' }}
+    if: ${{ github.event_name == 'push' }}
     uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@3adb4b14a2b0623876d18d863a498b785fb3752d # v2.3.8
     with:
       scan-args: |-
